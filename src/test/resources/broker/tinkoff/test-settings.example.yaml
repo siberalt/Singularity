@@ -1,0 +1,3 @@
+sandboxToken: {{ sandboxToken }}
+readonlyToken: {{ readonlyToken }}
+shareIsin: US29760G1031

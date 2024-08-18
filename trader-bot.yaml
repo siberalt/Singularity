@@ -1,0 +1,4 @@
+run:
+  activeStrategies:
+    - imoex
+    - only_up

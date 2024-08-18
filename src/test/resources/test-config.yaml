@@ -1,0 +1,9 @@
+run:
+  strategies:
+    definitions:
+      imoex:
+        '@type' : imoex
+        amount: 2233
+    active:
+      - imoex
+      - only_up
