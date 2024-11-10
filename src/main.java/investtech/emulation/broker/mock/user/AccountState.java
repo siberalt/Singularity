@@ -1,4 +1,4 @@
-package investtech.emulation.broker.virtual.user;
+package investtech.emulation.broker.mock.user;
 
 import investtech.broker.contract.service.user.Account;
 

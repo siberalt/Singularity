@@ -1,4 +1,4 @@
-package investtech.emulation.broker.virtual.operation;
+package investtech.emulation.broker.mock.operation;
 
 import investtech.broker.contract.service.operation.response.GetPositionsResponse;
 import investtech.broker.contract.service.operation.response.PositionSecurities;

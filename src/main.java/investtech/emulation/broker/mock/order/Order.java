@@ -1,4 +1,4 @@
-package investtech.emulation.broker.virtual.order;
+package investtech.emulation.broker.mock.order;
 
 import investtech.broker.contract.service.instrument.Instrument;
 import investtech.broker.contract.service.order.request.PostOrderRequest;

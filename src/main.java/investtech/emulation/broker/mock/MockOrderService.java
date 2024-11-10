@@ -1,4 +1,4 @@
-package investtech.emulation.broker.virtual;
+package investtech.emulation.broker.mock;
 
 import investtech.broker.contract.service.exception.AbstractException;
 import investtech.broker.contract.service.exception.ErrorCode;
@@ -16,8 +16,8 @@ import investtech.broker.contract.value.quatation.Quotation;
 import investtech.emulation.Event;
 import investtech.emulation.EventInvokerInterface;
 import investtech.emulation.EventObserver;
-import investtech.emulation.broker.virtual.exception.VirtualBrokerException;
-import investtech.emulation.broker.virtual.order.Order;
+import investtech.emulation.broker.mock.exception.MockBrokerException;
+import investtech.emulation.broker.mock.order.Order;
 import investtech.emulation.shared.market.candle.Candle;
 import investtech.emulation.shared.market.candle.ComparisonOperator;
 import investtech.emulation.shared.market.candle.FindPriceParams;
@@ -28,8 +28,8 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class VirtualOrderService implements OrderServiceInterface, EventInvokerInterface {
-    protected VirtualBroker virtualBroker;
+public class MockOrderService implements OrderServiceInterface, EventInvokerInterface {
+    protected MockBroker virtualBroker;
     protected double buyBestPriceRatio = 49;
     protected double sellBestPriceRatio = 51;
     protected double orderCommission = 0.003;
@@ -38,7 +38,7 @@ public class VirtualOrderService implements OrderServiceInterface, EventInvokerI
     protected Duration limitOrderLiftTime = Duration.ofDays(1);
     protected Set<String> ordersRequestIds = new HashSet<>();
 
-    public VirtualOrderService(VirtualBroker virtualBroker) {
+    public MockOrderService(MockBroker virtualBroker) {
         this.virtualBroker = virtualBroker;
     }
 
@@ -170,7 +170,7 @@ public class VirtualOrderService implements OrderServiceInterface, EventInvokerI
         ).orElse(null);
 
         if (null == lastCandle) {
-            throw new VirtualBrokerException("Emulation error: last candle is null. Market data has ran out");
+            throw new MockBrokerException("Emulation error: last candle is null. Market data has ran out");
         }
 
         Instant eventTime;

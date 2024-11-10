@@ -1,4 +1,4 @@
-package investtech.emulation.broker.virtual;
+package investtech.emulation.broker.mock;
 
 import investtech.broker.contract.service.market.MarketDataServiceInterface;
 import investtech.broker.contract.service.market.request.CandleInterval;
@@ -21,11 +21,11 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-public class VirtualMarketDataService implements MarketDataServiceInterface {
-    protected VirtualBroker virtualBroker;
+public class MockMarketDataService implements MarketDataServiceInterface {
+    protected MockBroker virtualBroker;
     protected CandleStorageInterface candleStorage;
 
-    public VirtualMarketDataService(VirtualBroker virtualBroker, CandleStorageInterface candleStorage) {
+    public MockMarketDataService(MockBroker virtualBroker, CandleStorageInterface candleStorage) {
         this.virtualBroker = virtualBroker;
         this.candleStorage = candleStorage;
     }

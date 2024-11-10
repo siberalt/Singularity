@@ -1,4 +1,4 @@
-package investtech.emulation.broker.virtual;
+package investtech.emulation.broker.mock;
 
 import investtech.broker.contract.service.exception.AbstractException;
 import investtech.broker.contract.service.exception.ErrorCode;
@@ -9,18 +9,18 @@ import investtech.broker.contract.service.operation.request.GetPositionsRequest;
 import investtech.broker.contract.service.operation.response.GetPositionsResponse;
 import investtech.broker.contract.service.operation.response.PositionSecurities;
 import investtech.broker.contract.value.money.Money;
-import investtech.emulation.broker.virtual.operation.AccountBalance;
+import investtech.emulation.broker.mock.operation.AccountBalance;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-public class VirtualOperationsService implements OperationsServiceInterface {
+public class MockOperationsService implements OperationsServiceInterface {
     private final Map<String, AccountBalance> accountBalances = new HashMap<>();
 
-    private final VirtualBroker virtualBroker;
+    private final MockBroker virtualBroker;
 
-    public VirtualOperationsService(VirtualBroker virtualBroker) {
+    public MockOperationsService(MockBroker virtualBroker) {
         this.virtualBroker = virtualBroker;
     }
 
@@ -39,7 +39,7 @@ public class VirtualOperationsService implements OperationsServiceInterface {
         return accountBalances.get(accountId).isEnoughOfMoney(amount);
     }
 
-    protected VirtualOperationsService addAccountBalance(String accountId, AccountBalance accountBalance) {
+    protected MockOperationsService addAccountBalance(String accountId, AccountBalance accountBalance) {
         accountBalances.put(accountId, accountBalance);
 
         return this;

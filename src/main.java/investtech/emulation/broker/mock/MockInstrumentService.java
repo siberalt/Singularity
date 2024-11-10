@@ -1,4 +1,4 @@
-package investtech.emulation.broker.virtual;
+package investtech.emulation.broker.mock;
 
 import investtech.broker.contract.service.exception.AbstractException;
 import investtech.broker.contract.service.instrument.InstrumentServiceInterface;
@@ -6,12 +6,12 @@ import investtech.broker.contract.service.instrument.request.GetRequest;
 import investtech.broker.contract.service.instrument.response.GetResponse;
 import investtech.emulation.shared.instrument.InstrumentStorageInterface;
 
-public class VirtualInstrumentService implements InstrumentServiceInterface {
+public class MockInstrumentService implements InstrumentServiceInterface {
     protected InstrumentStorageInterface instrumentStorage;
 
-    protected VirtualBroker virtualBroker;
+    protected MockBroker virtualBroker;
 
-    public VirtualInstrumentService(VirtualBroker virtualBroker, InstrumentStorageInterface instrumentStorage) {
+    public MockInstrumentService(MockBroker virtualBroker, InstrumentStorageInterface instrumentStorage) {
         this.instrumentStorage = instrumentStorage;
         this.virtualBroker = virtualBroker;
     }

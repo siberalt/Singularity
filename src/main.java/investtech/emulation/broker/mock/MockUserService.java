@@ -1,4 +1,4 @@
-package investtech.emulation.broker.virtual;
+package investtech.emulation.broker.mock;
 
 import investtech.broker.contract.service.exception.ErrorCode;
 import investtech.broker.contract.service.exception.ExceptionBuilder;
@@ -6,17 +6,17 @@ import investtech.broker.contract.service.user.Account;
 import investtech.broker.contract.service.user.GetAccountsRequest;
 import investtech.broker.contract.service.user.GetAccountsResponse;
 import investtech.broker.contract.service.user.UserServiceInterface;
-import investtech.emulation.broker.virtual.user.AccountState;
+import investtech.emulation.broker.mock.user.AccountState;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-public class VirtualUserService implements UserServiceInterface {
-    protected VirtualBroker virtualBroker;
+public class MockUserService implements UserServiceInterface {
+    protected MockBroker virtualBroker;
     protected Map<String, AccountState> accountsStates = new HashMap<>();
 
-    public VirtualUserService(VirtualBroker virtualBroker) {
+    public MockUserService(MockBroker virtualBroker) {
         this.virtualBroker = virtualBroker;
     }
 

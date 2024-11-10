@@ -1,4 +1,4 @@
-package investtech.emulation.broker.virtual;
+package investtech.emulation.broker.mock;
 
 import investtech.broker.contract.emulation.EmulationBrokerInterface;
 import investtech.broker.contract.run.StopOrderServiceAwareBrokerInterface;
@@ -16,21 +16,21 @@ import investtech.strategy.event.EventManagerInterface;
 
 import java.time.Instant;
 
-public class VirtualBroker implements EmulationBrokerInterface, StopOrderServiceAwareBrokerInterface, ContextAwareInterface {
+public class MockBroker implements EmulationBrokerInterface, StopOrderServiceAwareBrokerInterface, ContextAwareInterface {
     protected Instant toTime;
     protected AbstractContext<?> context;
-    protected VirtualMarketDataService marketDataService;
-    protected VirtualOrderService orderService;
-    protected VirtualOperationsService operationsService;
-    protected VirtualInstrumentService instrumentService;
-    protected VirtualUserService userService;
+    protected MockMarketDataService marketDataService;
+    protected MockOrderService orderService;
+    protected MockOperationsService operationsService;
+    protected MockInstrumentService instrumentService;
+    protected MockUserService userService;
 
-    public VirtualBroker(CandleStorageInterface candleRepository, InstrumentStorageInterface instrumentStorage) {
-        orderService = new VirtualOrderService(this);
-        marketDataService = new VirtualMarketDataService(this, candleRepository);
-        operationsService = new VirtualOperationsService(this);
-        instrumentService = new VirtualInstrumentService(this, instrumentStorage);
-        userService = new VirtualUserService(this);
+    public MockBroker(CandleStorageInterface candleRepository, InstrumentStorageInterface instrumentStorage) {
+        orderService = new MockOrderService(this);
+        marketDataService = new MockMarketDataService(this, candleRepository);
+        operationsService = new MockOperationsService(this);
+        instrumentService = new MockInstrumentService(this, instrumentStorage);
+        userService = new MockUserService(this);
     }
 
     @Override
