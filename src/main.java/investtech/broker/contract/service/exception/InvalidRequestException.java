@@ -7,6 +7,10 @@ public class InvalidRequestException extends AbstractException {
         super(errorCode, message);
     }
 
+    public InvalidRequestException(ErrorCode errorCode) {
+        super(errorCode, errorCode.getMessagePattern());
+    }
+
     public String getInvalidAttribute() {
         return invalidAttribute;
     }

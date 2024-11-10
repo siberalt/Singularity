@@ -2,14 +2,20 @@ package investtech.emulation.shared.market.candle.storage.cvs;
 
 import investtech.emulation.shared.market.candle.Candle;
 import investtech.emulation.shared.market.candle.CandleStorageInterface;
+import investtech.emulation.shared.market.candle.FindPriceParams;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
 
-public class CvsCandleStorage implements CandleStorageInterface {
+public class CvsCandleStorage implements CandleStorageInterface, AutoCloseable {
+    protected static final int READ_LIMIT = 1024 * 1024 * 1024;
+
     protected InputStream inputStream;
 
     protected String instrumentUid;
@@ -17,6 +23,7 @@ public class CvsCandleStorage implements CandleStorageInterface {
     public CvsCandleStorage(String instrumentUid, InputStream inputStream) {
         this.inputStream = inputStream;
         this.instrumentUid = instrumentUid;
+        this.inputStream.mark(READ_LIMIT);
     }
 
     @Override
@@ -25,31 +32,14 @@ public class CvsCandleStorage implements CandleStorageInterface {
             return Optional.empty();
         }
 
+        resetInputStream(inputStream);
+
         var candle = new CvsCandleIterator(inputStream)
+                .initInstrumentUid(instrumentUid)
                 .initFrom(at)
                 .next();
 
         return Optional.of(candle);
-    }
-
-    @Override
-    public Iterable<Candle> getTo(String instrumentUid, Instant to) {
-        if (!Objects.equals(this.instrumentUid, instrumentUid)) {
-            return Collections::emptyIterator;
-        }
-
-        return () -> new CvsCandleIterator(inputStream)
-                .initTo(to);
-    }
-
-    @Override
-    public Iterable<Candle> getFrom(String instrumentUid, Instant from) {
-        if (!Objects.equals(this.instrumentUid, instrumentUid)) {
-            return Collections::emptyIterator;
-        }
-
-        return () -> new CvsCandleIterator(inputStream)
-                .initFrom(from);
     }
 
     @Override
@@ -58,7 +48,56 @@ public class CvsCandleStorage implements CandleStorageInterface {
             return Collections::emptyIterator;
         }
 
+        resetInputStream(inputStream);
+
         return () -> new CvsCandleIterator(inputStream)
-                .initFrom(from);
+                .initInstrumentUid(instrumentUid)
+                .initFrom(from)
+                .initTo(to);
+    }
+
+    @Override
+    public Iterable<Candle> findByOpenPrice(FindPriceParams params) {
+        if (!Objects.equals(this.instrumentUid, params.getInstrumentUid())) {
+            return Collections::emptyIterator;
+        }
+
+        resetInputStream(inputStream);
+
+        Iterable<Candle> iterator = () -> new CvsCandleIterator(inputStream)
+                .initInstrumentUid(instrumentUid)
+                .initFrom(params.getFrom())
+                .initTo(params.getTo());
+
+        var resultCandles = new ArrayList<Candle>();
+
+        for (Candle candle : iterator) {
+            if (candle.getOpenPrice().compare(params.getPrice(), params.getComparisonOperator())) {
+                resultCandles.add(candle);
+
+                if (params.getMaxCount() <= resultCandles.size()) {
+                    break;
+                }
+            }
+        }
+
+        return resultCandles;
+    }
+
+    protected void resetInputStream(InputStream inputStream) {
+        try {
+            inputStream.reset();
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
+
+    @Override
+    public void close() {
+        try {
+            inputStream.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

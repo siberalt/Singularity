@@ -1,4 +1,4 @@
-package investtech;
+package investtech.test;
 
 import investtech.broker.impl.tinkoff.run.TinkoffBroker;
 import investtech.configuration.ConfigurationInterface;

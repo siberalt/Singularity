@@ -1,8 +1,7 @@
-package investtech.broker.impl.tinkoff.emulation;
+package investtech.test.broker.impl.tinkoff.emulation;
 
 import investtech.broker.contract.service.exception.*;
 import investtech.broker.contract.service.instrument.Instrument;
-import investtech.broker.contract.service.instrument.common.InstrumentType;
 import investtech.broker.contract.service.instrument.request.GetRequest;
 import investtech.broker.contract.service.market.request.*;
 import investtech.broker.contract.service.operation.request.GetPositionsRequest;
@@ -10,6 +9,7 @@ import investtech.broker.contract.service.order.request.*;
 import investtech.broker.contract.service.order.request.PriceType;
 import investtech.broker.contract.service.user.Account;
 import investtech.broker.contract.value.quatation.Quotation;
+import investtech.broker.impl.tinkoff.emulation.TinkoffSandboxBroker;
 import investtech.configuration.ConfigurationInterface;
 import investtech.configuration.YamlConfiguration;
 import org.junit.jupiter.api.Assertions;
@@ -160,6 +160,7 @@ public class TinkoffSandboxBrokerTest {
         var tinkoffBroker = getTinkoffSandbox();
         var share = getTestShare();
         var marketDataService = tinkoffBroker.getMarketDataService();
+        var techAnalysisService = tinkoffBroker.getTechAnalysisService();
 
         System.out.println("\nTesting method getLastPrices: \n");
         var lastPricesResponse = marketDataService.getLastPrices(GetLastPricesRequest.of(share.getUid()));
@@ -190,7 +191,7 @@ public class TinkoffSandboxBrokerTest {
             System.out.println();
         }
 
-        var getTechAnalysisResponse = marketDataService.getTechAnalysis(
+        var getTechAnalysisResponse = techAnalysisService.getTechAnalysis(
                 new GetTechAnalysisRequest()
                         .setFrom(Instant.parse("2023-11-20T12:00:00.00Z"))
                         .setTo(Instant.parse("2023-11-30T12:00:00.00Z"))
@@ -273,7 +274,7 @@ public class TinkoffSandboxBrokerTest {
     protected Instrument getTestShare() throws IOException, AbstractException {
         if (null == testShare) {
             var response = getTinkoffSandbox().getInstrumentService()
-                    .get(GetRequest.of((String) getConfiguration().get("shareIsin"), InstrumentType.SHARE));
+                    .get(GetRequest.of((String) getConfiguration().get("shareIsin")));
             testShare = response.getInstrument();
         }
 
@@ -314,7 +315,7 @@ public class TinkoffSandboxBrokerTest {
     protected ConfigurationInterface getConfiguration() throws IOException {
         if (null == configuration) {
             configuration = new YamlConfiguration(
-                    Files.newInputStream(Paths.get("src/test/resources/broker/tinkoff/test-settings.yaml"))
+                    Files.newInputStream(Paths.get("src/test/resources/broker/tinkoff/test-settings.yaml.yaml"))
             );
         }
 

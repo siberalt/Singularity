@@ -16,10 +16,8 @@ public class TimeFlowEmulator {
         this.timeSynchronizer = timeSynchronizer;
     }
 
-    public TimeFlowEmulator addTimeDependentUnit(TimeDependentUnitInterface timeDependentUnit) {
+    public void addTimeDependentUnit(TimeDependentUnitInterface timeDependentUnit) {
         this.timeDependentUnits.add(timeDependentUnit);
-
-        return this;
     }
 
     public void run(Instant from, Instant to) {

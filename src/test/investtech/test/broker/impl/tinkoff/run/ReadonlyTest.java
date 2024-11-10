@@ -1,9 +1,9 @@
-package investtech.broker.impl.tinkoff.run;
+package investtech.test.broker.impl.tinkoff.run;
 
 import investtech.broker.contract.service.exception.AbstractException;
 import investtech.broker.contract.service.operation.request.GetPositionsRequest;
 import investtech.broker.contract.service.user.Account;
-import investtech.broker.impl.tinkoff.emulation.TinkoffSandboxBroker;
+import investtech.broker.impl.tinkoff.run.TinkoffReadonlyBroker;
 import investtech.configuration.ConfigurationInterface;
 import investtech.configuration.YamlConfiguration;
 import org.junit.jupiter.api.Test;
@@ -17,7 +17,7 @@ public class ReadonlyTest {
     @Test
     public void test() throws IOException, AbstractException {
         ConfigurationInterface configuration = new YamlConfiguration(
-                Files.newInputStream(Paths.get("src/test/resources/broker/tinkoff/test-settings.yaml"))
+                Files.newInputStream(Paths.get("src/test/resources/broker/tinkoff/test-settings.yaml.yaml"))
         );
 
         var tinkoffBroker = new TinkoffReadonlyBroker((String) configuration.get("readonlyToken"));

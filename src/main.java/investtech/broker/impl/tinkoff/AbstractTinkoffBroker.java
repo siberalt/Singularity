@@ -1,7 +1,8 @@
 package investtech.broker.impl.tinkoff;
 
-import investtech.broker.contract.run.BrokerInterface;
+import investtech.broker.contract.run.TechAnalysisServiceAwareBrokerInterface;
 import investtech.broker.contract.service.market.MarketDataServiceInterface;
+import investtech.broker.contract.service.market.TechAnalysisServiceInterface;
 import investtech.broker.contract.service.operation.OperationsServiceInterface;
 import investtech.broker.contract.service.order.OrderServiceInterface;
 import investtech.broker.contract.service.user.UserServiceInterface;
@@ -9,18 +10,14 @@ import investtech.strategy.event.EventManagerInterface;
 import ru.tinkoff.piapi.contract.v1.OperationsServiceGrpc;
 import ru.tinkoff.piapi.core.InvestApi;
 
-public abstract class AbstractTinkoffBroker implements BrokerInterface {
+public abstract class AbstractTinkoffBroker implements TechAnalysisServiceAwareBrokerInterface {
     protected InvestApi api;
-
     protected OrderService orderService;
-
     protected MarketDataService marketDataService;
-
     protected OperationsService operationsService;
-
     protected UserService userService;
-
     protected InstrumentService instrumentService;
+    protected TechAnalysisService techAnalysisService;
 
     public AbstractTinkoffBroker(String token) {
         init(token);
@@ -31,6 +28,7 @@ public abstract class AbstractTinkoffBroker implements BrokerInterface {
         var channel = api.getChannel();
         orderService = new OrderService(api.getOrdersService());
         marketDataService = new MarketDataService(api.getMarketDataService());
+        techAnalysisService = new TechAnalysisService(api.getMarketDataService());
         operationsService = new OperationsService(OperationsServiceGrpc.newBlockingStub(channel));
         userService = new UserService(api.getUserService());
         instrumentService = new InstrumentService(api.getInstrumentsService());
@@ -43,6 +41,11 @@ public abstract class AbstractTinkoffBroker implements BrokerInterface {
     @Override
     public MarketDataServiceInterface getMarketDataService() {
         return marketDataService;
+    }
+
+    @Override
+    public TechAnalysisServiceInterface getTechAnalysisService() {
+        return techAnalysisService;
     }
 
     @Override

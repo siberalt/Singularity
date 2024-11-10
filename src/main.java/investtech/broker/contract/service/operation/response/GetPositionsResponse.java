@@ -35,4 +35,13 @@ public class GetPositionsResponse {
         this.securities = securities;
         return this;
     }
+
+    @Override
+    public GetPositionsResponse clone() {
+        try {
+            return (GetPositionsResponse) super.clone();
+        } catch (CloneNotSupportedException exception) {
+            throw new RuntimeException(exception);
+        }
+    }
 }

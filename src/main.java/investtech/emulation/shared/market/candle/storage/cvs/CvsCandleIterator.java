@@ -13,6 +13,8 @@ class CvsCandleIterator implements Iterator<Candle> {
     protected Scanner scanner;
     protected Instant to;
     protected Instant currentTime;
+    protected String instrumentUid;
+    protected String initFromLastLine = null;
 
     public CvsCandleIterator(InputStream inputStream) {
         scanner = new Scanner(inputStream);
@@ -25,11 +27,20 @@ class CvsCandleIterator implements Iterator<Candle> {
 
     @Override
     public Candle next() {
-        String[] data = scanner.nextLine().split(";");
+        String line;
+
+        if (null != initFromLastLine) {
+            line = initFromLastLine;
+            initFromLastLine = null;
+        } else {
+            line = scanner.nextLine();
+        }
+
+        String[] data = line.split(";");
         currentTime = Instant.parse(data[1]);
 
         return new Candle()
-                .setInstrumentUid(data[0])
+                .setInstrumentUid(instrumentUid == null ? data[0] : instrumentUid)
                 .setTime(currentTime)
                 .setOpenPrice(Quotation.of(data[2]))
                 .setClosePrice(Quotation.of(data[3]))
@@ -39,27 +50,32 @@ class CvsCandleIterator implements Iterator<Candle> {
     }
 
     public CvsCandleIterator initFrom(Instant from) {
-        Instant time;
+        currentTime = null;
 
         do {
-            if (!hasNext()) {
+            if (!scanner.hasNext()) {
                 // TODO: throw exception
             }
 
-            var matcher = Pattern.compile("^.*;(.*);").matcher(scanner.nextLine());
+            var matcher = Pattern.compile("^.+?;(.+?);").matcher(initFromLastLine = scanner.nextLine());
 
             if (!matcher.find()) {
                 // TODO: throw exception
             }
 
-            time = Instant.parse(matcher.group(0));
-        } while (time.isBefore(from));
+            currentTime = Instant.parse(matcher.group(1));
+        } while (currentTime.isBefore(from));
 
         return this;
     }
 
     public CvsCandleIterator initTo(Instant to) {
         this.to = to;
+        return this;
+    }
+
+    public CvsCandleIterator initInstrumentUid(String instrumentUid) {
+        this.instrumentUid = instrumentUid;
         return this;
     }
 }

@@ -3,7 +3,7 @@ package investtech.broker.contract.service.instrument.response;
 import investtech.broker.contract.service.instrument.Instrument;
 
 public class GetResponse {
-    protected Instrument instrument;
+    protected Instrument instrument = null;
 
     public Instrument getInstrument() {
         return instrument;

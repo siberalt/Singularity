@@ -1,4 +1,4 @@
-package investtech;
+package investtech.test;
 
 import investtech.configuration.ConfigurationInterface;
 import investtech.configuration.YamlConfiguration;

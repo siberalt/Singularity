@@ -17,12 +17,25 @@ public class InstrumentService implements InstrumentServiceInterface {
 
     @Override
     public GetResponse get(GetRequest request) throws AbstractException {
-        var response = ExceptionConverter.rethrowContractExceptionOnError(
+        var findInstrumentResponse = ExceptionConverter.rethrowContractExceptionOnError(
                 () -> instrumentsService.findInstrumentSync(request.getId())
         );
-        var instrument = response.stream().findFirst().orElse(null);
+        var instrument = findInstrumentResponse.stream().findFirst().orElse(null);
+        var getResponse = new GetResponse();
 
-        return new GetResponse()
-                .setInstrument(null == instrument ? null : InstrumentTranslator.toContract(instrument));
+        if (null != instrument) {
+            var getInstrumentResponse = ExceptionConverter.rethrowContractExceptionOnError(
+                    () -> instrumentsService.getInstrumentByTickerSync(instrument.getTicker(), instrument.getClassCode())
+            );
+
+            getResponse.setInstrument(
+                    InstrumentTranslator.toContract(instrument)
+                            .setLot(getInstrumentResponse.getLot())
+                            .setIsin(getInstrumentResponse.getIsin())
+                            .setCurrency(getInstrumentResponse.getCurrency())
+            );
+        }
+
+        return getResponse;
     }
 }

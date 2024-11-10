@@ -2,13 +2,14 @@ package investtech.broker.contract.service.instrument;
 
 import investtech.broker.contract.service.instrument.common.InstrumentType;
 
-import java.io.*;
-
 public class Instrument {
     protected String name;
     protected String uid;
     protected String positionUid;
     protected InstrumentType instrumentType;
+    protected String isin;
+    protected int lot;
+    protected String currency;
 
     public String getName() {
         return name;
@@ -43,6 +44,33 @@ public class Instrument {
 
     public Instrument setInstrumentType(InstrumentType instrumentType) {
         this.instrumentType = instrumentType;
+        return this;
+    }
+
+    public String getIsin() {
+        return isin;
+    }
+
+    public Instrument setIsin(String isin) {
+        this.isin = isin;
+        return this;
+    }
+
+    public int getLot() {
+        return lot;
+    }
+
+    public Instrument setLot(int lot) {
+        this.lot = lot;
+        return this;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public Instrument setCurrency(String currency) {
+        this.currency = currency;
         return this;
     }
 

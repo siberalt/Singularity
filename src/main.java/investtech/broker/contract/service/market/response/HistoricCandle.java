@@ -1,7 +1,13 @@
 package investtech.broker.contract.service.market.response;
 
 import investtech.broker.contract.value.quatation.Quotation;
+import investtech.emulation.shared.market.candle.Candle;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.Objects;
+import java.util.stream.Stream;
 
 public class HistoricCandle {
     protected Quotation open;
@@ -73,5 +79,28 @@ public class HistoricCandle {
     public HistoricCandle setComplete(boolean complete) {
         isComplete = complete;
         return this;
+    }
+
+    public Quotation getAveragePrice() {
+        return getAveragePrice(RoundingMode.HALF_EVEN);
+    }
+
+    public Quotation getAveragePrice(RoundingMode roundingMode) {
+        var sum = Stream.of(low, high, close, open)
+                .map(Objects::requireNonNull)
+                .map(Quotation::toBigDecimal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return Quotation.of(sum.divide(BigDecimal.valueOf(4), roundingMode));
+    }
+
+    public static HistoricCandle of(Candle candle) {
+        return new HistoricCandle()
+                .setTime(candle.getTime())
+                .setVolume(candle.getVolume())
+                .setLow(candle.getLowPrice())
+                .setHigh(candle.getHighPrice())
+                .setClose(candle.getClosePrice())
+                .setOpen(candle.getOpenPrice())
+                .setComplete(true);
     }
 }

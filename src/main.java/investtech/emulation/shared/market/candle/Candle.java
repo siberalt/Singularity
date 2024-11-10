@@ -86,6 +86,25 @@ public class Candle {
         return this;
     }
 
+    public Candle addCumulative(Candle candle) {
+        candle.lowPrice.add(candle.closePrice);
+        candle.highPrice.add(candle.highPrice);
+        candle.openPrice.add(candle.openPrice);
+        candle.closePrice.add(candle.closePrice);
+        candle.volume += candle.volume;
+
+        return this;
+    }
+
+    @Override
+    public Candle clone() {
+        try {
+            return (Candle) super.clone();
+        } catch (CloneNotSupportedException exception) {
+            throw new RuntimeException(exception);
+        }
+    }
+
     public Quotation getAveragePrice() {
         return getAveragePrice(RoundingMode.HALF_EVEN);
     }
