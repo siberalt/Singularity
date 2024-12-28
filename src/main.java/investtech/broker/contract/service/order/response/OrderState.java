@@ -9,7 +9,7 @@ import java.util.List;
 
 public class OrderState {
     protected String orderId;
-    protected OrderExecutionReportStatus executionReportStatus;
+    protected ExecutionStatus executionReportStatus;
     protected long lotsRequested;
     protected long lotsExecuted;
     protected Money initialOrderPrice;
@@ -37,11 +37,11 @@ public class OrderState {
         return this;
     }
 
-    public OrderExecutionReportStatus getExecutionReportStatus() {
+    public ExecutionStatus getExecutionReportStatus() {
         return executionReportStatus;
     }
 
-    public OrderState setExecutionReportStatus(OrderExecutionReportStatus executionReportStatus) {
+    public OrderState setExecutionReportStatus(ExecutionStatus executionReportStatus) {
         this.executionReportStatus = executionReportStatus;
         return this;
     }

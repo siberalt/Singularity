@@ -1,6 +1,6 @@
 package investtech.factory.broker;
 
-import investtech.broker.contract.run.BrokerInterface;
+import investtech.broker.contract.execution.BrokerInterface;
 import investtech.configuration.ConfigurationInterface;
 import investtech.factory.ServiceContainer;
 

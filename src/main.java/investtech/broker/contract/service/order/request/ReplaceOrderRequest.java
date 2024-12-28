@@ -1,6 +1,6 @@
 package investtech.broker.contract.service.order.request;
 
-import investtech.broker.contract.value.quatation.Quotation;
+import investtech.broker.contract.value.quotation.Quotation;
 
 public class ReplaceOrderRequest {
     protected String accountId;

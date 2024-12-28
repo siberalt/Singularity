@@ -1,17 +1,18 @@
 package investtech.strategy.context;
 
 import investtech.broker.container.AbstractBrokerContainer;
-import investtech.broker.contract.run.BrokerInterface;
+import investtech.broker.contract.execution.BrokerInterface;
 import investtech.strategy.scheduler.SchedulerInterface;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 
 public abstract class AbstractContext<brokerT extends BrokerInterface> {
     private final AbstractBrokerContainer<brokerT> brokers;
-
     private final SchedulerInterface scheduler;
-
     protected final TimeSynchronizerInterface timeSynchronizer;
+    protected Map<String, Object> params = new HashMap<>();
 
     public AbstractContext(
             SchedulerInterface scheduler,
@@ -33,5 +34,9 @@ public abstract class AbstractContext<brokerT extends BrokerInterface> {
 
     public Instant getCurrentTime() {
         return timeSynchronizer.currentTime();
+    }
+
+    public Map<String, Object> getParams() {
+        return params;
     }
 }

@@ -2,7 +2,7 @@ package investtech.broker.contract.service.order.stop.request;
 
 import investtech.broker.contract.service.order.common.ExchangeOrderType;
 import investtech.broker.contract.service.order.request.PriceType;
-import investtech.broker.contract.value.quatation.Quotation;
+import investtech.broker.contract.value.quotation.Quotation;
 import java.time.Instant;
 
 public class PostStopOrderRequest {

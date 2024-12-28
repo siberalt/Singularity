@@ -1,15 +1,15 @@
 package investtech.broker.contract.service.market.response;
 
-import java.util.Collection;
+import java.util.List;
 
 public class GetCandlesResponse {
-    Collection<HistoricCandle> candles;
+    List<HistoricCandle> candles;
 
-    public Collection<HistoricCandle> getCandles() {
+    public List<HistoricCandle> getCandles() {
         return candles;
     }
 
-    public GetCandlesResponse setCandles(Collection<HistoricCandle> candles) {
+    public GetCandlesResponse setCandles(List<HistoricCandle> candles) {
         this.candles = candles;
         return this;
     }

@@ -3,11 +3,10 @@ package investtech.broker.contract.service.order.response;
 import investtech.broker.contract.service.order.request.OrderDirection;
 import investtech.broker.contract.service.order.request.OrderType;
 import investtech.broker.contract.value.money.Money;
-import investtech.broker.contract.value.quatation.Quotation;
 
 public class PostOrderResponse {
     protected String orderId;
-    protected OrderExecutionReportStatus executionReportStatus;
+    protected ExecutionStatus executionReportStatus;
     protected long lotsRequested;
     protected long lotsExecuted;
     protected Money initialOrderPrice;
@@ -20,7 +19,6 @@ public class PostOrderResponse {
     protected Money initialSecurityPrice;
     protected OrderType orderType;
     protected String message;
-    protected Quotation initialOrderPricePt;
     protected String instrumentUid;
     protected String orderRequestId;
 
@@ -33,11 +31,11 @@ public class PostOrderResponse {
         return this;
     }
 
-    public OrderExecutionReportStatus getExecutionReportStatus() {
+    public ExecutionStatus getExecutionStatus() {
         return executionReportStatus;
     }
 
-    public PostOrderResponse setExecutionReportStatus(OrderExecutionReportStatus executionReportStatus) {
+    public PostOrderResponse setExecutionStatus(ExecutionStatus executionReportStatus) {
         this.executionReportStatus = executionReportStatus;
         return this;
     }
@@ -147,15 +145,6 @@ public class PostOrderResponse {
 
     public PostOrderResponse setMessage(String message) {
         this.message = message;
-        return this;
-    }
-
-    public Quotation getInitialOrderPricePt() {
-        return initialOrderPricePt;
-    }
-
-    public PostOrderResponse setInitialOrderPricePt(Quotation initialOrderPricePt) {
-        this.initialOrderPricePt = initialOrderPricePt;
         return this;
     }
 

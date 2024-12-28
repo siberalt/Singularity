@@ -97,6 +97,7 @@ public enum ErrorCode {
     INSTRUMENT_NOT_FOUND(ErrorType.NOT_FOUND), //Instrument not found	Инструмент не найден.
     ACCOUNT_NOT_FOUND(ErrorType.NOT_FOUND), //Account not found	Счёт по переданному account_id не найден.
     ORDER_NOT_FOUND(ErrorType.NOT_FOUND), //Order not found	Торговое поручение по переданному order_id не найдено.
+    POSITION_NOT_FOUND(ErrorType.NOT_FOUND), //Order not found	Торговое поручение по переданному order_id не найдено.
     STOP_ORDER_NOT_FOUND(ErrorType.NOT_FOUND), //Stop-order not found	Стоп-заявка по переданному stop_order_id не найдена.
     TASK_NOT_FOUND(ErrorType.NOT_FOUND), //Task not found	Задача не найдена.
     ASSET_NOT_FOUND(ErrorType.NOT_FOUND), //Asset not found	Актив не найден.

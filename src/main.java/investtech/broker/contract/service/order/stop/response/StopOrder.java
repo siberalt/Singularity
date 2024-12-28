@@ -7,7 +7,7 @@ import investtech.broker.contract.service.order.stop.request.StopOrderType;
 import investtech.broker.contract.service.order.stop.request.TakeProfitType;
 import investtech.broker.contract.service.order.stop.request.TrailingValueType;
 import investtech.broker.contract.value.money.Money;
-import investtech.broker.contract.value.quatation.Quotation;
+import investtech.broker.contract.value.quotation.Quotation;
 
 import java.time.Instant;
 

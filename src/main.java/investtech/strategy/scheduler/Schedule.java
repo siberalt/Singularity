@@ -2,7 +2,6 @@ package investtech.strategy.scheduler;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Date;
 
 public class Schedule {
     public enum ExecutionType {
@@ -12,15 +11,10 @@ public class Schedule {
     }
 
     protected Instant startTime;
-
     protected Duration interval;
-
     protected ExecutionType executionType = ExecutionType.DEFAULT;
-
     protected int iterations;
-
     protected int totalCalls = 0;
-
 
     public Instant getStartTime() {
         return startTime;

@@ -1,15 +1,15 @@
 package investtech.broker.contract.service.user;
 
-import java.util.Collection;
+import java.util.List;
 
 public class GetAccountsResponse {
-    Collection<Account> accounts;
+    List<Account> accounts;
 
-    public Collection<Account> getAccounts() {
+    public List<Account> getAccounts() {
         return accounts;
     }
 
-    public GetAccountsResponse setAccounts(Collection<Account> accounts) {
+    public GetAccountsResponse setAccounts(List<Account> accounts) {
         this.accounts = accounts;
         return this;
     }

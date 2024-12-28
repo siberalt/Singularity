@@ -2,11 +2,8 @@ package investtech.broker.contract.service.exception;
 
 public class ExceptionBuilder {
     protected ErrorCode errorCode;
-
     protected String message;
-
     protected String invalidAttribute;
-
     protected Throwable suppressedException;
 
     public ExceptionBuilder(ErrorCode errorCode) {
@@ -51,6 +48,10 @@ public class ExceptionBuilder {
         T exception;
 
         try {
+            if (null == message) {
+                message = errorCode.name();
+            }
+
             exception = classException
                     .getDeclaredConstructor(ErrorCode.class, String.class)
                     .newInstance(errorCode, message);

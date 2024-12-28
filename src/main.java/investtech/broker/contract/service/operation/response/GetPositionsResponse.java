@@ -7,7 +7,7 @@ import java.util.Collection;
 public class GetPositionsResponse {
     protected Collection<Money> money;
     protected Collection<Money> blocked;
-    protected Collection<PositionSecurities> securities;
+    protected Collection<Position> securities;
 
     public Collection<Money> getMoney() {
         return money;
@@ -27,11 +27,11 @@ public class GetPositionsResponse {
         return this;
     }
 
-    public Collection<PositionSecurities> getSecurities() {
+    public Collection<Position> getSecurities() {
         return securities;
     }
 
-    public GetPositionsResponse setSecurities(Collection<PositionSecurities> securities) {
+    public GetPositionsResponse setSecurities(Collection<Position> securities) {
         this.securities = securities;
         return this;
     }

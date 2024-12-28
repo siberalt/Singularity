@@ -1,7 +1,7 @@
 package investtech.broker.contract.service.market.response;
 
 
-import investtech.broker.contract.value.quatation.Quotation;
+import investtech.broker.contract.value.quotation.Quotation;
 
 import java.time.Instant;
 

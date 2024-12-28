@@ -1,7 +1,7 @@
 package investtech.factory.broker;
 
-import investtech.broker.contract.run.BrokerInterface;
-import investtech.broker.impl.tinkoff.run.TinkoffBroker;
+import investtech.broker.contract.execution.BrokerInterface;
+import investtech.broker.impl.tinkoff.execution.TinkoffBroker;
 import investtech.configuration.ConfigurationInterface;
 import investtech.configuration.validation.ConfigValidationAwareInterface;
 import investtech.configuration.validation.ConstraintsAggregate;

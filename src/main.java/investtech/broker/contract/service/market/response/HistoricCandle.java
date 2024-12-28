@@ -1,7 +1,7 @@
 package investtech.broker.contract.service.market.response;
 
-import investtech.broker.contract.value.quatation.Quotation;
-import investtech.emulation.shared.market.candle.Candle;
+import investtech.broker.contract.value.quotation.Quotation;
+import investtech.simulation.shared.market.candle.Candle;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
