@@ -1,6 +1,5 @@
-package investtech.broker.impl.mock.simulation;
+package investtech.broker.impl.mock;
 
-import investtech.broker.contract.simulation.SimulationBrokerInterface;
 import investtech.broker.contract.execution.StopOrderServiceAwareBrokerInterface;
 import investtech.broker.contract.service.order.stop.StopOrderServiceInterface;
 import investtech.simulation.shared.instrument.InstrumentStorageInterface;
@@ -9,10 +8,7 @@ import investtech.strategy.context.AbstractContext;
 import investtech.strategy.context.ContextAwareInterface;
 import investtech.strategy.event.EventManagerInterface;
 
-import java.time.Instant;
-
-public class MockBroker implements SimulationBrokerInterface, StopOrderServiceAwareBrokerInterface, ContextAwareInterface {
-    protected Instant toTime;
+public class MockBroker implements StopOrderServiceAwareBrokerInterface, ContextAwareInterface {
     protected AbstractContext<?> context;
     protected MockMarketDataService marketDataService;
     protected MockOrderService orderService;
@@ -26,11 +22,6 @@ public class MockBroker implements SimulationBrokerInterface, StopOrderServiceAw
         operationsService = new MockOperationsService(this);
         instrumentService = new MockInstrumentService(this, instrumentStorage);
         userService = new MockUserService(this);
-    }
-
-    @Override
-    public void initPeriod(Instant from, Instant to) {
-        this.toTime = to;
     }
 
     @Override

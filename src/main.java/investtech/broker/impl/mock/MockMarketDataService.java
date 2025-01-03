@@ -1,4 +1,4 @@
-package investtech.broker.impl.mock.simulation;
+package investtech.broker.impl.mock;
 
 import investtech.broker.contract.service.market.MarketDataServiceInterface;
 import investtech.broker.contract.service.market.request.CandleInterval;
@@ -71,7 +71,7 @@ public class MockMarketDataService implements MarketDataServiceInterface {
         return candleStorage.getAt(instrumentUid, at);
     }
 
-    protected List<Candle> findCandlesByClosePrice(CandleInterval interval, FindPriceParams findParams) {
+    protected List<Candle> findCandlesByOpenPrice(CandleInterval interval, FindPriceParams findParams) {
         return adaptCandlesForInterval(this.candleStorage.findByOpenPrice(findParams), interval);
     }
 

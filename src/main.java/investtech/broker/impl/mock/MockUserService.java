@@ -1,5 +1,6 @@
-package investtech.broker.impl.mock.simulation;
+package investtech.broker.impl.mock;
 
+import investtech.broker.contract.service.exception.AbstractException;
 import investtech.broker.contract.service.exception.ErrorCode;
 import investtech.broker.contract.service.exception.ExceptionBuilder;
 import investtech.broker.contract.service.user.*;
@@ -40,8 +41,8 @@ public class MockUserService implements UserServiceInterface {
         return account;
     }
 
-    public void closeAccount(String accountId) {
-        assert accountsStates.containsKey(accountId) : ExceptionBuilder.create(ErrorCode.ACCOUNT_NOT_FOUND);
+    public void closeAccount(String accountId) throws AbstractException {
+        checkAccountExists(accountId);
 
         var account = accountsStates.get(accountId).getAccount();
 
@@ -55,5 +56,11 @@ public class MockUserService implements UserServiceInterface {
     public GetAccountsResponse getAccounts(GetAccountsRequest request) {
         return new GetAccountsResponse()
                 .setAccounts(accountsStates.values().stream().map(AccountState::getAccount).toList());
+    }
+
+    void checkAccountExists(String accountId) throws AbstractException {
+        if (!accountExists(accountId)) {
+            throw ExceptionBuilder.create(ErrorCode.ACCOUNT_NOT_FOUND);
+        }
     }
 }

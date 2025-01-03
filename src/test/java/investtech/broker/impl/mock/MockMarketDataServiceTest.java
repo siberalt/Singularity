@@ -1,4 +1,4 @@
-package investtech.broker.impl.mock.simulation;
+package investtech.broker.impl.mock;
 
 import investtech.broker.contract.service.instrument.Instrument;
 import investtech.broker.contract.service.market.request.CandleInterval;
@@ -9,7 +9,7 @@ import investtech.broker.contract.service.market.response.GetLastPricesResponse;
 import investtech.broker.contract.service.market.response.HistoricCandle;
 import investtech.broker.contract.service.market.response.LastPrice;
 import investtech.broker.contract.value.quotation.Quotation;
-import investtech.broker.impl.mock.simulation.config.MockBrokerConfig;
+import investtech.broker.impl.mock.config.MockBrokerConfig;
 import investtech.simulation.shared.instrument.RuntimeInstrumentStorage;
 import investtech.simulation.shared.market.candle.Candle;
 import investtech.simulation.shared.market.candle.ComparisonOperator;
@@ -258,7 +258,7 @@ class MockMarketDataServiceTest {
                 .setTo(Instant.parse("2020-12-30T14:45:00Z"))
                 .setPrice(Quotation.of(5.554))
                 .setComparisonOperator(ComparisonOperator.MORE);
-        List<Candle> result = marketDataService.findCandlesByClosePrice(CandleInterval.MIN_1, params);
+        List<Candle> result = marketDataService.findCandlesByOpenPrice(CandleInterval.MIN_1, params);
 
         assertNotNull(result);
         assertEquals(4, result.size());

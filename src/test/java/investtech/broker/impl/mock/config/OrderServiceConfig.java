@@ -1,4 +1,4 @@
-package investtech.broker.impl.mock.simulation.config;
+package investtech.broker.impl.mock.config;
 
 public class OrderServiceConfig {
     protected double commissionRatio = 0.003;

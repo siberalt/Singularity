@@ -36,11 +36,27 @@ public class Quotation {
         return Quotation.of(toBigDecimal().add(quotation.toBigDecimal()));
     }
 
+    public Quotation add(double value) {
+        return Quotation.of(toBigDecimal().add(BigDecimal.valueOf(value)));
+    }
+
+    public Quotation add(int value) {
+        return Quotation.of(toBigDecimal().add(BigDecimal.valueOf(value)));
+    }
+
+    public Quotation add(BigDecimal value) {
+        return Quotation.of(toBigDecimal().add(value));
+    }
+
     public Quotation subtract(Quotation quotation) {
         return Quotation.of(toBigDecimal().subtract(quotation.toBigDecimal()));
     }
 
     public Quotation multiply(int multiplyBy) {
+        return Quotation.of(toBigDecimal().multiply(BigDecimal.valueOf(multiplyBy)));
+    }
+
+    public Quotation multiply(double multiplyBy) {
         return Quotation.of(toBigDecimal().multiply(BigDecimal.valueOf(multiplyBy)));
     }
 
@@ -153,6 +169,10 @@ public class Quotation {
 
     public static Quotation of(long units, int nano) {
         return new Quotation().setNano(nano).setUnits(units);
+    }
+
+    public static Quotation of(long value) {
+        return Quotation.of(BigDecimal.valueOf(value));
     }
 
     public static Quotation of(String value) {

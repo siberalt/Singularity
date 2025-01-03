@@ -1,4 +1,4 @@
-package investtech.broker.impl.mock.simulation;
+package investtech.broker.impl.mock;
 
 import investtech.broker.contract.service.exception.AbstractException;
 import investtech.broker.contract.service.instrument.InstrumentServiceInterface;

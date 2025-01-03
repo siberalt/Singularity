@@ -1,4 +1,4 @@
-package investtech.broker.impl.mock.simulation.config;
+package investtech.broker.impl.mock.config;
 
 public class MockBrokerConfig {
     public static final String SETTINGS_PATH = "src/test/resources/broker.mock/test-settings.yaml";

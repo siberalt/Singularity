@@ -4,32 +4,33 @@ import investtech.broker.contract.service.instrument.Instrument;
 import investtech.broker.contract.service.order.request.PostOrderRequest;
 import investtech.broker.contract.service.order.response.ExecutionStatus;
 import investtech.broker.contract.service.order.response.OrderState;
+import investtech.broker.contract.value.money.Money;
 import investtech.broker.contract.value.quotation.Quotation;
-import investtech.simulation.Event;
 
 import java.time.Instant;
 import java.util.UUID;
 
 public class Order {
     protected Quotation instrumentPrice;
-    protected Event event;
     protected PostOrderRequest request;
     protected Instant createdDate;
     protected String requestId;
-    protected ExecutionStatus reportStatus;
+    protected ExecutionStatus executionStatus;
     protected Instrument instrument;
     protected Quotation initialPrice;
     protected Quotation totalPrice;
     protected Quotation commissionPrice;
-    protected Quotation executedPrice;
+    protected Quotation totalPricePerOne;
     protected Quotation initialPricePerOne;
+    protected long lotsExecuted;
+    protected long lotsRequested;
 
-    public Quotation getExecutedPrice() {
-        return executedPrice;
+    public Quotation getTotalPricePerOne() {
+        return totalPricePerOne;
     }
 
-    public Order setExecutedPrice(Quotation executedPrice) {
-        this.executedPrice = executedPrice;
+    public Order setTotalPricePerOne(Quotation totalPricePerOne) {
+        this.totalPricePerOne = totalPricePerOne;
         return this;
     }
 
@@ -69,15 +70,6 @@ public class Order {
         return instrumentPrice;
     }
 
-    public Event getEvent() {
-        return event;
-    }
-
-    public Order setEvent(Event event) {
-        this.event = event;
-        return this;
-    }
-
     public PostOrderRequest getRequest() {
         return request;
     }
@@ -105,8 +97,8 @@ public class Order {
         return this;
     }
 
-    public ExecutionStatus getReportStatus() {
-        return reportStatus;
+    public ExecutionStatus getExecutionStatus() {
+        return executionStatus;
     }
 
     public Quotation getInitialPricePerOne() {
@@ -118,8 +110,8 @@ public class Order {
         return this;
     }
 
-    public Order setReportStatus(ExecutionStatus reportStatus) {
-        this.reportStatus = reportStatus;
+    public Order setExecutionStatus(ExecutionStatus executionStatus) {
+        this.executionStatus = executionStatus;
         return this;
     }
 
@@ -132,38 +124,63 @@ public class Order {
         return this;
     }
 
+    public long getLotsExecuted() {
+        return lotsExecuted;
+    }
+
+    public Order setLotsExecuted(long lotsExecuted) {
+        this.lotsExecuted = lotsExecuted;
+        return this;
+    }
+
+    public long getLotsRequested() {
+        return lotsRequested;
+    }
+
+    public Order setLotsRequested(long lotsRequested) {
+        this.lotsRequested = lotsRequested;
+        return this;
+    }
+
     public OrderState getState() {
+        String instrumentCurrency = getInstrument().getCurrency();
+
         return new OrderState()
-                .setOrderId(request.getOrderId())
-                .setDirection(request.getDirection())
-                .setOrderType(request.getOrderType())
-                .setInstrumentUid(request.getInstrumentId())
-                .setOrderDate(createdDate)
-                .setOrderRequestId(requestId)
-                .setLotsRequested(request.getQuantity());
+            .setOrderId(request.getOrderId())
+            .setDirection(request.getDirection())
+            .setOrderType(request.getOrderType())
+            .setInstrumentUid(request.getInstrumentId())
+            .setOrderDate(createdDate)
+            .setOrderRequestId(requestId)
+            .setLotsRequested(request.getQuantity())
+            .setLotsExecuted(lotsExecuted)
+            .setInitialOrderPrice(Money.of(instrumentCurrency, initialPrice))
+            .setExecutedOrderPrice(Money.of(instrumentCurrency, totalPricePerOne))
+            .setExecutedCommission(Money.of(instrumentCurrency, commissionPrice))
+            .setTotalOrderAmount(Money.of(instrumentCurrency, totalPrice))
+            .setInitialSecurityPrice(Money.of(instrumentCurrency, initialPricePerOne))
+            .setExecutionStatus(executionStatus)
+            .setCurrency(instrumentCurrency);
     }
 
     public static Order of(
-            Event event,
-            PostOrderRequest request,
-            Instant date,
-            ExecutionStatus status
+        PostOrderRequest request,
+        Instant date,
+        ExecutionStatus status
     ) {
-        return of(event, request, date, UUID.randomUUID().toString(), status);
+        return of(request, date, UUID.randomUUID().toString(), status);
     }
 
     public static Order of(
-            Event event,
-            PostOrderRequest request,
-            Instant date,
-            String requestId,
-            ExecutionStatus status
+        PostOrderRequest request,
+        Instant date,
+        String requestId,
+        ExecutionStatus status
     ) {
         return new Order()
-                .setEvent(event)
-                .setRequest(request)
-                .setCreatedDate(date)
-                .setRequestId(requestId)
-                .setReportStatus(status);
+            .setRequest(request)
+            .setCreatedDate(date)
+            .setRequestId(requestId)
+            .setExecutionStatus(status);
     }
 }

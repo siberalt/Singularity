@@ -1,6 +1,8 @@
-package investtech.broker.impl.mock.simulation;
+package investtech.broker.impl.mock;
 
+import investtech.broker.contract.service.exception.AbstractException;
 import investtech.broker.contract.service.user.*;
+import investtech.broker.impl.mock.MockBroker;
 import investtech.strategy.context.emulation.SimulationContext;
 import investtech.strategy.context.emulation.time.SimulationTimeSynchronizer;
 import org.junit.jupiter.api.Assertions;
@@ -10,7 +12,7 @@ import java.time.Instant;
 
 public class MockUsersServiceTest {
     @Test
-    void testBasic() {
+    void testBasic() throws AbstractException {
         var openDate = Instant.parse("2020-12-30T07:00:00Z");
         var timeSynchronizer = new SimulationTimeSynchronizer();
         timeSynchronizer.syncCurrentTime(openDate);

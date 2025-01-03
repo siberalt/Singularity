@@ -9,14 +9,14 @@ public class PostOrderResponse {
     protected ExecutionStatus executionReportStatus;
     protected long lotsRequested;
     protected long lotsExecuted;
-    protected Money initialOrderPrice;
-    protected Money executedOrderPrice;
-    protected Money totalOrderAmount;
+    protected Money initialPrice;
+    protected Money totalPricePerOne;
+    protected Money totalPrice;
     protected Money initialCommission;
     protected Money executedCommission;
     protected Money aciValue;
     protected OrderDirection direction;
-    protected Money initialSecurityPrice;
+    protected Money initialPricePerOne;
     protected OrderType orderType;
     protected String message;
     protected String instrumentUid;
@@ -58,30 +58,30 @@ public class PostOrderResponse {
         return this;
     }
 
-    public Money getInitialOrderPrice() {
-        return initialOrderPrice;
+    public Money getInitialPrice() {
+        return initialPrice;
     }
 
-    public PostOrderResponse setInitialOrderPrice(Money initialOrderPrice) {
-        this.initialOrderPrice = initialOrderPrice;
+    public PostOrderResponse setInitialPrice(Money initialPrice) {
+        this.initialPrice = initialPrice;
         return this;
     }
 
-    public Money getExecutedOrderPrice() {
-        return executedOrderPrice;
+    public Money getTotalPricePerOne() {
+        return totalPricePerOne;
     }
 
-    public PostOrderResponse setExecutedOrderPrice(Money executedOrderPrice) {
-        this.executedOrderPrice = executedOrderPrice;
+    public PostOrderResponse setTotalPricePerOne(Money totalPricePerOne) {
+        this.totalPricePerOne = totalPricePerOne;
         return this;
     }
 
-    public Money getTotalOrderAmount() {
-        return totalOrderAmount;
+    public Money getTotalPrice() {
+        return totalPrice;
     }
 
-    public PostOrderResponse setTotalOrderAmount(Money totalOrderAmount) {
-        this.totalOrderAmount = totalOrderAmount;
+    public PostOrderResponse setTotalPrice(Money totalPrice) {
+        this.totalPrice = totalPrice;
         return this;
     }
 
@@ -121,12 +121,12 @@ public class PostOrderResponse {
         return this;
     }
 
-    public Money getInitialSecurityPrice() {
-        return initialSecurityPrice;
+    public Money getInitialPricePerOne() {
+        return initialPricePerOne;
     }
 
-    public PostOrderResponse setInitialSecurityPrice(Money initialSecurityPrice) {
-        this.initialSecurityPrice = initialSecurityPrice;
+    public PostOrderResponse setInitialPricePerOne(Money initialPricePerOne) {
+        this.initialPricePerOne = initialPricePerOne;
         return this;
     }
 

@@ -7,7 +7,7 @@ public class OrderStateTranslator {
     public static ru.tinkoff.piapi.contract.v1.OrderState toTinkoff(OrderState orderState) {
         return ru.tinkoff.piapi.contract.v1.OrderState.newBuilder()
                 .setOrderId(orderState.getOrderId())
-                .setExecutionReportStatus(OrderExecutionReportStatusTranslator.toTinkoff(orderState.getExecutionReportStatus()))
+                .setExecutionReportStatus(OrderExecutionReportStatusTranslator.toTinkoff(orderState.getExecutionStatus()))
                 .setLotsRequested(orderState.getLotsRequested())
                 .setLotsExecuted(orderState.getLotsExecuted())
                 .setInitialOrderPrice(MoneyValueTranslator.toTinkoff(orderState.getInitialOrderPrice()))
@@ -31,7 +31,7 @@ public class OrderStateTranslator {
     public static OrderState toContract(ru.tinkoff.piapi.contract.v1.OrderState orderState) {
         return new OrderState()
                 .setOrderId(orderState.getOrderId())
-                .setExecutionReportStatus(OrderExecutionReportStatusTranslator.toContract(orderState.getExecutionReportStatus()))
+                .setExecutionStatus(OrderExecutionReportStatusTranslator.toContract(orderState.getExecutionReportStatus()))
                 .setLotsRequested(orderState.getLotsRequested())
                 .setLotsExecuted(orderState.getLotsExecuted())
                 .setInitialOrderPrice(MoneyValueTranslator.toContract(orderState.getInitialOrderPrice()))

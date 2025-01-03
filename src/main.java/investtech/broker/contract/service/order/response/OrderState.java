@@ -9,7 +9,7 @@ import java.util.List;
 
 public class OrderState {
     protected String orderId;
-    protected ExecutionStatus executionReportStatus;
+    protected ExecutionStatus executionStatus;
     protected long lotsRequested;
     protected long lotsExecuted;
     protected Money initialOrderPrice;
@@ -37,12 +37,12 @@ public class OrderState {
         return this;
     }
 
-    public ExecutionStatus getExecutionReportStatus() {
-        return executionReportStatus;
+    public ExecutionStatus getExecutionStatus() {
+        return executionStatus;
     }
 
-    public OrderState setExecutionReportStatus(ExecutionStatus executionReportStatus) {
-        this.executionReportStatus = executionReportStatus;
+    public OrderState setExecutionStatus(ExecutionStatus executionStatus) {
+        this.executionStatus = executionStatus;
         return this;
     }
 
@@ -203,7 +203,7 @@ public class OrderState {
     public String toString() {
         var elements = List.of(
                 String.format("orderId: %s", orderId),
-                String.format("executionReportStatus: %s", executionReportStatus),
+                String.format("executionStatus: %s", executionStatus),
                 String.format("lotsRequested: %d", lotsRequested),
                 String.format("lotsExecuted: %d", lotsExecuted),
                 String.format("initialOrderPrice: %s", initialOrderPrice),

@@ -1,4 +1,4 @@
-package investtech.broker.impl.mock.simulation.config;
+package investtech.broker.impl.mock.config;
 
 import investtech.broker.contract.service.instrument.common.InstrumentType;
 
@@ -7,7 +7,7 @@ public class InstrumentConfig {
     protected String name;
     protected String uid;
     protected String positionUid;
-    protected InstrumentType instrumentType;
+    protected InstrumentType instrumentType = InstrumentType.SHARE;
     protected String isin;
     protected int lot;
     protected String currency;

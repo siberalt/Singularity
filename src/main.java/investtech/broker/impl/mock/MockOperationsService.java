@@ -1,4 +1,4 @@
-package investtech.broker.impl.mock.simulation;
+package investtech.broker.impl.mock;
 
 import investtech.broker.contract.service.exception.AbstractException;
 import investtech.broker.contract.service.exception.ErrorCode;
@@ -44,7 +44,7 @@ public class MockOperationsService implements OperationsServiceInterface {
         return getOrCreateBalance(accountId).isEnoughOfMoney(amount);
     }
 
-    public Money getAvailableMoneyForCurrency(String accountId, String currencyIso) throws AbstractException {
+    public Money getAvailableMoney(String accountId, String currencyIso) throws AbstractException {
         checkAccountExists(accountId);
 
         return getOrCreateBalance(accountId).getAvailableMoney(currencyIso);

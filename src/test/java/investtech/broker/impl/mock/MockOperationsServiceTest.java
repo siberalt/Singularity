@@ -1,4 +1,4 @@
-package investtech.broker.impl.mock.simulation;
+package investtech.broker.impl.mock;
 
 import investtech.broker.contract.service.exception.AbstractException;
 import investtech.broker.contract.service.exception.InvalidRequestException;
@@ -63,14 +63,14 @@ public class MockOperationsServiceTest {
         Assertions.assertEquals(Quotation.of(1D), money.getQuotation());
 
         operationsService.addMoney(account.getId(), Money.of("RUB", 1000D));
-        money = operationsService.getAvailableMoneyForCurrency(account.getId(), "RUB");
+        money = operationsService.getAvailableMoney(account.getId(), "RUB");
         Assertions.assertNotNull(money);
         Assertions.assertEquals("RUB", money.getCurrencyIso());
         Assertions.assertEquals(Quotation.of(13000D), money.getQuotation());
 
         // Test subtractMoney
         operationsService.subtractMoney(account.getId(), Money.of("USD", 5000D));
-        money = operationsService.getAvailableMoneyForCurrency(account.getId(), "USD");
+        money = operationsService.getAvailableMoney(account.getId(), "USD");
         Assertions.assertNotNull(money);
         Assertions.assertEquals("USD", money.getCurrencyIso());
         Assertions.assertEquals(Quotation.of(715000D), money.getQuotation());
@@ -128,7 +128,7 @@ public class MockOperationsServiceTest {
         );
         Assertions.assertEquals(
                 Money.of("RUB", 1000D),
-                operationsService.getAvailableMoneyForCurrency(account.getId(), "RUB")
+                operationsService.getAvailableMoney(account.getId(), "RUB")
         );
         Assertions.assertThrowsExactly(
                 InvalidRequestException.class,
@@ -142,7 +142,7 @@ public class MockOperationsServiceTest {
         );
         Assertions.assertEquals(
                 Money.of("RUB", 11000D),
-                operationsService.getAvailableMoneyForCurrency(account.getId(), "RUB")
+                operationsService.getAvailableMoney(account.getId(), "RUB")
         );
 
         // Test account not found
