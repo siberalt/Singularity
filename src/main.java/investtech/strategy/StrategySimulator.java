@@ -1,6 +1,6 @@
 package investtech.strategy;
 
-import investtech.broker.container.emulation.SimulationBrokerContainer;
+import investtech.broker.container.simulation.SimulationBrokerContainer;
 import investtech.broker.contract.simulation.SimulationBrokerInterface;
 import investtech.simulation.EventInvokerInterface;
 import investtech.simulation.EventObserver;
@@ -13,15 +13,15 @@ import investtech.strategy.scheduler.emulation.EmulationSchedulerInterface;
 import java.time.Instant;
 import java.util.Map;
 
-public class StrategyEmulator {
+public class StrategySimulator {
     protected Map<String, StrategyInterface> strategies;
     protected Map<String, SimulationBrokerInterface> brokers;
     protected EmulationSchedulerInterface scheduler;
     protected SimulationContext context;
     protected boolean isRunning = false;
-    protected Simulator timeFlowEmulator;
+    protected Simulator simulator;
 
-    public StrategyEmulator(
+    public StrategySimulator(
             Map<String, StrategyInterface> strategies,
             Map<String, SimulationBrokerInterface> brokers,
             EmulationSchedulerInterface scheduler
@@ -35,20 +35,20 @@ public class StrategyEmulator {
         isRunning = true;
         SimulationTimeSynchronizer timeSynchronizer = new SimulationTimeSynchronizer();
         EventObserver eventObserver = new EventObserver();
-        timeFlowEmulator = new Simulator(eventObserver, timeSynchronizer);
+        simulator = new Simulator(eventObserver, timeSynchronizer);
 
         for (var broker : this.brokers.values()) {
             broker.initPeriod(from, to);
 
             if (broker.getEventManager() instanceof EventInvokerInterface) {
                 ((EventInvokerInterface) broker.getEventManager()).observeEventsBy(eventObserver);
-                timeFlowEmulator.addTimeDependentUnit((TimeDependentUnitInterface) broker.getEventManager());
+                simulator.addTimeDependentUnit((TimeDependentUnitInterface) broker.getEventManager());
             }
         }
 
         if (scheduler instanceof EventInvokerInterface) {
             ((EventInvokerInterface) scheduler).observeEventsBy(eventObserver);
-            timeFlowEmulator.addTimeDependentUnit((TimeDependentUnitInterface) scheduler);
+            simulator.addTimeDependentUnit((TimeDependentUnitInterface) scheduler);
         }
 
         var context = createContext(timeSynchronizer);
@@ -57,7 +57,7 @@ public class StrategyEmulator {
             strategy.start(context);
         }
 
-        timeFlowEmulator.run(from, to);
+        simulator.run(from, to);
         isRunning = false;
     }
 

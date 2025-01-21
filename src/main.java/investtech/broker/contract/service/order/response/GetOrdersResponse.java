@@ -1,15 +1,15 @@
 package investtech.broker.contract.service.order.response;
 
-import java.util.Collection;
+import java.util.List;
 
 public class GetOrdersResponse {
-    Collection<OrderState> orders;
+    List<OrderState> orders;
 
-    public Collection<OrderState> getOrders() {
+    public List<OrderState> getOrders() {
         return orders;
     }
 
-    public GetOrdersResponse setOrders(Collection<OrderState> orders) {
+    public GetOrdersResponse setOrders(List<OrderState> orders) {
         this.orders = orders;
         return this;
     }

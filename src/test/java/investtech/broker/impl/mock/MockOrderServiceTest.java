@@ -1,13 +1,11 @@
 package investtech.broker.impl.mock;
 
-import investtech.broker.container.emulation.SimulationBrokerContainer;
+import investtech.broker.container.simulation.SimulationBrokerContainer;
 import investtech.broker.contract.service.exception.*;
 import investtech.broker.contract.service.instrument.Instrument;
-import investtech.broker.contract.service.order.request.GetOrderStateRequest;
-import investtech.broker.contract.service.order.request.OrderDirection;
-import investtech.broker.contract.service.order.request.OrderType;
-import investtech.broker.contract.service.order.request.PostOrderRequest;
+import investtech.broker.contract.service.order.request.*;
 import investtech.broker.contract.service.order.response.ExecutionStatus;
+import investtech.broker.contract.service.order.response.GetOrdersResponse;
 import investtech.broker.contract.service.order.response.PostOrderResponse;
 import investtech.broker.contract.service.user.AccessLevel;
 import investtech.broker.contract.service.user.Account;
@@ -28,13 +26,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-public class MockOrderServiceTest {
+public abstract class MockOrderServiceTest {
     protected static final String SETTINGS_PATH = "src/test/resources/broker.mock/test-settings.yaml";
     protected MockBroker broker;
     protected MockBrokerConfig config;
@@ -43,6 +41,8 @@ public class MockOrderServiceTest {
     protected Account testAccount;
     protected Instant currentTime;
     protected Quotation commissionRatio;
+    protected InstrumentStorageInterface instrumentStorage;
+    protected TimeSynchronizerInterface timeSynchronizer;
 
     @BeforeEach
     public void setUp() throws Exception {
@@ -52,14 +52,14 @@ public class MockOrderServiceTest {
         Instrument instrument = createInstrument(config.getInstrument());
         currentTime = Instant.parse("2021-12-15T15:00:00Z");
 
-        InstrumentStorageInterface instrumentStorage = mock(InstrumentStorageInterface.class);
+        instrumentStorage = mock(InstrumentStorageInterface.class);
         when(instrumentStorage.get(instrument.getUid())).thenReturn(instrument);
         candleStorage = mock(CandleStorageInterface.class);
 
-        TimeSynchronizerInterface timeSynchronizer = mock(TimeSynchronizerInterface.class);
+        timeSynchronizer = mock(TimeSynchronizerInterface.class);
         when(timeSynchronizer.currentTime()).thenReturn(currentTime);
 
-        broker = new MockBroker(candleStorage, instrumentStorage);
+        broker = createBroker(candleStorage, instrumentStorage);
         broker.applyContext(
             new SimulationContext(
                 mock(SchedulerInterface.class),
@@ -76,496 +76,212 @@ public class MockOrderServiceTest {
         orderService = broker.getOrderService();
     }
 
-    @Test
-    public void testThrowException() {
-        InstrumentConfig instrumentConfig = config.getInstrument();
-        when(candleStorage.getAt(any(), any())).thenReturn(Optional.of(createCandle(currentTime, 7, 8, 9, 1, 100, instrumentConfig.getUid())));
+    abstract MockBroker createBroker(
+        CandleStorageInterface candleStorage,
+        InstrumentStorageInterface instrumentStorage
+    );
 
-        assertThrowsWithErrorCode(
-            InvalidRequestException.class,
-            ErrorCode.INSUFFICIENT_BALANCE,
-            () -> orderService.post(
-                new PostOrderRequest()
-                    .setInstrumentId(instrumentConfig.getUid())
-                    .setQuantity(10)
-                    .setAccountId(testAccount.getId())
-                    .setDirection(OrderDirection.BUY)
-                    .setOrderType(OrderType.MARKET)
-            )
-        );
-        assertThrowsWithErrorCode(
-            InvalidRequestException.class,
-            ErrorCode.INVALID_PARAMETER_PRICE,
-            () -> orderService.post(
-                new PostOrderRequest()
-                    .setInstrumentId(instrumentConfig.getUid())
-                    .setQuantity(10)
-                    .setAccountId(testAccount.getId())
-                    .setDirection(OrderDirection.BUY)
-                    .setOrderType(OrderType.LIMIT)
-                    .setPrice(Quotation.of(-100))
-            )
-        );
+    @Test
+    public void testGet() throws AbstractException {
+        PostOrderResponse[] postOrderResponses = requestsForTestGet();
+        GetOrdersResponse response = orderService.get(GetOrdersRequest.of(testAccount.getId()));
+
+        for (int i = 0; i < response.getOrders().size(); i++) {
+            var postOrderResponse = postOrderResponses[i];
+
+            for (var order : response.getOrders()){
+                if (order.getOrderId().equals(postOrderResponse.getOrderId())) {
+                    assertEquals(postOrderResponse.getOrderId(), order.getOrderId());
+                    assertEquals(postOrderResponse.getDirection(), order.getDirection());
+                    assertEquals(postOrderResponse.getOrderType(), order.getOrderType());
+                    assertEquals(postOrderResponse.getLotsRequested(), order.getLotsRequested());
+                    assertEquals(postOrderResponse.getLotsExecuted(), order.getLotsExecuted());
+                    assertEquals(postOrderResponse.getInitialPrice(), order.getInitialOrderPrice());
+                    assertEquals(postOrderResponse.getTotalPricePerOne(), order.getExecutedOrderPrice());
+                    assertEquals(postOrderResponse.getTotalPrice(), order.getTotalPrice());
+                    assertEquals(postOrderResponse.getExecutionStatus(), order.getExecutionStatus());
+
+                    break;
+                }
+            }
+        }
     }
 
     @Test
     public void testBuyMarket() throws AbstractException {
-        InstrumentConfig instrumentConfig = config.getInstrument();
         Candle testCandle = createCandle(
-            currentTime, 10, 15, 5, 10, 100, instrumentConfig.getUid()
-        );
-        when(candleStorage.getAt(any(), any())).thenReturn(Optional.empty());
-        when(candleStorage.getAt(instrumentConfig.getUid(), currentTime)).thenReturn(Optional.of(testCandle));
-
-        broker.getOperationsService().addMoney(
-            testAccount.getId(),
-            Money.of(
-                config.getInstrument().getCurrency(),
-                testCandle.getOpenPrice().multiply(100)
-            )
+            currentTime, 10, 15, 5, 10, 100
         );
 
-        PostOrderResponse postResponse = orderService.post(
-            new PostOrderRequest()
-                .setInstrumentId(instrumentConfig.getUid())
-                .setQuantity(15)
-                .setAccountId(testAccount.getId())
-                .setDirection(OrderDirection.BUY)
-                .setOrderType(OrderType.MARKET)
-                .setPrice(testCandle.getOpenPrice())
+        assertThrowsWithErrorCode(
+            InvalidRequestException.class,
+            ErrorCode.INSUFFICIENT_BALANCE,
+            () -> assertBuyOrder(testCandle, OrderType.MARKET, 10, testCandle.getOpenPrice())
         );
 
-        Quotation actualPrice = testCandle.getOpenPrice().add(testCandle.getOpenPrice().multiply(commissionRatio));
-        assertPostOrderResponse(
-            postResponse,
-            15,
-            OrderDirection.BUY,
-            instrumentConfig.getUid(),
-            actualPrice,
-            testCandle.getOpenPrice()
+        addMoney(testCandle.getOpenPrice().multiply(100));
+        assertBuyOrder(testCandle, OrderType.MARKET, 12, testCandle.getOpenPrice());
+
+        assertThrowsWithErrorCode(
+            InvalidRequestException.class,
+            ErrorCode.QUANTITY_MUST_BE_POSITIVE,
+            () -> assertBuyOrder(testCandle, OrderType.MARKET, -10, testCandle.getOpenPrice())
         );
 
-        verify(candleStorage).getAt(instrumentConfig.getUid(), currentTime);
+        assertThrowsWithErrorCode(
+            InvalidRequestException.class,
+            ErrorCode.QUANTITY_MUST_BE_POSITIVE,
+            () -> assertBuyOrder(testCandle, OrderType.MARKET, 0)
+        );
+
+        when(instrumentStorage.get(config.getInstrument().getUid())).thenReturn(null);
+
+        assertThrowsWithErrorCode(
+            NotFoundException.class,
+            ErrorCode.INSTRUMENT_NOT_FOUND,
+            () -> assertBuyOrder(testCandle, OrderType.MARKET, 10, testCandle.getOpenPrice())
+        );
+
+        verify(candleStorage, atLeastOnce()).getAt(config.getInstrument().getUid(), currentTime);
     }
 
     @Test
     public void testBuyLimit() throws AbstractException {
-        InstrumentConfig instrumentConfig = config.getInstrument();
-        var ordersService = broker.getOrderService();
+        Candle validCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
 
-        Candle validCandle = new Candle()
-            .setTime(currentTime)
-            .setClosePrice(Quotation.of(10))
-            .setHighPrice(Quotation.of(15))
-            .setLowPrice(Quotation.of(5))
-            .setOpenPrice(Quotation.of(10))
-            .setVolume(100)
-            .setInstrumentUid(instrumentConfig.getUid());
-        Candle invalidCandle = new Candle()
-            .setTime(currentTime)
-            .setClosePrice(Quotation.of(1))
-            .setHighPrice(Quotation.of(1))
-            .setLowPrice(Quotation.of(1))
-            .setOpenPrice(Quotation.of(1))
-            .setVolume(100)
-            .setInstrumentUid(instrumentConfig.getUid());
+        addMoney(validCandle.getOpenPrice().multiply(100));
+
+        assertBuyOrder(validCandle, OrderType.LIMIT, 10, validCandle.getOpenPrice());
+
+        Candle buySignalCandle = createCandle(
+            currentTime, 10, 15, 5, 9, 100
+        );
+
+        when(candleStorage.findByOpenPrice(any()))
+            .thenReturn(List.of(buySignalCandle));
+        assertBuyOrder(validCandle, OrderType.LIMIT, 10, Quotation.of(9));
+
+        Candle expirationCandle = createCandle(
+            currentTime, 10, 15, 5, 12, 100
+        );
 
         when(candleStorage.getAt(any(), any()))
-            .thenReturn(Optional.of(invalidCandle));
-        when(candleStorage.getAt(instrumentConfig.getUid(), currentTime))
-            .thenReturn(Optional.of(validCandle));
+            .thenReturn(Optional.of(expirationCandle));
+        assertBuyOrder(validCandle, OrderType.LIMIT, 10, Quotation.of(9));
 
-        broker.getOperationsService().addMoney(
-            testAccount.getId(),
-            Money.of(
-                config.getInstrument().getCurrency(),
-                validCandle.getOpenPrice().multiply(100)
-            )
+        assertThrowsWithErrorCode(
+            InvalidRequestException.class,
+            ErrorCode.INVALID_PARAMETER_PRICE,
+            () -> assertBuyOrder(validCandle, OrderType.LIMIT, 10, Quotation.of(-100))
         );
 
-        PostOrderResponse postResponse = ordersService.post(
-            new PostOrderRequest()
-                .setInstrumentId(instrumentConfig.getUid())
-                .setQuantity(10)
-                .setPrice(validCandle.getOpenPrice())
-                .setAccountId(testAccount.getId())
-                .setDirection(OrderDirection.BUY)
-                .setOrderType(OrderType.LIMIT)
+        assertThrowsWithErrorCode(
+            InvalidRequestException.class,
+            ErrorCode.INVALID_PARAMETER_PRICE,
+            () -> assertBuyOrder(validCandle, OrderType.LIMIT, 10, Quotation.ZERO)
         );
 
-        Quotation totalPrice = validCandle.getOpenPrice()
-            .multiply(commissionRatio.add(1));
-
-        assertNotNull(postResponse.getOrderId());
-        assertEquals(10, postResponse.getLotsExecuted());
-        assertEquals(10, postResponse.getLotsRequested());
-        assertEquals(OrderDirection.BUY, postResponse.getDirection());
-        assertEquals(instrumentConfig.getUid(), postResponse.getInstrumentUid());
-        assertEquals(totalPrice.multiply(10), postResponse.getTotalPrice().getQuotation());
-        assertEquals(totalPrice, postResponse.getTotalPricePerOne().getQuotation());
-        assertEquals(validCandle.getOpenPrice().multiply(10), postResponse.getInitialPrice().getQuotation());
-        assertEquals(validCandle.getOpenPrice(), postResponse.getInitialPricePerOne().getQuotation());
-        assertEquals(ExecutionStatus.FILL, postResponse.getExecutionStatus());
-
-        UnimplementedException exception = assertThrows(
-            UnimplementedException.class,
-            () -> ordersService.post(
-                new PostOrderRequest()
-                    .setInstrumentId(instrumentConfig.getUid())
-                    .setQuantity(10)
-                    .setPrice(Quotation.of(5))
-                    .setAccountId(testAccount.getId())
-                    .setDirection(OrderDirection.BUY)
-                    .setOrderType(OrderType.LIMIT)
-            )
+        assertThrowsWithErrorCode(
+            InvalidRequestException.class,
+            ErrorCode.MISSING_PARAMETER_PRICE,
+            () -> assertBuyOrder(validCandle, OrderType.LIMIT, 10, null)
         );
-        assertEquals(ErrorCode.UNIMPLEMENTED, exception.getErrorCode());
 
-        verify(candleStorage, times(2)).getAt(instrumentConfig.getUid(), currentTime);
+        verify(candleStorage, atLeastOnce()).getAt(config.getInstrument().getUid(), currentTime);
     }
 
     @Test
     public void testBuyBestPrice() throws AbstractException {
-        InstrumentConfig instrumentConfig = config.getInstrument();
-        var ordersService = broker.getOrderService();
-        Candle validCandle = new Candle()
-            .setTime(currentTime)
-            .setClosePrice(Quotation.of(10))
-            .setHighPrice(Quotation.of(15))
-            .setLowPrice(Quotation.of(5))
-            .setOpenPrice(Quotation.of(10))
-            .setVolume(100)
-            .setInstrumentUid(instrumentConfig.getUid());
-        Candle invalidCandle = new Candle()
-            .setTime(currentTime)
-            .setClosePrice(Quotation.of(1))
-            .setHighPrice(Quotation.of(1))
-            .setLowPrice(Quotation.of(1))
-            .setOpenPrice(Quotation.of(1))
-            .setVolume(100)
-            .setInstrumentUid(instrumentConfig.getUid());
-
-        when(candleStorage.getAt(any(), any()))
-            .thenReturn(Optional.of(invalidCandle));
-        when(candleStorage.getAt(instrumentConfig.getUid(), currentTime))
-            .thenReturn(Optional.of(validCandle));
-
-        broker.getOperationsService().addMoney(
-            testAccount.getId(),
-            Money.of(
-                config.getInstrument().getCurrency(),
-                validCandle.getOpenPrice().multiply(100)
-            )
+        Candle validCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
         );
 
-        long quantity = 10;
-        PostOrderResponse postResponse = ordersService.post(
-            new PostOrderRequest()
-                .setInstrumentId(instrumentConfig.getUid())
-                .setQuantity(quantity)
-                .setAccountId(testAccount.getId())
-                .setDirection(OrderDirection.BUY)
-                .setOrderType(OrderType.BESTPRICE)
-        );
+        addMoney(validCandle.getOpenPrice().multiply(100));
 
-        double bestBuyPriceRatio = orderService.getBuyBestPriceRatio();
-
-        // bestBuyPrice = lowPrice + (highPrice - lowPrice) * bestBuyPriceRatio
-        Quotation bestBuyPrice = validCandle.getLowPrice()
-            .add(
-                validCandle
-                    .getHighPrice()
-                    .subtract(validCandle.getLowPrice())
-                    .multiply(bestBuyPriceRatio)
-            );
-
-        // totalPrice = bestBuyPrice * (1 + commissionRatio) * quantity
-        Quotation totalPrice = bestBuyPrice
-            .multiply(commissionRatio.add(1))
-            .multiply(quantity);
-
-        assertNotNull(postResponse.getOrderId());
-        assertEquals(quantity, postResponse.getLotsExecuted());
-        assertEquals(quantity, postResponse.getLotsRequested());
-        assertEquals(OrderDirection.BUY, postResponse.getDirection());
-        assertEquals(instrumentConfig.getUid(), postResponse.getInstrumentUid());
-        assertEquals(totalPrice, postResponse.getTotalPrice().getQuotation());
-        assertEquals(totalPrice.divide(quantity), postResponse.getTotalPricePerOne().getQuotation());
-        assertEquals(bestBuyPrice.multiply(quantity), postResponse.getInitialPrice().getQuotation());
-        assertEquals(bestBuyPrice, postResponse.getInitialPricePerOne().getQuotation());
-        assertEquals(ExecutionStatus.FILL, postResponse.getExecutionStatus());
+        assertBuyOrder(validCandle, OrderType.BEST_PRICE, 10, Quotation.of(5));
+        verify(candleStorage, atLeastOnce()).getAt(config.getInstrument().getUid(), currentTime);
     }
 
     @Test
     public void testSellMarket() throws AbstractException {
         InstrumentConfig instrumentConfig = config.getInstrument();
-        String currency = instrumentConfig.getCurrency();
-        Candle validCandle = new Candle()
-            .setTime(currentTime)
-            .setClosePrice(Quotation.of(10))
-            .setHighPrice(Quotation.of(15))
-            .setLowPrice(Quotation.of(5))
-            .setOpenPrice(Quotation.of(10))
-            .setVolume(100)
-            .setInstrumentUid(instrumentConfig.getUid());
-        when(candleStorage.getAt(any(), any()))
-            .thenReturn(Optional.empty());
-        when(candleStorage.getAt(instrumentConfig.getUid(), currentTime))
-            .thenReturn(Optional.of(validCandle));
+        Candle validCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
 
-        var ordersService = broker.getOrderService();
         var operationsService = broker.getOperationsService();
         var openPrice = validCandle.getOpenPrice();
 
         operationsService.addToPosition(testAccount.getId(), instrumentConfig.getUid(), 100);
+        assertSellOrder(validCandle, OrderType.MARKET, 15, openPrice);
 
-        PostOrderResponse postResponse = ordersService.post(
-            new PostOrderRequest()
-                .setInstrumentId(instrumentConfig.getUid())
-                .setQuantity(15)
-                .setPrice(openPrice)
-                .setAccountId(testAccount.getId())
-                .setDirection(OrderDirection.SELL)
-                .setOrderType(OrderType.MARKET)
-        );
-
-        // actualPrice = openPrice + openPrice * commissionRatio
-        Quotation actualPrice = openPrice
-            .add(openPrice.multiply(commissionRatio));
-
-        assertNotNull(postResponse.getOrderId());
-        assertEquals(15, postResponse.getLotsExecuted());
-        assertEquals(15, postResponse.getLotsRequested());
-        assertEquals(OrderDirection.SELL, postResponse.getDirection());
-        assertEquals(instrumentConfig.getUid(), postResponse.getInstrumentUid());
-        assertEquals(actualPrice.multiply(15), postResponse.getTotalPrice().getQuotation());
-        assertEquals(actualPrice, postResponse.getTotalPricePerOne().getQuotation());
-        assertEquals(openPrice.multiply(15), postResponse.getInitialPrice().getQuotation());
-        assertEquals(openPrice, postResponse.getInitialPricePerOne().getQuotation());
-        assertEquals(ExecutionStatus.FILL, postResponse.getExecutionStatus());
-
-        var exception = assertThrows(
+        assertThrowsWithErrorCode(
             InvalidRequestException.class,
-            () -> ordersService.post(
-                new PostOrderRequest()
-                    .setInstrumentId(instrumentConfig.getUid())
-                    .setQuantity(1000)
-                    .setPrice(openPrice)
-                    .setAccountId(testAccount.getId())
-                    .setDirection(OrderDirection.SELL)
-                    .setOrderType(OrderType.MARKET)
-            )
-        );
-        assertEquals(ErrorCode.INSUFFICIENT_BALANCE, exception.getErrorCode());
-
-        ordersService.post(
-            new PostOrderRequest()
-                .setInstrumentId(instrumentConfig.getUid())
-                .setQuantity(10)
-                .setPrice(openPrice)
-                .setAccountId(testAccount.getId())
-                .setDirection(OrderDirection.SELL)
-                .setOrderType(OrderType.MARKET)
+            ErrorCode.INSUFFICIENT_BALANCE,
+            () -> assertSellOrder(validCandle, OrderType.MARKET, 1000, openPrice)
         );
 
-        assertEquals(
-            Money.of(currency, actualPrice.multiply(25)),
-            operationsService.getAvailableMoney(
-                testAccount.getId(),
-                instrumentConfig.getCurrency()
-            )
-        );
-        assertEquals(
-            75,
-            operationsService.getPositionByInstrumentId(
-                testAccount.getId(),
-                instrumentConfig.getUid()
-            ).getBalance()
-        );
-
-        verify(candleStorage, times(3)).getAt(instrumentConfig.getUid(), currentTime);
+        assertSellOrder(validCandle, OrderType.MARKET, 20, openPrice);
+        verify(candleStorage, atLeastOnce()).getAt(instrumentConfig.getUid(), currentTime);
     }
 
     @Test
     public void testSellLimit() throws AbstractException {
-        InstrumentConfig instrumentConfig = config.getInstrument();
-        var ordersService = broker.getOrderService();
+        // Test ordinary limit sell order
+        Candle validCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
 
-        Candle validCandle = new Candle()
-            .setTime(currentTime)
-            .setClosePrice(Quotation.of(10))
-            .setHighPrice(Quotation.of(15))
-            .setLowPrice(Quotation.of(5))
-            .setOpenPrice(Quotation.of(10))
-            .setVolume(100)
-            .setInstrumentUid(instrumentConfig.getUid());
-        Candle invalidCandle = new Candle()
-            .setTime(currentTime)
-            .setClosePrice(Quotation.of(1))
-            .setHighPrice(Quotation.of(1))
-            .setLowPrice(Quotation.of(1))
-            .setOpenPrice(Quotation.of(1))
-            .setVolume(100)
-            .setInstrumentUid(instrumentConfig.getUid());
+        addInstruments(80);
+
+        assertSellOrder(validCandle, OrderType.LIMIT, 10, validCandle.getOpenPrice());
+
+        // Test limit sell order on delayed execution
+        Candle sellSignalCandle = createCandle(
+            currentTime, 10, 15, 5, 12, 100
+        );
+
+        when(candleStorage.findByOpenPrice(any()))
+            .thenReturn(List.of(sellSignalCandle));
+        assertSellOrder(validCandle, OrderType.LIMIT, 10, Quotation.of(11));
+
+        // Test limit sell order on expiration
+        Candle expirationCandle = createCandle(
+            currentTime, 10, 15, 5, 9, 100
+        );
 
         when(candleStorage.getAt(any(), any()))
-            .thenReturn(Optional.of(invalidCandle));
-        when(candleStorage.getAt(instrumentConfig.getUid(), currentTime))
-            .thenReturn(Optional.of(validCandle));
+            .thenReturn(Optional.of(expirationCandle));
+        assertSellOrder(validCandle, OrderType.LIMIT, 10, Quotation.of(11));
 
-        broker.getOperationsService().addToPosition(testAccount.getId(), instrumentConfig.getUid(), 100);
-
-        PostOrderResponse postResponse = ordersService.post(
-            new PostOrderRequest()
-                .setInstrumentId(instrumentConfig.getUid())
-                .setQuantity(10)
-                .setPrice(validCandle.getOpenPrice())
-                .setAccountId(testAccount.getId())
-                .setDirection(OrderDirection.SELL)
-                .setOrderType(OrderType.LIMIT)
-        );
-
-        Quotation totalPrice = validCandle.getOpenPrice()
-            .multiply(commissionRatio.add(1));
-
-        assertNotNull(postResponse.getOrderId());
-        assertEquals(10, postResponse.getLotsExecuted());
-        assertEquals(10, postResponse.getLotsRequested());
-        assertEquals(OrderDirection.SELL, postResponse.getDirection());
-        assertEquals(instrumentConfig.getUid(), postResponse.getInstrumentUid());
-        assertEquals(totalPrice.multiply(10), postResponse.getTotalPrice().getQuotation());
-        assertEquals(totalPrice, postResponse.getTotalPricePerOne().getQuotation());
-        assertEquals(validCandle.getOpenPrice().multiply(10), postResponse.getInitialPrice().getQuotation());
-        assertEquals(validCandle.getOpenPrice(), postResponse.getInitialPricePerOne().getQuotation());
-        assertEquals(ExecutionStatus.FILL, postResponse.getExecutionStatus());
-
-        UnimplementedException exception = assertThrows(
-            UnimplementedException.class,
-            () -> ordersService.post(
-                new PostOrderRequest()
-                    .setInstrumentId(instrumentConfig.getUid())
-                    .setQuantity(10)
-                    .setPrice(Quotation.of(11))
-                    .setAccountId(testAccount.getId())
-                    .setDirection(OrderDirection.SELL)
-                    .setOrderType(OrderType.LIMIT)
-            )
-        );
-        assertEquals(ErrorCode.UNIMPLEMENTED, exception.getErrorCode());
-
-        verify(candleStorage, times(2)).getAt(instrumentConfig.getUid(), currentTime);
+        verify(candleStorage, atLeastOnce()).getAt(config.getInstrument().getUid(), currentTime);
     }
 
     @Test
     public void testSellBestPrice() throws AbstractException {
-        InstrumentConfig instrumentConfig = config.getInstrument();
-        var ordersService = broker.getOrderService();
-        Candle validCandle = new Candle()
-            .setTime(currentTime)
-            .setClosePrice(Quotation.of(10))
-            .setHighPrice(Quotation.of(15))
-            .setLowPrice(Quotation.of(5))
-            .setOpenPrice(Quotation.of(10))
-            .setVolume(100)
-            .setInstrumentUid(instrumentConfig.getUid());
-        Candle invalidCandle = new Candle()
-            .setTime(currentTime)
-            .setClosePrice(Quotation.of(1))
-            .setHighPrice(Quotation.of(1))
-            .setLowPrice(Quotation.of(1))
-            .setOpenPrice(Quotation.of(1))
-            .setVolume(100)
-            .setInstrumentUid(instrumentConfig.getUid());
-
-        when(candleStorage.getAt(any(), any()))
-            .thenReturn(Optional.of(invalidCandle));
-        when(candleStorage.getAt(instrumentConfig.getUid(), currentTime))
-            .thenReturn(Optional.of(validCandle));
-
-        broker.getOperationsService().addToPosition(testAccount.getId(), instrumentConfig.getUid(), 100);
-
-        long quantity = 10;
-        PostOrderResponse postResponse = ordersService.post(
-            new PostOrderRequest()
-                .setInstrumentId(instrumentConfig.getUid())
-                .setQuantity(quantity)
-                .setAccountId(testAccount.getId())
-                .setDirection(OrderDirection.SELL)
-                .setOrderType(OrderType.BESTPRICE)
+        Candle validCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
         );
 
-        double bestSellPriceRatio = orderService.getSellBestPriceRatio();
+        addInstruments(100);
 
-        // bestSellPrice = lowPrice + (highPrice - lowPrice) * bestSellPriceRatio
-        Quotation bestSellPrice = validCandle.getLowPrice()
-            .add(
-                validCandle
-                    .getHighPrice()
-                    .subtract(validCandle.getLowPrice())
-                    .multiply(bestSellPriceRatio)
-            );
-
-        // totalPrice = bestSellPrice * (1 + commissionRatio) * quantity
-        Quotation totalPrice = bestSellPrice
-            .multiply(commissionRatio.add(1))
-            .multiply(quantity);
-
-        assertNotNull(postResponse.getOrderId());
-        assertEquals(quantity, postResponse.getLotsExecuted());
-        assertEquals(quantity, postResponse.getLotsRequested());
-        assertEquals(OrderDirection.SELL, postResponse.getDirection());
-        assertEquals(instrumentConfig.getUid(), postResponse.getInstrumentUid());
-        assertEquals(totalPrice, postResponse.getTotalPrice().getQuotation());
-        assertEquals(totalPrice.divide(quantity), postResponse.getTotalPricePerOne().getQuotation());
-        assertEquals(bestSellPrice.multiply(quantity), postResponse.getInitialPrice().getQuotation());
-        assertEquals(bestSellPrice, postResponse.getInitialPricePerOne().getQuotation());
-        assertEquals(ExecutionStatus.FILL, postResponse.getExecutionStatus());
+        assertSellOrder(validCandle, OrderType.BEST_PRICE, 10, Quotation.of(11));
+        verify(candleStorage, atLeastOnce()).getAt(config.getInstrument().getUid(), currentTime);
     }
 
     @Test
     public void testGetState() throws AbstractException {
-        InstrumentConfig instrumentConfig = config.getInstrument();
-        var ordersService = broker.getOrderService();
-        Candle validCandle = new Candle()
-            .setTime(currentTime)
-            .setClosePrice(Quotation.of(10))
-            .setHighPrice(Quotation.of(15))
-            .setLowPrice(Quotation.of(5))
-            .setOpenPrice(Quotation.of(10))
-            .setVolume(100)
-            .setInstrumentUid(instrumentConfig.getUid());
-        Candle invalidCandle = new Candle()
-            .setTime(currentTime)
-            .setClosePrice(Quotation.of(1))
-            .setHighPrice(Quotation.of(1))
-            .setLowPrice(Quotation.of(1))
-            .setOpenPrice(Quotation.of(1))
-            .setVolume(100)
-            .setInstrumentUid(instrumentConfig.getUid());
-
-        when(candleStorage.getAt(any(), any()))
-            .thenReturn(Optional.of(invalidCandle));
-        when(candleStorage.getAt(instrumentConfig.getUid(), currentTime))
-            .thenReturn(Optional.of(validCandle));
-
-        broker.getOperationsService().addMoney(
-            testAccount.getId(),
-            Money.of(
-                config.getInstrument().getCurrency(),
-                validCandle.getOpenPrice().multiply(100)
-            )
+        Candle validCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
         );
 
-        var postResponse = ordersService.post(
-            new PostOrderRequest()
-                .setInstrumentId(config.getInstrument().getUid())
-                .setQuantity(10)
-                .setAccountId(testAccount.getId())
-                .setDirection(OrderDirection.BUY)
-                .setOrderType(OrderType.MARKET)
-        );
+        addMoney(validCandle.getOpenPrice().multiply(100));
 
-        var state = ordersService.getState(
+        var postResponse = assertBuyOrder(validCandle, OrderType.MARKET, 10, validCandle.getOpenPrice());
+
+        var state = orderService.getState(
             new GetOrderStateRequest()
                 .setOrderId(postResponse.getOrderId())
                 .setAccountId(testAccount.getId())
@@ -578,55 +294,52 @@ public class MockOrderServiceTest {
         assertEquals(postResponse.getLotsExecuted(), state.getLotsExecuted());
         assertEquals(postResponse.getInitialPrice(), state.getInitialOrderPrice());
         assertEquals(postResponse.getTotalPricePerOne(), state.getExecutedOrderPrice());
-        assertEquals(postResponse.getTotalPrice(), state.getTotalOrderAmount());
+        assertEquals(postResponse.getTotalPrice(), state.getTotalPrice());
         assertEquals(postResponse.getExecutionStatus(), state.getExecutionStatus());
 
-        var exception = assertThrows(
+        assertThrowsWithErrorCode(
             NotFoundException.class,
-            () -> ordersService.getState(
+            ErrorCode.ORDER_NOT_FOUND,
+            () -> orderService.getState(
                 new GetOrderStateRequest()
                     .setOrderId("invalidOrderId")
                     .setAccountId(testAccount.getId())
             )
         );
-        assertEquals(ErrorCode.ORDER_NOT_FOUND, exception.getErrorCode());
+
+        assertThrowsWithErrorCode(
+            NotFoundException.class,
+            ErrorCode.ACCOUNT_NOT_FOUND,
+            () -> orderService.getState(
+                new GetOrderStateRequest()
+                    .setOrderId(postResponse.getOrderId())
+                    .setAccountId("invalidAccountId")
+            )
+        );
     }
 
-    protected void assertBuyOrder(
+    protected PostOrderResponse assertBuyOrder(
         Candle priceCandle,
         OrderType orderType,
-        long quantity,
-        Quotation priceLimit
+        long quantity
     ) throws AbstractException {
-        InstrumentConfig instrumentConfig = config.getInstrument();
-        var ordersService = broker.getOrderService();
-        var operationsService = broker.getOperationsService();
+        return assertBuyOrder(priceCandle, orderType, quantity, null);
+    }
 
-        when(candleStorage.getAt(any(), any())).thenReturn(Optional.empty());
-        when(candleStorage.getAt(instrumentConfig.getUid(), currentTime)).thenReturn(Optional.of(priceCandle));
-
-        PostOrderResponse postResponse = ordersService.post(
-            new PostOrderRequest()
-                .setInstrumentId(instrumentConfig.getUid())
-                .setQuantity(quantity)
-                .setAccountId(testAccount.getId())
-                .setDirection(OrderDirection.BUY)
-                .setOrderType(orderType)
-                .setPrice(priceLimit)
+    protected void addInstruments(long count) throws AbstractException {
+        broker.getOperationsService().addToPosition(
+            testAccount.getId(),
+            config.getInstrument().getUid(),
+            count
         );
+    }
 
-        // actualPrice = openPrice + openPrice * commissionRatio
-        Quotation totalPricePerOne = priceCandle.getOpenPrice().add(priceCandle.getOpenPrice().multiply(commissionRatio));
-        assertNotNull(postResponse.getOrderId());
-        assertEquals(lotsExecuted, postResponse.getLotsExecuted());
-        assertEquals(lotsExecuted, postResponse.getLotsRequested());
-        assertEquals(direction, postResponse.getDirection());
-        assertEquals(instrumentUid, postResponse.getInstrumentUid());
-        assertEquals(totalPricePerOne.multiply(lotsExecuted), postResponse.getTotalPrice().getQuotation());
-        assertEquals(totalPricePerOne, postResponse.getTotalPricePerOne().getQuotation());
-        assertEquals(openPrice.multiply(lotsExecuted), postResponse.getInitialPrice().getQuotation());
-        assertEquals(openPrice, response.getInitialPricePerOne().getQuotation());
-        assertEquals(ExecutionStatus.FILL, postResponse.getExecutionStatus());
+    protected void addMoney(Quotation amount) throws AbstractException {
+        addMoney(config.getInstrument().getCurrency(), amount);
+    }
+
+    protected void addMoney(String currency, Quotation amount) throws AbstractException {
+        broker.getOperationsService().addMoney(testAccount.getId(), Money.of(currency, amount));
     }
 
     protected Instrument createInstrument(InstrumentConfig config) {
@@ -643,9 +356,10 @@ public class MockOrderServiceTest {
         int highPrice,
         int lowPrice,
         int openPrice,
-        int volume,
-        String instrumentUid
+        int volume
     ) {
+        var instrumentConfig = config.getInstrument();
+
         return new Candle()
             .setTime(time)
             .setClosePrice(Quotation.of(closePrice))
@@ -653,7 +367,26 @@ public class MockOrderServiceTest {
             .setLowPrice(Quotation.of(lowPrice))
             .setOpenPrice(Quotation.of(openPrice))
             .setVolume(volume)
-            .setInstrumentUid(instrumentUid);
+            .setInstrumentUid(instrumentConfig.getUid());
+    }
+
+    protected Quotation calculateInitialPricePerOne(
+        Candle priceCandle,
+        OrderType orderType,
+        double bestPriceRatio
+    ) {
+        return switch (orderType) {
+            case MARKET, LIMIT -> priceCandle.getOpenPrice();
+            case BEST_PRICE -> priceCandle
+                .getLowPrice()
+                .add(
+                    priceCandle
+                        .getHighPrice()
+                        .subtract(priceCandle.getLowPrice())
+                        .multiply(bestPriceRatio)
+                );
+            default -> throw new IllegalArgumentException("Unexpected value: " + orderType);
+        };
     }
 
     protected <T extends AbstractException> void assertThrowsWithErrorCode(
@@ -664,4 +397,170 @@ public class MockOrderServiceTest {
         T exception = assertThrows(exceptionClass, executable);
         assertEquals(errorCode, exception.getErrorCode());
     }
+
+    protected PostOrderResponse assertSellOrder(
+        Candle priceCandle,
+        OrderType orderType,
+        long quantity,
+        Quotation priceLimit
+    ) throws AbstractException {
+        InstrumentConfig instrumentConfig = config.getInstrument();
+        var ordersService = broker.getOrderService();
+        var operationsService = broker.getOperationsService();
+        var isDelayedLimitOrder = orderType == OrderType.LIMIT
+            && priceLimit != null
+            && priceLimit.isMore(priceCandle.getOpenPrice());
+
+        when(candleStorage.getAt(instrumentConfig.getUid(), priceCandle.getTime()))
+            .thenReturn(Optional.of(priceCandle));
+        when(timeSynchronizer.currentTime()).thenReturn(priceCandle.getTime());
+
+        var request = new PostOrderRequest()
+            .setInstrumentId(instrumentConfig.getUid())
+            .setQuantity(quantity)
+            .setPrice(priceLimit)
+            .setAccountId(testAccount.getId())
+            .setDirection(OrderDirection.SELL)
+            .setOrderType(orderType);
+
+        var position = operationsService.getPositionByInstrumentId(testAccount.getId(), instrumentConfig.getUid());
+        var instrumentBalance = (position != null) ? position.getBalance() : 0;
+        var avialableMoney = operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
+
+        PostOrderResponse postResponse = ordersService.post(request);
+        Quotation initialPricePerOne = calculateInitialPricePerOne(
+            priceCandle,
+            orderType,
+            orderService.getSellBestPriceRatio()
+        );
+
+        if (isDelayedLimitOrder) {
+            assertEquals(0, postResponse.getLotsExecuted());
+            assertEquals(quantity, postResponse.getLotsRequested());
+            assertEquals(Quotation.ZERO, postResponse.getTotalPrice().getQuotation());
+            assertEquals(Quotation.ZERO, postResponse.getTotalPricePerOne().getQuotation());
+            assertEquals(ExecutionStatus.NEW, postResponse.getExecutionStatus());
+            assertEquals(
+                avialableMoney,
+                operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency())
+            );
+            assertEquals(
+                instrumentBalance,
+                operationsService.getPositionByInstrumentId(testAccount.getId(), instrumentConfig.getUid()).getBalance()
+            );
+        } else {
+            var totalPricePerOne = initialPricePerOne.add(initialPricePerOne.multiply(commissionRatio));
+
+            assertEquals(quantity, postResponse.getLotsExecuted());
+            assertEquals(quantity, postResponse.getLotsRequested());
+            assertEquals(totalPricePerOne.multiply(quantity), postResponse.getTotalPrice().getQuotation());
+            assertEquals(totalPricePerOne, postResponse.getTotalPricePerOne().getQuotation());
+            assertEquals(initialPricePerOne.multiply(quantity), postResponse.getInitialPrice().getQuotation());
+            assertEquals(initialPricePerOne, postResponse.getInitialPricePerOne().getQuotation());
+            assertEquals(ExecutionStatus.FILL, postResponse.getExecutionStatus());
+
+            var newInstrumentBalance = instrumentBalance - quantity;
+            var newAvialableMoney = avialableMoney.add(
+                Money.of(instrumentConfig.getCurrency(), totalPricePerOne.multiply(quantity))
+            );
+
+            assertEquals(
+                newInstrumentBalance,
+                operationsService.getPositionByInstrumentId(testAccount.getId(), instrumentConfig.getUid()).getBalance()
+            );
+            assertEquals(
+                newAvialableMoney,
+                operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency())
+            );
+        }
+
+        assertEquals(initialPricePerOne.multiply(quantity), postResponse.getInitialPrice().getQuotation());
+        assertEquals(initialPricePerOne, postResponse.getInitialPricePerOne().getQuotation());
+        assertNotNull(postResponse.getOrderId());
+        assertEquals(OrderDirection.SELL, postResponse.getDirection());
+        assertEquals(instrumentConfig.getUid(), postResponse.getInstrumentUid());
+
+        return postResponse;
+    }
+
+    protected PostOrderResponse assertBuyOrder(
+        Candle priceCandle,
+        OrderType orderType,
+        long quantity,
+        Quotation priceLimit
+    ) throws AbstractException {
+        InstrumentConfig instrumentConfig = config.getInstrument();
+        var ordersService = broker.getOrderService();
+        var operationsService = broker.getOperationsService();
+        var isDelayedLimitOrder = orderType == OrderType.LIMIT
+            && priceLimit != null
+            && priceLimit.isLess(priceCandle.getOpenPrice());
+
+        when(candleStorage.getAt(instrumentConfig.getUid(), priceCandle.getTime()))
+            .thenReturn(Optional.of(priceCandle));
+        when(timeSynchronizer.currentTime()).thenReturn(priceCandle.getTime());
+
+        var request = new PostOrderRequest()
+            .setInstrumentId(instrumentConfig.getUid())
+            .setQuantity(quantity)
+            .setPrice(priceLimit)
+            .setAccountId(testAccount.getId())
+            .setDirection(OrderDirection.BUY)
+            .setOrderType(orderType);
+
+        var position = operationsService.getPositionByInstrumentId(testAccount.getId(), instrumentConfig.getUid());
+        var instrumentBalance = (position != null) ? position.getBalance() : 0;
+        var avialableMoney = operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
+        Quotation initialPricePerOne = calculateInitialPricePerOne(
+            priceCandle,
+            orderType,
+            orderService.getBuyBestPriceRatio()
+        );
+
+        PostOrderResponse postResponse = ordersService.post(request);
+
+        assertNotNull(postResponse.getOrderId());
+        assertEquals(OrderDirection.BUY, postResponse.getDirection());
+        assertEquals(instrumentConfig.getUid(), postResponse.getInstrumentUid());
+        assertEquals(initialPricePerOne.multiply(quantity), postResponse.getInitialPrice().getQuotation());
+        assertEquals(initialPricePerOne, postResponse.getInitialPricePerOne().getQuotation());
+
+        if (isDelayedLimitOrder) {
+            assertEquals(0, postResponse.getLotsExecuted());
+            assertEquals(quantity, postResponse.getLotsRequested());
+            assertEquals(Quotation.ZERO, postResponse.getTotalPrice().getQuotation());
+            assertEquals(Quotation.ZERO, postResponse.getTotalPricePerOne().getQuotation());
+            assertEquals(ExecutionStatus.NEW, postResponse.getExecutionStatus());
+            var positionAfter = operationsService.getPositionByInstrumentId(
+                testAccount.getId(),
+                instrumentConfig.getUid()
+            );
+            var balanceAfter = (positionAfter != null) ? positionAfter.getBalance() : 0;
+            assertEquals(
+                avialableMoney,
+                operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency())
+            );
+            assertEquals(instrumentBalance, balanceAfter);
+        } else {
+            var totalPricePerOne = initialPricePerOne.add(initialPricePerOne.multiply(commissionRatio));
+
+            assertEquals(quantity, postResponse.getLotsExecuted());
+            assertEquals(quantity, postResponse.getLotsRequested());
+            assertEquals(totalPricePerOne.multiply(quantity), postResponse.getTotalPrice().getQuotation());
+            assertEquals(totalPricePerOne, postResponse.getTotalPricePerOne().getQuotation());
+            assertEquals(ExecutionStatus.FILL, postResponse.getExecutionStatus());
+
+            var newAvialableMoney = avialableMoney.subtract(
+                Money.of(instrumentConfig.getCurrency(), totalPricePerOne.multiply(quantity))
+            );
+            assertEquals(
+                newAvialableMoney,
+                operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency())
+            );
+        }
+
+        return postResponse;
+    }
+
+    abstract protected PostOrderResponse[] requestsForTestGet() throws AbstractException;
 }

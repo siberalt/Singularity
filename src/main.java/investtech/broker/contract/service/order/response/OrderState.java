@@ -14,7 +14,7 @@ public class OrderState {
     protected long lotsExecuted;
     protected Money initialOrderPrice;
     protected Money executedOrderPrice;
-    protected Money totalOrderAmount;
+    protected Money totalPrice;
     protected Money averagePositionPrice;
     protected Money initialCommission;
     protected Money executedCommission;
@@ -26,7 +26,7 @@ public class OrderState {
     protected OrderType orderType;
     protected Instant orderDate;
     protected String instrumentUid;
-    protected String orderRequestId;
+    protected String idempotencyKey;
 
     public String getOrderId() {
         return orderId;
@@ -82,12 +82,12 @@ public class OrderState {
         return this;
     }
 
-    public Money getTotalOrderAmount() {
-        return totalOrderAmount;
+    public Money getTotalPrice() {
+        return totalPrice;
     }
 
-    public OrderState setTotalOrderAmount(Money totalOrderAmount) {
-        this.totalOrderAmount = totalOrderAmount;
+    public OrderState setTotalPrice(Money totalPrice) {
+        this.totalPrice = totalPrice;
         return this;
     }
 
@@ -190,12 +190,12 @@ public class OrderState {
         return this;
     }
 
-    public String getOrderRequestId() {
-        return orderRequestId;
+    public String getIdempotencyKey() {
+        return idempotencyKey;
     }
 
-    public OrderState setOrderRequestId(String orderRequestId) {
-        this.orderRequestId = orderRequestId;
+    public OrderState setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
         return this;
     }
 
@@ -208,7 +208,7 @@ public class OrderState {
                 String.format("lotsExecuted: %d", lotsExecuted),
                 String.format("initialOrderPrice: %s", initialOrderPrice),
                 String.format("executedOrderPrice: %s", executedOrderPrice),
-                String.format("totalOrderAmount: %s", totalOrderAmount),
+                String.format("totalOrderAmount: %s", totalPrice),
                 String.format("averagePositionPrice: %s", averagePositionPrice),
                 String.format("initialCommission: %s", initialCommission),
                 String.format("executedCommission: %s", executedCommission),
@@ -220,7 +220,7 @@ public class OrderState {
                 String.format("orderType: %s", orderType),
                 String.format("orderDate: %s", orderDate),
                 String.format("instrumentUid: %s", instrumentUid),
-                String.format("orderRequestId: %s", orderRequestId)
+                String.format("orderRequestId: %s", idempotencyKey)
         );
 
         return String.join("\n", elements);

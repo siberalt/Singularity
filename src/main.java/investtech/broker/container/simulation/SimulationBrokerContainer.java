@@ -1,4 +1,4 @@
-package investtech.broker.container.emulation;
+package investtech.broker.container.simulation;
 
 import investtech.broker.container.AbstractBrokerContainer;
 import investtech.broker.contract.simulation.SimulationBrokerInterface;

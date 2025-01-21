@@ -4,15 +4,15 @@ import investtech.simulation.shared.instrument.InstrumentStorageInterface;
 import investtech.simulation.shared.market.candle.CandleStorageInterface;
 
 public class EventMockBroker extends MockBroker {
-    protected EventMockOrderService orderService;
+    protected EventSimulatedOrderService orderService;
 
     public EventMockBroker(CandleStorageInterface candleRepository, InstrumentStorageInterface instrumentStorage) {
         super(candleRepository, instrumentStorage);
-        this.orderService = new EventMockOrderService(this);
+        this.orderService = new EventSimulatedOrderService(this);
     }
 
     @Override
-    public EventMockOrderService getOrderService() {
+    public EventSimulatedOrderService getOrderService() {
         return orderService;
     }
 }

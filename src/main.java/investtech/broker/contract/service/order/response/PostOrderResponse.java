@@ -20,7 +20,7 @@ public class PostOrderResponse {
     protected OrderType orderType;
     protected String message;
     protected String instrumentUid;
-    protected String orderRequestId;
+    protected String idempotencyKey;
 
     public String getOrderId() {
         return orderId;
@@ -157,12 +157,12 @@ public class PostOrderResponse {
         return this;
     }
 
-    public String getOrderRequestId() {
-        return orderRequestId;
+    public String getIdempotencyKey() {
+        return idempotencyKey;
     }
 
-    public PostOrderResponse setOrderRequestId(String orderRequestId) {
-        this.orderRequestId = orderRequestId;
+    public PostOrderResponse setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
         return this;
     }
 }

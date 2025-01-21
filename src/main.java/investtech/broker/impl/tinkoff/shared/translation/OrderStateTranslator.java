@@ -12,7 +12,7 @@ public class OrderStateTranslator {
                 .setLotsExecuted(orderState.getLotsExecuted())
                 .setInitialOrderPrice(MoneyValueTranslator.toTinkoff(orderState.getInitialOrderPrice()))
                 .setExecutedOrderPrice(MoneyValueTranslator.toTinkoff(orderState.getExecutedOrderPrice()))
-                .setTotalOrderAmount(MoneyValueTranslator.toTinkoff(orderState.getTotalOrderAmount()))
+                .setTotalOrderAmount(MoneyValueTranslator.toTinkoff(orderState.getTotalPrice()))
                 .setAveragePositionPrice(MoneyValueTranslator.toTinkoff(orderState.getAveragePositionPrice()))
                 .setInitialCommission(MoneyValueTranslator.toTinkoff(orderState.getInitialCommission()))
                 .setExecutedCommission(MoneyValueTranslator.toTinkoff(orderState.getExecutedCommission()))
@@ -24,7 +24,7 @@ public class OrderStateTranslator {
                 .setOrderType(OrderTypeTranslator.toTinkoff(orderState.getOrderType()))
                 .setOrderDate(TimestampTranslator.toTinkoff(orderState.getOrderDate()))
                 .setInstrumentUid(orderState.getInstrumentUid())
-                .setOrderRequestId(orderState.getOrderRequestId())
+                .setOrderRequestId(orderState.getIdempotencyKey())
                 .build();
     }
 
@@ -36,7 +36,7 @@ public class OrderStateTranslator {
                 .setLotsExecuted(orderState.getLotsExecuted())
                 .setInitialOrderPrice(MoneyValueTranslator.toContract(orderState.getInitialOrderPrice()))
                 .setExecutedOrderPrice(MoneyValueTranslator.toContract(orderState.getExecutedOrderPrice()))
-                .setTotalOrderAmount(MoneyValueTranslator.toContract(orderState.getTotalOrderAmount()))
+                .setTotalPrice(MoneyValueTranslator.toContract(orderState.getTotalOrderAmount()))
                 .setAveragePositionPrice(MoneyValueTranslator.toContract(orderState.getAveragePositionPrice()))
                 .setInitialCommission(MoneyValueTranslator.toContract(orderState.getInitialCommission()))
                 .setExecutedCommission(MoneyValueTranslator.toContract(orderState.getExecutedCommission()))
@@ -48,6 +48,6 @@ public class OrderStateTranslator {
                 .setOrderType(OrderTypeTranslator.toContract(orderState.getOrderType()))
                 .setOrderDate(TimestampTranslator.toContract(orderState.getOrderDate()))
                 .setInstrumentUid(orderState.getInstrumentUid())
-                .setOrderRequestId(orderState.getOrderRequestId());
+                .setIdempotencyKey(orderState.getOrderRequestId());
     }
 }

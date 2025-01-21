@@ -12,6 +12,4 @@ public interface OrderServiceInterface {
     OrderState getState(GetOrderStateRequest request) throws AbstractException;
 
     GetOrdersResponse get(GetOrdersRequest request) throws AbstractException;
-
-    PostOrderResponse replace(ReplaceOrderRequest request) throws AbstractException;
 }

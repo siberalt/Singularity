@@ -8,9 +8,8 @@ public class PostOrderRequest {
     protected OrderDirection direction;
     protected String accountId;
     protected OrderType orderType;
-    protected String orderId;
+    protected String idempotencyKey;
     protected String instrumentId;
-    protected ReplaceOrderRequest.TimeInForceType timeInForce;
     protected PriceType priceType;
 
     public long getQuantity() {
@@ -58,12 +57,12 @@ public class PostOrderRequest {
         return this;
     }
 
-    public String getOrderId() {
-        return orderId;
+    public String getIdempotencyKey() {
+        return idempotencyKey;
     }
 
-    public PostOrderRequest setOrderId(String orderId) {
-        this.orderId = orderId;
+    public PostOrderRequest setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
         return this;
     }
 
@@ -73,15 +72,6 @@ public class PostOrderRequest {
 
     public PostOrderRequest setInstrumentId(String instrumentId) {
         this.instrumentId = instrumentId;
-        return this;
-    }
-
-    public ReplaceOrderRequest.TimeInForceType getTimeInForce() {
-        return timeInForce;
-    }
-
-    public PostOrderRequest setTimeInForce(ReplaceOrderRequest.TimeInForceType timeInForce) {
-        this.timeInForce = timeInForce;
         return this;
     }
 

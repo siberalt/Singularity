@@ -7,12 +7,9 @@ import investtech.broker.contract.value.quotation.Quotation;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 
 public class AccountBalance {
-    interface BalanceUpdaterInterface<BalanceT> {
-        BalanceT update(BalanceT balance);
-    }
-
     protected String accountId;
     protected Map<String, Money> availableMonies = new HashMap<>();
     protected Map<String, Money> blockedMonies = new HashMap<>();
@@ -89,19 +86,19 @@ public class AccountBalance {
     }
 
     public Money getAvailableMoney(String currencyIso) {
-        return availableMonies.getOrDefault(currencyIso, null);
+        return availableMonies.getOrDefault(currencyIso, Money.of(currencyIso, Quotation.ZERO));
     }
 
-    protected void updateMoneyBalance(Map<String, Money> moneyBalance, Money money, BalanceUpdaterInterface<Money> updater) {
+    protected void updateMoneyBalance(Map<String, Money> moneyBalance, Money money, Function<Money, Money> updater) {
         money = moneyBalance.containsKey(money.getCurrencyIso())
-                ? updater.update(moneyBalance.get(money.getCurrencyIso()))
+                ? updater.apply(moneyBalance.get(money.getCurrencyIso()))
                 : money;
         moneyBalance.put(money.getCurrencyIso(), money);
     }
 
-    protected void updatePositionBalance(String instrumentUid, BalanceUpdaterInterface<Long> updater) {
+    protected void updatePositionBalance(String instrumentUid, Function<Long, Long> updater) {
         var position = positions.get(instrumentUid);
-        position.setBalance(updater.update(position.getBalance()));
+        position.setBalance(updater.apply(position.getBalance()));
     }
 
     private void assertMoneyPositive(Money money) {

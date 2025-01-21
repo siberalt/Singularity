@@ -8,7 +8,7 @@ import investtech.strategy.context.AbstractContext;
 import investtech.strategy.context.ContextAwareInterface;
 import investtech.strategy.event.EventManagerInterface;
 
-public class MockBroker implements StopOrderServiceAwareBrokerInterface, ContextAwareInterface {
+class MockBroker implements StopOrderServiceAwareBrokerInterface, ContextAwareInterface {
     protected AbstractContext<?> context;
     protected MockMarketDataService marketDataService;
     protected MockOrderService orderService;

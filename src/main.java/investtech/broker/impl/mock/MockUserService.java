@@ -18,8 +18,8 @@ public class MockUserService implements UserServiceInterface {
         this.virtualBroker = virtualBroker;
     }
 
-    protected AccountState getAccountState(String accountId) {
-        assert accountsStates.containsKey(accountId) : ExceptionBuilder.create(ErrorCode.ACCOUNT_NOT_FOUND);
+    protected AccountState getAccountState(String accountId) throws AbstractException {
+        checkAccountExists(accountId);
 
         return accountsStates.get(accountId);
     }

@@ -4,5 +4,5 @@ public enum OrderType {
     UNSPECIFIED,
     LIMIT,
     MARKET,
-    BESTPRICE,
+    BEST_PRICE,
 }

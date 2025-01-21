@@ -1,20 +1,24 @@
 package investtech.broker.impl.mock.shared.order;
 
 import investtech.broker.contract.service.instrument.Instrument;
-import investtech.broker.contract.service.order.request.PostOrderRequest;
+import investtech.broker.contract.service.order.request.OrderDirection;
+import investtech.broker.contract.service.order.request.OrderType;
+import investtech.broker.contract.service.order.request.PriceType;
 import investtech.broker.contract.service.order.response.ExecutionStatus;
 import investtech.broker.contract.service.order.response.OrderState;
 import investtech.broker.contract.value.money.Money;
 import investtech.broker.contract.value.quotation.Quotation;
 
 import java.time.Instant;
-import java.util.UUID;
 
 public class Order {
-    protected Quotation instrumentPrice;
-    protected PostOrderRequest request;
-    protected Instant createdDate;
-    protected String requestId;
+    protected String accountId;
+    protected OrderDirection direction;
+    protected OrderType orderType;
+    protected long lotsRequested;
+    protected PriceType priceType;
+    protected String idempotencyKey;
+    protected Quotation requestedPrice;
     protected ExecutionStatus executionStatus;
     protected Instrument instrument;
     protected Quotation initialPrice;
@@ -22,8 +26,46 @@ public class Order {
     protected Quotation commissionPrice;
     protected Quotation totalPricePerOne;
     protected Quotation initialPricePerOne;
+    protected Instant createdDate;
     protected long lotsExecuted;
-    protected long lotsRequested;
+    protected Quotation instrumentPrice;
+    protected String orderId;
+
+    public PriceType getPriceType() {
+        return priceType;
+    }
+
+    public Order setPriceType(PriceType priceType) {
+        this.priceType = priceType;
+        return this;
+    }
+
+    public String getAccountId() {
+        return accountId;
+    }
+
+    public Order setAccountId(String accountId) {
+        this.accountId = accountId;
+        return this;
+    }
+
+    public OrderDirection getDirection() {
+        return direction;
+    }
+
+    public Order setDirection(OrderDirection direction) {
+        this.direction = direction;
+        return this;
+    }
+
+    public OrderType getOrderType() {
+        return orderType;
+    }
+
+    public Order setOrderType(OrderType orderType) {
+        this.orderType = orderType;
+        return this;
+    }
 
     public Quotation getTotalPricePerOne() {
         return totalPricePerOne;
@@ -70,15 +112,6 @@ public class Order {
         return instrumentPrice;
     }
 
-    public PostOrderRequest getRequest() {
-        return request;
-    }
-
-    public Order setRequest(PostOrderRequest request) {
-        this.request = request;
-        return this;
-    }
-
     public Instant getCreatedDate() {
         return createdDate;
     }
@@ -88,12 +121,12 @@ public class Order {
         return this;
     }
 
-    public String getRequestId() {
-        return requestId;
+    public String getIdempotencyKey() {
+        return idempotencyKey;
     }
 
-    public Order setRequestId(String requestId) {
-        this.requestId = requestId;
+    public Order setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
         return this;
     }
 
@@ -142,45 +175,42 @@ public class Order {
         return this;
     }
 
+    public String getOrderId() {
+        return orderId;
+    }
+
+    public Order setOrderId(String orderId) {
+        this.orderId = orderId;
+        return this;
+    }
+
+    public Quotation getRequestedPrice() {
+        return requestedPrice;
+    }
+
+    public Order setRequestedPrice(Quotation requestedPrice) {
+        this.requestedPrice = requestedPrice;
+        return this;
+    }
+
     public OrderState getState() {
         String instrumentCurrency = getInstrument().getCurrency();
 
         return new OrderState()
-            .setOrderId(request.getOrderId())
-            .setDirection(request.getDirection())
-            .setOrderType(request.getOrderType())
-            .setInstrumentUid(request.getInstrumentId())
+            .setOrderId(orderId)
+            .setDirection(direction)
+            .setOrderType(orderType)
+            .setInstrumentUid(instrument.getUid())
             .setOrderDate(createdDate)
-            .setOrderRequestId(requestId)
-            .setLotsRequested(request.getQuantity())
+            .setIdempotencyKey(idempotencyKey)
+            .setLotsRequested(lotsRequested)
             .setLotsExecuted(lotsExecuted)
             .setInitialOrderPrice(Money.of(instrumentCurrency, initialPrice))
             .setExecutedOrderPrice(Money.of(instrumentCurrency, totalPricePerOne))
             .setExecutedCommission(Money.of(instrumentCurrency, commissionPrice))
-            .setTotalOrderAmount(Money.of(instrumentCurrency, totalPrice))
+            .setTotalPrice(Money.of(instrumentCurrency, totalPrice))
             .setInitialSecurityPrice(Money.of(instrumentCurrency, initialPricePerOne))
             .setExecutionStatus(executionStatus)
             .setCurrency(instrumentCurrency);
-    }
-
-    public static Order of(
-        PostOrderRequest request,
-        Instant date,
-        ExecutionStatus status
-    ) {
-        return of(request, date, UUID.randomUUID().toString(), status);
-    }
-
-    public static Order of(
-        PostOrderRequest request,
-        Instant date,
-        String requestId,
-        ExecutionStatus status
-    ) {
-        return new Order()
-            .setRequest(request)
-            .setCreatedDate(date)
-            .setRequestId(requestId)
-            .setExecutionStatus(status);
     }
 }

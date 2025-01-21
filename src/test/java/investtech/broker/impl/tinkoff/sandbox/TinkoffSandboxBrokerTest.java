@@ -46,7 +46,7 @@ public class TinkoffSandboxBrokerTest {
                         .setAccountId(testAccountId)
                         .setDirection(OrderDirection.BUY)
                         .setInstrumentId(share.getUid())
-                        .setOrderType(OrderType.BESTPRICE)
+                        .setOrderType(OrderType.BEST_PRICE)
                         .setQuantity(buyQuantity)
                         .setPrice(Quotation.of(BigDecimal.valueOf(122)))
         );
@@ -59,7 +59,7 @@ public class TinkoffSandboxBrokerTest {
                         .setAccountId(testAccountId)
                         .setDirection(OrderDirection.BUY)
                         .setInstrumentId(share.getUid())
-                        .setOrderType(OrderType.BESTPRICE)
+                        .setOrderType(OrderType.BEST_PRICE)
                         .setQuantity(buyQuantity)
                         .setPrice(Quotation.of(BigDecimal.valueOf(122)))
         );
@@ -74,7 +74,7 @@ public class TinkoffSandboxBrokerTest {
                         .setAccountId(testAccountId)
                         .setDirection(OrderDirection.SELL)
                         .setInstrumentId(share.getUid())
-                        .setOrderType(OrderType.BESTPRICE)
+                        .setOrderType(OrderType.BEST_PRICE)
                         .setQuantity(sellQuantity)
         );
         instrumentBalance -= sellQuantity;
@@ -113,7 +113,7 @@ public class TinkoffSandboxBrokerTest {
             System.out.printf("orderType: %s\n", order.getOrderType());
             System.out.printf("currency: %s\n", order.getCurrency());
             System.out.printf("orderDate: %s\n", order.getOrderDate());
-            System.out.printf("orderRequestId: %s\n", order.getOrderRequestId());
+            System.out.printf("orderRequestId: %s\n", order.getIdempotencyKey());
             System.out.printf("executedCommission: %s\n", order.getExecutedCommission());
             System.out.printf("serviceCommission: %s\n", order.getServiceCommission());
             System.out.printf("initialCommission: %s\n", order.getInitialCommission());
@@ -229,7 +229,7 @@ public class TinkoffSandboxBrokerTest {
                             .setAccountId(accountId)
                             .setDirection(OrderDirection.BUY)
                             .setInstrumentId(share.getUid())
-                            .setOrderType(OrderType.BESTPRICE)
+                            .setOrderType(OrderType.BEST_PRICE)
                             .setQuantity(10000)
                             .setPrice(Quotation.of(BigDecimal.valueOf(122)))
             );

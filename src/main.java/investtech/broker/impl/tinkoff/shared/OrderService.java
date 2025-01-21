@@ -34,7 +34,7 @@ public class OrderService implements OrderServiceInterface {
                         OrderDirectionTranslator.toTinkoff(request.getDirection()),
                         request.getAccountId(),
                         OrderTypeTranslator.toTinkoff(request.getOrderType()),
-                        request.getOrderId()
+                        request.getIdempotencyKey()
                 )
         );
 
@@ -66,7 +66,7 @@ public class OrderService implements OrderServiceInterface {
                 .setLotsExecuted(response.getLotsExecuted())
                 .setInitialOrderPrice(MoneyValueTranslator.toContract(response.getInitialOrderPrice()))
                 .setExecutedOrderPrice(MoneyValueTranslator.toContract(response.getExecutedOrderPrice()))
-                .setTotalOrderAmount(MoneyValueTranslator.toContract(response.getTotalOrderAmount()))
+                .setTotalPrice(MoneyValueTranslator.toContract(response.getTotalOrderAmount()))
                 .setAveragePositionPrice(MoneyValueTranslator.toContract(response.getAveragePositionPrice()))
                 .setInitialCommission(MoneyValueTranslator.toContract(response.getInitialCommission()))
                 .setExecutedCommission(MoneyValueTranslator.toContract(response.getExecutedCommission()))
@@ -78,7 +78,7 @@ public class OrderService implements OrderServiceInterface {
                 .setOrderType(OrderTypeTranslator.toContract(response.getOrderType()))
                 .setOrderDate(TimestampTranslator.toContract(response.getOrderDate()))
                 .setInstrumentUid(response.getInstrumentUid())
-                .setOrderRequestId(response.getOrderRequestId());
+                .setIdempotencyKey(response.getOrderRequestId());
     }
 
     @Override
@@ -91,7 +91,6 @@ public class OrderService implements OrderServiceInterface {
                 .setOrders(ListTranslator.translate(response, OrderStateTranslator::toContract));
     }
 
-    @Override
     public PostOrderResponse replace(ReplaceOrderRequest request) throws AbstractException {
         var response = ExceptionConverter.rethrowContractExceptionOnError(
                 () -> ordersServiceApi.replaceOrderSync(
@@ -124,6 +123,6 @@ public class OrderService implements OrderServiceInterface {
                 .setOrderType(OrderTypeTranslator.toContract(response.getOrderType()))
                 .setMessage(response.getMessage())
                 .setInstrumentUid(response.getInstrumentUid())
-                .setOrderRequestId(response.getOrderRequestId());
+                .setIdempotencyKey(response.getOrderRequestId());
     }
 }
