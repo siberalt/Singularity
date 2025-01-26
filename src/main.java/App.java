@@ -1,5 +1,5 @@
-import investtech.TraderBot;
-import investtech.configuration.YamlConfiguration;
+import com.siberalt.singularity.TraderBot;
+import com.siberalt.singularity.configuration.YamlConfiguration;
 
 import java.io.IOException;
 import java.nio.file.Files;
