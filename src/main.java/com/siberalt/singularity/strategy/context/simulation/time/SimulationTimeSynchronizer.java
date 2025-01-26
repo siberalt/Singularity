@@ -1,10 +1,10 @@
-package investtech.strategy.context.emulation.time;
+package com.siberalt.singularity.strategy.context.simulation.time;
 
-import investtech.simulation.EmulationTimeSynchronizerInterface;
+import com.siberalt.singularity.simulation.SimulationTimeSynchronizerInterface;
 
 import java.time.Instant;
 
-public class SimulationTimeSynchronizer implements EmulationTimeSynchronizerInterface {
+public class SimulationTimeSynchronizer implements SimulationTimeSynchronizerInterface {
     protected Instant currentTime;
 
     @Override

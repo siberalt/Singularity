@@ -1,14 +1,17 @@
-package investtech.strategy.scheduler.emulation;
+package com.siberalt.singularity.strategy.scheduler.simulation;
 
-import investtech.simulation.*;
-import investtech.strategy.*;
-import investtech.strategy.context.AbstractContext;
-import investtech.strategy.scheduler.Schedule;
+import com.siberalt.singularity.simulation.Event;
+import com.siberalt.singularity.simulation.EventInvokerInterface;
+import com.siberalt.singularity.simulation.EventObserver;
+import com.siberalt.singularity.simulation.TimeDependentUnitInterface;
+import com.siberalt.singularity.strategy.StrategyInterface;
+import com.siberalt.singularity.strategy.context.AbstractContext;
+import com.siberalt.singularity.strategy.scheduler.Schedule;
 
 import java.time.Instant;
 import java.util.*;
 
-public class SimulationScheduler implements EmulationSchedulerInterface, EventInvokerInterface, TimeDependentUnitInterface {
+public class SimulationScheduler implements SimulationSchedulerInterface, EventInvokerInterface, TimeDependentUnitInterface {
     protected EventObserver eventObserver;
     protected AbstractContext<?> context;
     protected Map<String, Schedule> strategySchedules = new HashMap<>();
