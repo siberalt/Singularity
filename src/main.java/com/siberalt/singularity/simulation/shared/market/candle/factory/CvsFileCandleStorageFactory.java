@@ -1,10 +1,10 @@
 package com.siberalt.singularity.simulation.shared.market.candle.factory;
 
-import com.siberalt.singularity.factory.FactoryInterface;
-import com.siberalt.singularity.factory.ServiceContainer;
-import com.siberalt.singularity.configuration.ConfigurationInterface;
-import com.siberalt.singularity.simulation.shared.market.candle.storage.cvs.CvsCandleStorage;
+import com.siberalt.singularity.service.DependencyManager;
+import com.siberalt.singularity.service.ServiceDetails;
+import com.siberalt.singularity.service.factory.FactoryInterface;
 import com.siberalt.singularity.shared.stream.input.ZipFileInputStream;
+import com.siberalt.singularity.simulation.shared.market.candle.storage.cvs.CvsCandleStorage;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -15,7 +15,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 public class CvsFileCandleStorageFactory implements FactoryInterface {
-    protected String instrumentUid;
 
     public CvsCandleStorage create(String instrumentUid, String filesDir) {
         File[] files = new File(filesDir).listFiles();
@@ -57,18 +56,10 @@ public class CvsFileCandleStorageFactory implements FactoryInterface {
     }
 
     @Override
-    public CvsCandleStorage create(ConfigurationInterface config, ServiceContainer serviceManager) {
-        String filesDir = (String) config.get("filesDir");
-
-        if (null == instrumentUid) {
-            instrumentUid = (String) config.get("instrumentUid");
-        }
+    public CvsCandleStorage create(ServiceDetails serviceDetails, DependencyManager dependencyManager) {
+        String filesDir = (String) serviceDetails.config().get("filesDir");
+        var instrumentUid = (String) serviceDetails.config().get("instrumentUid");
 
         return create(instrumentUid, filesDir);
-    }
-
-    public CvsFileCandleStorageFactory setInstrumentUid(String instrumentUid) {
-        this.instrumentUid = instrumentUid;
-        return this;
     }
 }

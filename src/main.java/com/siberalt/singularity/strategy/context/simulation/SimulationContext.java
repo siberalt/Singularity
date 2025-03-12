@@ -1,7 +1,7 @@
 package com.siberalt.singularity.strategy.context.simulation;
 
 import com.siberalt.singularity.strategy.context.AbstractContext;
-import com.siberalt.singularity.strategy.scheduler.SchedulerInterface;
+import com.siberalt.singularity.scheduler.SchedulerInterface;
 import com.siberalt.singularity.broker.container.AbstractBrokerContainer;
 import com.siberalt.singularity.broker.contract.simulation.SimulationBrokerInterface;
 import com.siberalt.singularity.strategy.context.TimeSynchronizerInterface;

@@ -22,7 +22,7 @@ import com.siberalt.singularity.simulation.shared.market.candle.Candle;
 import com.siberalt.singularity.simulation.shared.market.candle.CandleStorageInterface;
 import com.siberalt.singularity.strategy.context.TimeSynchronizerInterface;
 import com.siberalt.singularity.strategy.context.simulation.SimulationContext;
-import com.siberalt.singularity.strategy.scheduler.SchedulerInterface;
+import com.siberalt.singularity.scheduler.SchedulerInterface;
 import com.siberalt.singularity.test.util.ConfigLoader;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;

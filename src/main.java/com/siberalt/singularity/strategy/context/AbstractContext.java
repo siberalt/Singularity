@@ -1,6 +1,6 @@
 package com.siberalt.singularity.strategy.context;
 
-import com.siberalt.singularity.strategy.scheduler.SchedulerInterface;
+import com.siberalt.singularity.scheduler.SchedulerInterface;
 import com.siberalt.singularity.broker.container.AbstractBrokerContainer;
 import com.siberalt.singularity.broker.contract.execution.BrokerInterface;
 
@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
+// TODO improve and fix
 public abstract class AbstractContext<brokerT extends BrokerInterface> {
     private final AbstractBrokerContainer<brokerT> brokers;
     private final SchedulerInterface scheduler;

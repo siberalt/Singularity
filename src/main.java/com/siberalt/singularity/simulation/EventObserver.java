@@ -5,10 +5,10 @@ import java.util.*;
 
 public class EventObserver {
     protected SortedMap<Instant, List<Event>> eventsSortedByTime = new TreeMap<>(
-            Comparator.comparingLong(Instant::toEpochMilli).reversed()
+            Comparator.comparingLong(Instant::toEpochMilli)
     );
 
-    public void plan(Event event) {
+    public void scheduleEvent(Event event) {
         var timePoint = event.getTimePoint();
 
         if (!eventsSortedByTime.containsKey(timePoint)) {
@@ -18,7 +18,7 @@ public class EventObserver {
         }
     }
 
-    public void cancel(Event event) {
+    public void cancelEvent(Event event) {
         var timePoint = event.getTimePoint();
 
         if (eventsSortedByTime.containsKey(timePoint)) {
@@ -31,21 +31,21 @@ public class EventObserver {
         }
     }
 
-    public void rewindToNextEvents() {
-        eventsSortedByTime.remove(getComingEventsTimePoint());
+    public void advanceToNextEvent() {
+        eventsSortedByTime.remove(getNextEventTime());
     }
 
-    public Instant getComingEventsTimePoint() {
+    public Instant getNextEventTime() {
         return eventsSortedByTime.firstKey();
     }
 
-    public List<Event> getNextComingEvents() {
+    public List<Event> getNextEvents() {
         var timePoint = eventsSortedByTime.firstKey();
 
         return eventsSortedByTime.get(timePoint);
     }
 
-    public boolean hasComingEvents() {
+    public boolean hasUpcomingEvents() {
         return !eventsSortedByTime.isEmpty();
     }
 }

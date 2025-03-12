@@ -6,7 +6,7 @@ import com.siberalt.singularity.simulation.shared.instrument.InstrumentStorageIn
 import com.siberalt.singularity.simulation.shared.market.candle.CandleStorageInterface;
 import com.siberalt.singularity.strategy.context.AbstractContext;
 import com.siberalt.singularity.strategy.context.ContextAwareInterface;
-import com.siberalt.singularity.strategy.event.EventManagerInterface;
+import com.siberalt.singularity.event.EventManagerInterface;
 
 class MockBroker implements StopOrderServiceAwareBrokerInterface, ContextAwareInterface {
     protected AbstractContext<?> context;

@@ -1,31 +1,32 @@
 package com.siberalt.singularity.strategy.impl;
 
+import com.siberalt.singularity.strategy.StrategyCommand;
 import com.siberalt.singularity.strategy.context.AbstractContext;
 import com.siberalt.singularity.strategy.StrategyInterface;
 
-public class ProportionalLowHighStrategy implements StrategyInterface {
-    @Override
-    public String getId() {
-        return null;
-    }
+import java.io.Externalizable;
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
+
+public class ProportionalLowHighStrategy implements StrategyInterface, Externalizable {
 
     @Override
-    public void setId(String id) {
-
-    }
-
-    @Override
-    public void start(AbstractContext<?> context) {
+    public void execute(StrategyCommand command) {
 
     }
 
     @Override
-    public void run(AbstractContext<?> context) {
+    public void applyContext(AbstractContext<?> context) {
 
     }
 
     @Override
-    public void stop(AbstractContext<?> context) {
+    public void writeExternal(ObjectOutput out) throws IOException {
 
+    }
+
+    @Override
+    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
     }
 }

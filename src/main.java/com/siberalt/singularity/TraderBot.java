@@ -1,29 +1,25 @@
 package com.siberalt.singularity;
 
-import com.siberalt.singularity.factory.ServiceContainer;
-import com.siberalt.singularity.factory.broker.BrokerFactoryManager;
-import com.siberalt.singularity.factory.broker.TinkoffBrokerFactory;
-import com.siberalt.singularity.factory.strategy.StrategyFactoryManager;
-import com.siberalt.singularity.factory.strategy.TinkoffIMOEXStrategyFactory;
-import com.siberalt.singularity.strategy.scheduler.Scheduler;
 import com.siberalt.singularity.broker.contract.execution.BrokerInterface;
-import com.siberalt.singularity.configuration.ConfigurationInterface;
-import com.siberalt.singularity.factory.exception.FactoryNotFoundException;
+import com.siberalt.singularity.configuration.ConfigInterface;
+import com.siberalt.singularity.service.ServiceRegistry;
+import com.siberalt.singularity.service.exception.FactoryNotFoundException;
+import com.siberalt.singularity.service.factory.broker.BrokerFactoryManager;
+import com.siberalt.singularity.service.factory.strategy.StrategyFactoryManager;
 import com.siberalt.singularity.strategy.StrategyInterface;
-import com.siberalt.singularity.strategy.StrategyExecutor;
 
 import java.util.HashMap;
 
 public class TraderBot {
-    protected ConfigurationInterface configuration;
+    protected ConfigInterface configuration;
 
-    protected ServiceContainer serviceContainer;
+    protected ServiceRegistry serviceContainer;
 
     protected StrategyFactoryManager strategyFactoryManager;
 
     protected BrokerFactoryManager brokerFactoryManager;
 
-    public TraderBot(ConfigurationInterface configuration) {
+    public TraderBot(ConfigInterface configuration) {
         this.configuration = configuration;
     }
 
@@ -36,17 +32,17 @@ public class TraderBot {
         HashMap<String, BrokerInterface> brokers = new HashMap<>();
 
         for (String brokerId : activeBrokerIds) {
-            serviceContainer.addFactory(brokerId, brokerFactoryManager);
+            serviceContainer.setFactory(brokerId, brokerFactoryManager);
             brokers.put(brokerId, (BrokerInterface) serviceContainer.get(brokerId));
         }
 
         for (String strategyId : activeStrategyIds) {
-            serviceContainer.addFactory(strategyId, strategyFactoryManager);
+            serviceContainer.setFactory(strategyId, strategyFactoryManager);
             strategies.put(strategyId, (StrategyInterface) serviceContainer.get(strategyId));
         }
 
-        StrategyExecutor strategyExecutor = new StrategyExecutor(strategies, brokers, new Scheduler());
-        strategyExecutor.run();
+        //StrategyExecutor strategyExecutor = new StrategyExecutor(strategies, brokers, new Scheduler());
+        //strategyExecutor.run();
     }
 
     public void emulate() {
@@ -54,20 +50,6 @@ public class TraderBot {
     }
 
     protected void init() {
-        strategyFactoryManager = new StrategyFactoryManager()
-                .registerType("tinkoff_imoex", new TinkoffIMOEXStrategyFactory());
 
-        brokerFactoryManager = new BrokerFactoryManager()
-                .registerType("tinkoff", new TinkoffBrokerFactory());
-
-        serviceContainer = new ServiceContainer(configuration)
-                .setConfigMappings(
-                        new String[]{
-                                "run.strategies",
-                                "run.brokers",
-                                "emulate.strategies",
-                                "emulate.brokers"
-                        }
-                );
     }
 }

@@ -1,9 +1,9 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared;
 
 import com.siberalt.singularity.strategy.context.AbstractContext;
-import com.siberalt.singularity.strategy.event.Event;
-import com.siberalt.singularity.strategy.event.EventHandlerInterface;
-import com.siberalt.singularity.strategy.event.EventManagerInterface;
+import com.siberalt.singularity.event.Event;
+import com.siberalt.singularity.event.EventHandlerInterface;
+import com.siberalt.singularity.event.EventManagerInterface;
 
 import java.util.ArrayList;
 import java.util.HashMap;

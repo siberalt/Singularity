@@ -6,7 +6,7 @@ import com.siberalt.singularity.broker.contract.service.market.MarketDataService
 import com.siberalt.singularity.broker.contract.service.market.TechAnalysisServiceInterface;
 import com.siberalt.singularity.broker.contract.service.operation.OperationsServiceInterface;
 import com.siberalt.singularity.broker.contract.service.order.OrderServiceInterface;
-import com.siberalt.singularity.strategy.event.EventManagerInterface;
+import com.siberalt.singularity.event.EventManagerInterface;
 import ru.tinkoff.piapi.contract.v1.OperationsServiceGrpc;
 import ru.tinkoff.piapi.core.InvestApi;
 

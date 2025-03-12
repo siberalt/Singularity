@@ -9,8 +9,8 @@ import com.siberalt.singularity.broker.contract.service.order.request.PriceType;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.user.Account;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
-import com.siberalt.singularity.configuration.ConfigurationInterface;
-import com.siberalt.singularity.configuration.YamlConfiguration;
+import com.siberalt.singularity.configuration.ConfigInterface;
+import com.siberalt.singularity.configuration.YamlConfig;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import ru.tinkoff.piapi.contract.v1.MoneyValue;
@@ -24,7 +24,7 @@ import java.util.Objects;
 
 public class TinkoffSandboxBrokerTest {
     protected TinkoffSandboxBroker tinkoffBroker;
-    protected ConfigurationInterface configuration;
+    protected ConfigInterface configuration;
     protected String testAccountId;
     protected Instrument testShare;
 
@@ -311,9 +311,9 @@ public class TinkoffSandboxBrokerTest {
         return tinkoffBroker;
     }
 
-    protected ConfigurationInterface getConfiguration() throws IOException {
+    protected ConfigInterface getConfiguration() throws IOException {
         if (null == configuration) {
-            configuration = new YamlConfiguration(
+            configuration = new YamlConfig(
                     Files.newInputStream(Paths.get("src/test/resources/broker/tinkoff/test-settings.yaml"))
             );
         }

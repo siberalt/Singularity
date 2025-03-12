@@ -124,13 +124,13 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
             .setExecutionStatus(ExecutionStatus.NEW);
 
         registerOrder(order);
-        eventObserver.plan(orderEvent);
+        eventObserver.scheduleEvent(orderEvent);
     }
 
     @Override
     protected void cancel(Order order) {
         super.cancel(order);
-        eventObserver.cancel(orderEvents.get(order.getOrderId()).getEvent());
+        eventObserver.cancelEvent(orderEvents.get(order.getOrderId()).getEvent());
     }
 
     protected Candle findMarketSignalCandle(

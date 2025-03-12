@@ -3,8 +3,8 @@ package com.siberalt.singularity.broker.impl.tinkoff.execution;
 import com.siberalt.singularity.broker.contract.service.user.Account;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.operation.request.GetPositionsRequest;
-import com.siberalt.singularity.configuration.ConfigurationInterface;
-import com.siberalt.singularity.configuration.YamlConfiguration;
+import com.siberalt.singularity.configuration.ConfigInterface;
+import com.siberalt.singularity.configuration.YamlConfig;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -14,7 +14,7 @@ import java.nio.file.Paths;
 public class ReadonlyTest {
     @Test
     public void test() throws IOException, AbstractException {
-        ConfigurationInterface configuration = new YamlConfiguration(
+        ConfigInterface configuration = new YamlConfig(
                 Files.newInputStream(Paths.get("src/test/resources/broker/tinkoff/test-settings.yaml"))
         );
 

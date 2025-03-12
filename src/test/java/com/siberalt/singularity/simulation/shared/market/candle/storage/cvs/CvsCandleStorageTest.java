@@ -1,8 +1,8 @@
 package com.siberalt.singularity.simulation.shared.market.candle.storage.cvs;
 
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
-import com.siberalt.singularity.configuration.ConfigurationInterface;
-import com.siberalt.singularity.configuration.YamlConfiguration;
+import com.siberalt.singularity.configuration.ConfigInterface;
+import com.siberalt.singularity.configuration.YamlConfig;
 import com.siberalt.singularity.simulation.shared.market.candle.Candle;
 import com.siberalt.singularity.simulation.shared.market.candle.ComparisonOperator;
 import com.siberalt.singularity.simulation.shared.market.candle.FindPriceParams;
@@ -245,7 +245,7 @@ public class CvsCandleStorageTest {
 
     CvsTestConfig createTestConfig() throws IOException {
         try (var configurationStream = Files.newInputStream(Paths.get(SETTINGS_PATH))) {
-            ConfigurationInterface configuration = new YamlConfiguration(configurationStream);
+            ConfigInterface configuration = new YamlConfig(configurationStream);
             String instrumentUid = (String) configuration.get("instrumentUid");
             String instrumentDataPath = (String) configuration.get("instrumentDataPath");
 
