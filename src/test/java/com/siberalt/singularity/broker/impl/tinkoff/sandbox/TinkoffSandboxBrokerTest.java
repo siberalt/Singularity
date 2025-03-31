@@ -9,6 +9,7 @@ import com.siberalt.singularity.broker.contract.service.order.request.PriceType;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.user.Account;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
+import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.MoneyValueTranslator;
 import com.siberalt.singularity.configuration.ConfigInterface;
 import com.siberalt.singularity.configuration.YamlConfig;
 import org.junit.jupiter.api.Assertions;
@@ -33,7 +34,7 @@ public class TinkoffSandboxBrokerTest {
         var tinkoffBroker = getTinkoffSandbox();
         var orderService = tinkoffBroker.getOrderService();
         var share = getTestShare();
-        var testAccountId = openTestAccount();
+        var testAccountId = openTestAccount("TestAccount");
 
         System.out.println("Testing share: ");
         System.out.println(share);
@@ -139,7 +140,7 @@ public class TinkoffSandboxBrokerTest {
     @Test
     public void testOperationsService() throws IOException, AbstractException {
         var tinkoffBroker = getTinkoffSandbox();
-        var testAccountId = openTestAccount();
+        var testAccountId = openTestAccount("TestAccount");
 
         System.out.println();
         System.out.println("Positions: ");
@@ -221,7 +222,9 @@ public class TinkoffSandboxBrokerTest {
         var share = getTestShare();
         var caught = false;
 
-        String accountId = openTestAccount(MoneyValue.newBuilder().setCurrency("RUB").setUnits(120).build());
+        String accountId = openTestAccount(
+            "TestAccount", MoneyValue.newBuilder().setCurrency("RUB").setUnits(120).build()
+        );
 
         try {
             orderService.post(
@@ -280,24 +283,25 @@ public class TinkoffSandboxBrokerTest {
         return testShare;
     }
 
-    protected String openTestAccount() throws IOException, AbstractException {
-        return openTestAccount(MoneyValue.newBuilder().setCurrency("RUB").setUnits(120000).build());
+    protected String openTestAccount(String name) throws IOException, AbstractException {
+        return openTestAccount(name, MoneyValue.newBuilder().setCurrency("RUB").setUnits(120000).build());
     }
 
-    protected String openTestAccount(MoneyValue startBalance) throws IOException, AbstractException {
+    protected String openTestAccount(String name, MoneyValue startBalance) throws IOException, AbstractException {
         var tinkoffBroker = getTinkoffSandbox();
         var responseAccounts = tinkoffBroker.getUserService().getAccounts(null);
+        TinkoffSandboxService sandboxService = tinkoffBroker.getSandboxService();
 
         if (!responseAccounts.getAccounts().isEmpty()) {
             responseAccounts
                     .getAccounts()
                     .stream()
                     .map(Account::getId)
-                    .forEach(tinkoffBroker::closeAccount);
+                    .forEach(sandboxService::closeAccount);
         }
 
-        testAccountId = tinkoffBroker.openAccount();
-        tinkoffBroker.payIn(testAccountId, startBalance);
+        testAccountId = sandboxService.openAccount(name);
+        sandboxService.payIn(testAccountId, MoneyValueTranslator.toContract(startBalance));
 
         return testAccountId;
     }

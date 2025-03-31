@@ -6,6 +6,7 @@ import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -87,6 +88,10 @@ public class AccountBalance {
 
     public Money getAvailableMoney(String currencyIso) {
         return availableMonies.getOrDefault(currencyIso, Money.of(currencyIso, Quotation.ZERO));
+    }
+
+    public List<Money> getAvailableMoney() {
+        return availableMonies.values().stream().toList();
     }
 
     protected void updateMoneyBalance(Map<String, Money> moneyBalance, Money money, Function<Money, Money> updater) {

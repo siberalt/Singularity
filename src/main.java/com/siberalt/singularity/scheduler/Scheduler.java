@@ -2,7 +2,7 @@ package com.siberalt.singularity.scheduler;
 
 import com.siberalt.singularity.scheduler.exception.InvalidScheduleException;
 import com.siberalt.singularity.scheduler.exception.ScheduleNotFoundException;
-import com.siberalt.singularity.strategy.context.TimeSynchronizerInterface;
+import com.siberalt.singularity.strategy.context.Clock;
 
 import javax.annotation.Nonnull;
 import java.time.temporal.ChronoUnit;
@@ -16,9 +16,9 @@ import java.util.concurrent.TimeUnit;
 public class Scheduler implements SchedulerInterface {
     protected ScheduledExecutorService executor = Executors.newScheduledThreadPool(5);
     protected HashMap<UUID, ScheduledFuture<?>> runnableFutures = new HashMap<>();
-    protected TimeSynchronizerInterface timeSynchronizer;
+    protected Clock timeSynchronizer;
 
-    public Scheduler(TimeSynchronizerInterface timeSynchronizer) {
+    public Scheduler(Clock timeSynchronizer) {
         this.timeSynchronizer = timeSynchronizer;
     }
 

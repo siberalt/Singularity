@@ -1,20 +1,23 @@
 package com.siberalt.singularity.broker.impl.mock;
 
+import com.siberalt.singularity.broker.contract.execution.SandboxServiceAwareBroker;
 import com.siberalt.singularity.broker.contract.execution.StopOrderServiceAwareBrokerInterface;
 import com.siberalt.singularity.broker.contract.service.order.stop.StopOrderServiceInterface;
+import com.siberalt.singularity.broker.contract.service.sandbox.SandboxService;
+import com.siberalt.singularity.event.EventManagerInterface;
 import com.siberalt.singularity.simulation.shared.instrument.InstrumentStorageInterface;
 import com.siberalt.singularity.simulation.shared.market.candle.CandleStorageInterface;
 import com.siberalt.singularity.strategy.context.AbstractContext;
 import com.siberalt.singularity.strategy.context.ContextAwareInterface;
-import com.siberalt.singularity.event.EventManagerInterface;
 
-class MockBroker implements StopOrderServiceAwareBrokerInterface, ContextAwareInterface {
+class MockBroker implements StopOrderServiceAwareBrokerInterface, ContextAwareInterface, SandboxServiceAwareBroker {
     protected AbstractContext<?> context;
     protected MockMarketDataService marketDataService;
     protected MockOrderService orderService;
     protected MockOperationsService operationsService;
     protected MockInstrumentService instrumentService;
     protected MockUserService userService;
+    protected MockSandboxService sandboxService;
 
     public MockBroker(CandleStorageInterface candleRepository, InstrumentStorageInterface instrumentStorage) {
         orderService = new MockOrderService(this);
@@ -22,6 +25,7 @@ class MockBroker implements StopOrderServiceAwareBrokerInterface, ContextAwareIn
         operationsService = new MockOperationsService(this);
         instrumentService = new MockInstrumentService(this, instrumentStorage);
         userService = new MockUserService(this);
+        sandboxService = new MockSandboxService(this);
     }
 
     @Override
@@ -62,5 +66,10 @@ class MockBroker implements StopOrderServiceAwareBrokerInterface, ContextAwareIn
     @Override
     public void applyContext(AbstractContext<?> context) {
         this.context = context;
+    }
+
+    @Override
+    public SandboxService getSandboxService() {
+        return sandboxService;
     }
 }

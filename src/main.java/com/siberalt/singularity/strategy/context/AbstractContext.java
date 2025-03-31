@@ -12,13 +12,13 @@ import java.util.Map;
 public abstract class AbstractContext<brokerT extends BrokerInterface> {
     private final AbstractBrokerContainer<brokerT> brokers;
     private final SchedulerInterface scheduler;
-    protected final TimeSynchronizerInterface timeSynchronizer;
+    protected final Clock timeSynchronizer;
     protected Map<String, Object> params = new HashMap<>();
 
     public AbstractContext(
             SchedulerInterface scheduler,
             AbstractBrokerContainer<brokerT> brokers,
-            TimeSynchronizerInterface timeSynchronizer
+            Clock timeSynchronizer
     ) {
         this.scheduler = scheduler;
         this.brokers = brokers;

@@ -1,10 +1,10 @@
 package com.siberalt.singularity.strategy.context.simulation.time;
 
-import com.siberalt.singularity.simulation.SimulationTimeSynchronizerInterface;
+import com.siberalt.singularity.simulation.SimulationClock;
 
 import java.time.Instant;
 
-public class SimulationTimeSynchronizer implements SimulationTimeSynchronizerInterface {
+public class ClockStub implements SimulationClock {
     protected Instant currentTime;
 
     @Override

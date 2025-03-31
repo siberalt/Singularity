@@ -3,8 +3,9 @@ package com.siberalt.singularity.broker.impl.mock;
 import com.siberalt.singularity.broker.contract.service.market.response.GetLastPricesResponse;
 import com.siberalt.singularity.broker.contract.service.market.response.HistoricCandle;
 import com.siberalt.singularity.broker.impl.mock.config.MockBrokerConfig;
-import com.siberalt.singularity.strategy.context.simulation.SimulationContext;
-import com.siberalt.singularity.strategy.context.simulation.time.SimulationTimeSynchronizer;
+import com.siberalt.singularity.simulation.SimulationClock;
+import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
+import com.siberalt.singularity.strategy.simulation.SimulationContext;
 import com.siberalt.singularity.test.util.ConfigLoader;
 import com.siberalt.singularity.test.util.resource.ResourceHandler;
 import com.siberalt.singularity.broker.contract.service.instrument.Instrument;
@@ -33,12 +34,12 @@ import java.util.stream.StreamSupport;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class MockMarketDataServiceTest {
+class MockMarketDataServiceIT {
     private MockMarketDataService marketDataService;
     private MockBroker broker;
-    private ResourceHandler<CvsCandleStorage> resourceCandleStorageHandler;
+    private ResourceHandler<CvsCandleStorage> storageHandler;
     private MockBrokerConfig config;
-    private SimulationTimeSynchronizer timeSynchronizer;
+    private SimulationClock clock;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -52,22 +53,22 @@ class MockMarketDataServiceTest {
 
         var instrumentStorage = new RuntimeInstrumentStorage().add(instrument);
 
-        resourceCandleStorageHandler = ResourceHandler.newHandler(() ->
+        storageHandler = ResourceHandler.newHandler(() ->
                 new CvsFileCandleStorageFactory().create(
                         config.getInstrument().getUid(),
                         config.getInstrument().getDataPath()
                 )
         );
 
-        timeSynchronizer = new SimulationTimeSynchronizer();
-        broker = new MockBroker(resourceCandleStorageHandler.create(), instrumentStorage);
-        broker.applyContext(new SimulationContext(null, null, timeSynchronizer));
+        clock = new SimpleSimulationClock();
+        broker = new MockBroker(storageHandler.create(), instrumentStorage);
+        broker.applyContext(new SimulationContext(null, null, clock));
         marketDataService = broker.getMarketDataService();
     }
 
     @AfterEach
     void tearDown() {
-        resourceCandleStorageHandler.close();
+        storageHandler.close();
     }
 
     @Test
@@ -180,7 +181,7 @@ class MockMarketDataServiceTest {
         GetLastPricesRequest request = new GetLastPricesRequest()
                 .setInstrumentUid(config.getInstrument().getUid())
                 .setPeriod(Duration.ofMinutes(10));
-        timeSynchronizer.syncCurrentTime(Instant.parse("2020-12-30T15:22:00Z"));
+        clock.syncCurrentTime(Instant.parse("2020-12-30T15:22:00Z"));
 
         GetLastPricesResponse response = marketDataService.getLastPrices(request);
 
@@ -250,7 +251,7 @@ class MockMarketDataServiceTest {
         9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-30T14:44:00Z;5.556;5.556;5.556;5.554;2792;
         9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-30T14:45:00Z;5.556;5.556;5.556;5.556;611;
          */
-        timeSynchronizer.syncCurrentTime(Instant.parse("2020-12-30T14:25:00Z"));
+        clock.syncCurrentTime(Instant.parse("2020-12-30T14:25:00Z"));
         FindPriceParams params = new FindPriceParams()
                 .setInstrumentUid(config.getInstrument().getUid())
                 .setMaxCount(4)
@@ -284,8 +285,8 @@ class MockMarketDataServiceTest {
           Tested file content:
           9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-30T15:15:00Z;5.558;5.56;5.56;5.556;35532;
          */
-        timeSynchronizer.syncCurrentTime(Instant.parse("2020-12-30T15:15:00Z"));
-        Candle candle = marketDataService.getInstrumentLastCandle(config.getInstrument().getUid());
+        clock.syncCurrentTime(Instant.parse("2020-12-30T15:15:00Z"));
+        Candle candle = marketDataService.getInstrumentCurrentCandle(config.getInstrument().getUid());
 
         assertNotNull(candle);
         assertEquals(Instant.parse("2020-12-30T15:15:00Z"), candle.getTime());

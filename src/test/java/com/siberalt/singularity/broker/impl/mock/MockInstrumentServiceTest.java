@@ -1,7 +1,7 @@
 package com.siberalt.singularity.broker.impl.mock;
 
-import com.siberalt.singularity.strategy.context.simulation.SimulationContext;
-import com.siberalt.singularity.strategy.context.simulation.time.SimulationTimeSynchronizer;
+import com.siberalt.singularity.strategy.context.simulation.time.ClockStub;
+import com.siberalt.singularity.strategy.simulation.SimulationContext;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.instrument.Instrument;
 import com.siberalt.singularity.broker.contract.service.instrument.common.InstrumentType;
@@ -34,7 +34,7 @@ public class MockInstrumentServiceTest {
 
         var mockBroker = new MockBroker(null, instrumentStorage);
         var instrumentService = mockBroker.getInstrumentService();
-        mockBroker.applyContext(new SimulationContext(null, null, new SimulationTimeSynchronizer()));
+        mockBroker.applyContext(new SimulationContext(null, null, new ClockStub()));
 
         var response = instrumentService.get(GetRequest.of(instrumentUid));
         var instrument = response.getInstrument();

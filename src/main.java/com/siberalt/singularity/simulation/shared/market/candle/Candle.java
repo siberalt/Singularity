@@ -10,15 +10,10 @@ import java.util.stream.Stream;
 
 public class Candle {
     String instrumentUid;
-
     Instant time;
-
     Quotation openPrice;
-
     Quotation closePrice;
-
     Quotation highPrice;
-
     Quotation lowPrice;
 
     long volume;
@@ -86,16 +81,6 @@ public class Candle {
         return this;
     }
 
-    public Candle addCumulative(Candle candle) {
-        this.lowPrice = Objects.requireNonNullElse(this.lowPrice, Quotation.ZERO).add(candle.lowPrice);
-        this.highPrice = Objects.requireNonNullElse(this.highPrice, Quotation.ZERO).add(candle.highPrice);
-        this.openPrice = Objects.requireNonNullElse(this.openPrice, Quotation.ZERO).add(candle.openPrice);
-        this.closePrice = Objects.requireNonNullElse(this.closePrice, Quotation.ZERO).add(candle.closePrice);
-        this.volume += candle.volume;
-
-        return this;
-    }
-
     @Override
     public Candle clone() {
         return new Candle()
@@ -118,5 +103,29 @@ public class Candle {
                 .map(Quotation::toBigDecimal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return Quotation.of(sum.divide(BigDecimal.valueOf(4), roundingMode));
+    }
+
+    public static Candle of(Instant time, long volume, Quotation open, Quotation high, Quotation low, Quotation close) {
+        return new Candle()
+                .setTime(time)
+                .setVolume(volume)
+                .setOpenPrice(open)
+                .setHighPrice(high)
+                .setLowPrice(low)
+                .setClosePrice(close);
+    }
+
+    public static Candle of(Instant time, long volume, double repeatedValue) {
+        return Candle.of(time, volume, repeatedValue, repeatedValue, repeatedValue, repeatedValue);
+    }
+
+    public static Candle of(Instant time, long volume, double open, double high, double low, double close) {
+        return new Candle()
+                .setTime(time)
+                .setVolume(volume)
+                .setOpenPrice(Quotation.of(open))
+                .setHighPrice(Quotation.of(high))
+                .setLowPrice(Quotation.of(low))
+                .setClosePrice(Quotation.of(close));
     }
 }

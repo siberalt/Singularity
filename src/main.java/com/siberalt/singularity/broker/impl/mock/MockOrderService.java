@@ -1,5 +1,6 @@
 package com.siberalt.singularity.broker.impl.mock;
 
+import com.siberalt.singularity.broker.contract.service.instrument.Instrument;
 import com.siberalt.singularity.broker.contract.service.operation.response.Position;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.order.response.*;
@@ -10,7 +11,9 @@ import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.ExceptionBuilder;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
 import com.siberalt.singularity.broker.contract.service.order.OrderServiceInterface;
+import com.siberalt.singularity.broker.impl.mock.shared.exception.MockBrokerException;
 import com.siberalt.singularity.broker.impl.mock.shared.order.Order;
+import com.siberalt.singularity.broker.impl.mock.shared.user.AccountState;
 import com.siberalt.singularity.simulation.shared.market.candle.Candle;
 
 import java.math.BigDecimal;
@@ -35,11 +38,11 @@ public class MockOrderService implements OrderServiceInterface {
     public PostOrderResponse post(PostOrderRequest request) throws AbstractException {
         checkAccountAvailable(request.getAccountId());
 
-        if (null == request.getPrice() && OrderType.LIMIT == request.getOrderType()) {
+        if (request.getPrice() == null && OrderType.LIMIT == request.getOrderType()) {
             throw ExceptionBuilder.create(ErrorCode.MISSING_PARAMETER_PRICE);
         }
 
-        if (null != request.getPrice() && request.getPrice().isLessOrEqual(BigDecimal.ZERO)) {
+        if (request.getPrice() != null && request.getPrice().isLessOrEqual(BigDecimal.ZERO)) {
             throw ExceptionBuilder.create(ErrorCode.INVALID_PARAMETER_PRICE);
         }
 
@@ -58,13 +61,13 @@ public class MockOrderService implements OrderServiceInterface {
     public CancelOrderResponse cancel(CancelOrderRequest request) throws AbstractException {
         checkAccountAvailable(request.getAccountId());
 
-        var accountOrders = orders.getOrDefault(request.getAccountId(), new HashMap<>());
+        Map<String, Order> accountOrders = orders.getOrDefault(request.getAccountId(), new HashMap<>());
 
         if (!accountOrders.containsKey(request.getOrderId())) {
             throw ExceptionBuilder.create(ErrorCode.ORDER_NOT_FOUND);
         }
 
-        var cancelOrder = accountOrders.get(request.getOrderId());
+        Order cancelOrder = accountOrders.get(request.getOrderId());
 
         if (cancelOrder.getExecutionStatus() != ExecutionStatus.NEW) {
             throw ExceptionBuilder.create(ErrorCode.CANCEL_ORDER_ERROR);
@@ -80,15 +83,15 @@ public class MockOrderService implements OrderServiceInterface {
     public OrderState getState(GetOrderStateRequest request) throws AbstractException {
         checkAccountAvailable(request.getAccountId());
 
-        var accountOrders = orders.getOrDefault(request.getAccountId(), new HashMap<>());
+        Map<String, Order> accountOrders = orders.getOrDefault(request.getAccountId(), new HashMap<>());
 
         if (!accountOrders.containsKey(request.getOrderId())) {
             throw ExceptionBuilder.create(ErrorCode.ORDER_NOT_FOUND);
         }
 
-        var accountOrder = accountOrders.get(request.getOrderId());
+        Order accountOrder = accountOrders.get(request.getOrderId());
 
-        if (null != request.getPriceType() && accountOrder.getPriceType() != request.getPriceType()) {
+        if (request.getPriceType() != null && accountOrder.getPriceType() != request.getPriceType()) {
             throw ExceptionBuilder.create(ErrorCode.ORDER_NOT_FOUND);
         }
 
@@ -99,7 +102,7 @@ public class MockOrderService implements OrderServiceInterface {
     public GetOrdersResponse get(GetOrdersRequest request) throws AbstractException {
         checkAccountAvailable(request.getAccountId());
 
-        var accountOrders = orders
+        List<OrderState> accountOrders = orders
             .computeIfAbsent(request.getAccountId(), k -> new HashMap<>())
             .values()
             .stream()
@@ -151,7 +154,7 @@ public class MockOrderService implements OrderServiceInterface {
     }
 
     protected PostOrderResponse buy(PostOrderRequest request) throws AbstractException {
-        var order = createOrder(request);
+        Order order = createOrder(request);
         calculateOrderPrices(order);
         checkEnoughOfMoneyToBuy(order);
 
@@ -198,14 +201,14 @@ public class MockOrderService implements OrderServiceInterface {
     }
 
     protected void buyInstrument(Order order) throws AbstractException {
-        var operationsService = mockBroker.operationsService;
+        MockOperationsService operationsService = mockBroker.operationsService;
         order
             .setExecutionStatus(ExecutionStatus.FILL)
             .setLotsExecuted(order.getLotsRequested());
 
         registerOrder(order);
 
-        var totalPriceMoney = Money.of(order.getInstrument().getCurrency(), order.getTotalPrice());
+        Money totalPriceMoney = Money.of(order.getInstrument().getCurrency(), order.getTotalPrice());
 
         operationsService.subtractMoney(
             order.getAccountId(), totalPriceMoney
@@ -218,7 +221,7 @@ public class MockOrderService implements OrderServiceInterface {
     }
 
     protected PostOrderResponse sell(PostOrderRequest request) throws AbstractException {
-        var order = createOrder(request);
+        Order order = createOrder(request);
         calculateOrderPrices(order);
         checkEnoughOfPositionToSell(order);
 
@@ -233,7 +236,7 @@ public class MockOrderService implements OrderServiceInterface {
     }
 
     protected Order createOrder(PostOrderRequest request) throws AbstractException {
-        var instrument = mockBroker
+        Instrument instrument = mockBroker
             .instrumentService
             .get(GetRequest.of(request.getInstrumentId()))
             .getInstrument();
@@ -242,11 +245,12 @@ public class MockOrderService implements OrderServiceInterface {
             throw ExceptionBuilder.create(ErrorCode.INSTRUMENT_NOT_FOUND);
         }
 
-        var instrumentPrice = calculateCurrentInstrumentPrice(
-            request.getInstrumentId(),
-            request.getOrderType(),
-            request.getDirection()
-        );
+        Candle currentCandle = mockBroker.marketDataService.getInstrumentCurrentCandle(request.getInstrumentId());
+        if (currentCandle == null) {
+            throw new MockBrokerException("Candle not found");
+        }
+
+        Quotation instrumentPrice = calculateCurrentPrice(request.getOrderType(), request.getDirection(), currentCandle);
 
         return new Order()
             .setOrderId(UUID.randomUUID().toString())
@@ -259,9 +263,8 @@ public class MockOrderService implements OrderServiceInterface {
             .setInstrumentPrice(instrumentPrice);
     }
 
-    protected Quotation calculateCurrentInstrumentPrice(String instrumentId, OrderType orderType, OrderDirection orderDirection) {
-        var lastCandle = mockBroker.marketDataService.getInstrumentLastCandle(instrumentId);
-        var bestPriceRatio = switch (orderDirection) {
+    protected Quotation calculateCurrentPrice(OrderType orderType, OrderDirection orderDirection, Candle currentCandle) {
+        double bestPriceRatio = switch (orderDirection) {
             case BUY -> buyBestPriceRatio;
             case SELL -> sellBestPriceRatio;
             case UNSPECIFIED -> 1;
@@ -270,8 +273,8 @@ public class MockOrderService implements OrderServiceInterface {
         orderType = Objects.requireNonNullElse(orderType, OrderType.LIMIT);
 
         return switch (orderType) {
-            case UNSPECIFIED, LIMIT, MARKET -> lastCandle.getOpenPrice();
-            case BEST_PRICE -> calculateBestPrice(lastCandle, bestPriceRatio);
+            case UNSPECIFIED, LIMIT, MARKET -> currentCandle.getOpenPrice();
+            case BEST_PRICE -> calculateBestPrice(currentCandle, bestPriceRatio);
         };
     }
 
@@ -284,7 +287,7 @@ public class MockOrderService implements OrderServiceInterface {
     }
 
     protected void checkAccountAvailable(String accountId) throws AbstractException {
-        var accountState = mockBroker.userService.getAccountState(accountId);
+        AccountState accountState = mockBroker.userService.getAccountState(accountId);
 
         if (accountState == null) {
             throw ExceptionBuilder.create(ErrorCode.ACCOUNT_NOT_FOUND);
@@ -300,7 +303,7 @@ public class MockOrderService implements OrderServiceInterface {
     }
 
     protected void checkEnoughOfMoneyToBuy(Order order) throws AbstractException {
-        var isEnoughOfMoney = this.mockBroker.operationsService.isEnoughOfMoney(
+        boolean isEnoughOfMoney = this.mockBroker.operationsService.isEnoughOfMoney(
             order.getAccountId(),
             Money.of(order.getInstrument().getCurrency(), order.getTotalPrice())
         );
@@ -323,8 +326,8 @@ public class MockOrderService implements OrderServiceInterface {
     }
 
     protected PostOrderResponse toServiceResponse(Order order) {
-        var currency = order.getInstrument().getCurrency();
-        var commissionPriceMoney = Money.of(currency, order.getCommissionPrice());
+        String currency = order.getInstrument().getCurrency();
+        Money commissionPriceMoney = Money.of(currency, order.getCommissionPrice());
 
         return new PostOrderResponse()
             .setOrderId(order.getOrderId())
@@ -344,18 +347,20 @@ public class MockOrderService implements OrderServiceInterface {
     }
 
     protected void calculateOrderPrices(Order order) {
-        var instrument = order.getInstrument();
-        var instrumentPrice = order.getInstrumentPrice();
+        Instrument instrument = order.getInstrument();
+        Quotation instrumentPrice = order.getInstrumentPrice();
 
-        var quantity = order.getLotsRequested();
-        var lotSize = instrument.getLot();
+        long quantity = order.getLotsRequested();
+        int lotSize = instrument.getLot();
 
-        var initialPrice = instrumentPrice
+        Quotation initialPrice = instrumentPrice
             .multiply(BigDecimal.valueOf(lotSize))
             .multiply(BigDecimal.valueOf(quantity));
-        var commissionPrice = initialPrice.multiply(Quotation.of(commissionRatio));
-        var totalPrice = initialPrice.add(commissionPrice);
-        var totalPricePerOne = totalPrice.divide(BigDecimal.valueOf(quantity * lotSize));
+        Quotation commissionPrice = initialPrice.multiply(Quotation.of(commissionRatio));
+        Quotation totalPrice = OrderDirection.BUY == order.getDirection()
+            ? initialPrice.add(commissionPrice)
+            : initialPrice.subtract(commissionPrice);
+        Quotation totalPricePerOne = totalPrice.divide(BigDecimal.valueOf(quantity * lotSize));
 
         order
             .setCommissionPrice(commissionPrice)
@@ -366,7 +371,7 @@ public class MockOrderService implements OrderServiceInterface {
     }
 
     protected void registerOrder(Order order) throws AbstractException {
-        if (null == order.getIdempotencyKey()) {
+        if (order.getIdempotencyKey() == null) {
             order.setIdempotencyKey(UUID.randomUUID().toString());
         } else if (ordersRequestIds.contains(order.getIdempotencyKey())) {
             throw ExceptionBuilder.create(ErrorCode.DUPLICATE_ORDER);

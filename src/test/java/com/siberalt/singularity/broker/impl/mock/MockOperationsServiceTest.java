@@ -6,8 +6,8 @@ import com.siberalt.singularity.broker.contract.service.user.Account;
 import com.siberalt.singularity.broker.contract.service.user.AccountType;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.OpenPosition;
-import com.siberalt.singularity.strategy.context.simulation.SimulationContext;
-import com.siberalt.singularity.strategy.context.simulation.time.SimulationTimeSynchronizer;
+import com.siberalt.singularity.strategy.context.simulation.time.ClockStub;
+import com.siberalt.singularity.strategy.simulation.SimulationContext;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.exception.InvalidRequestException;
 import com.siberalt.singularity.broker.contract.service.exception.NotFoundException;
@@ -23,15 +23,15 @@ import java.util.function.Function;
 public class MockOperationsServiceTest {
     @Test
     void testBasic() throws AbstractException {
-        var mockBroker = new MockBroker(null, null);
-        var timeSynchronizer = new SimulationTimeSynchronizer();
-        timeSynchronizer.syncCurrentTime(Instant.parse("2020-12-30T07:00:00Z"));
-        mockBroker.applyContext(new SimulationContext(null, null, timeSynchronizer));
-        var operationsService = mockBroker.getOperationsService();
+        MockBroker mockBroker = new MockBroker(null, null);
+        ClockStub clock = new ClockStub();
+        clock.syncCurrentTime(Instant.parse("2020-12-30T07:00:00Z"));
+        mockBroker.applyContext(new SimulationContext(null, null, clock));
+        MockOperationsService operationsService = mockBroker.getOperationsService();
 
         Account account = mockBroker
-                .getUserService()
-                .openAccount("testAccount", AccountType.ORDINARY, AccessLevel.FULL_ACCESS);
+            .getUserService()
+            .openAccount("testAccount", AccountType.ORDINARY, AccessLevel.FULL_ACCESS);
 
         // Test addMoney
         operationsService.addMoney(account.getId(), Money.of("RUB", 12000D));
@@ -42,12 +42,12 @@ public class MockOperationsServiceTest {
         Assertions.assertEquals(3, response.getMoney().size());
 
         Function<String, List<Money>> currencyBalanceGetter = currency ->
-                response.getMoney()
-                        .stream()
-                        .filter(x -> x.getCurrencyIso().equals(currency))
-                        .toList();
+            response.getMoney()
+                .stream()
+                .filter(x -> x.getCurrencyIso().equals(currency))
+                .toList();
 
-        var moneyBalance = currencyBalanceGetter.apply("RUB");
+        List<Money> moneyBalance = currencyBalanceGetter.apply("RUB");
         Assertions.assertEquals(1, moneyBalance.size());
         Money money = moneyBalance.stream().findFirst().orElseThrow();
         Assertions.assertEquals(Quotation.of(12000D), money.getQuotation());
@@ -77,11 +77,11 @@ public class MockOperationsServiceTest {
 
         // Test openPosition
         operationsService.openPosition(
-                account.getId(),
-                new OpenPosition()
-                        .setInitialBalance(12)
-                        .setInstrumentId("SBER")
-                        .setInstrumentType("SHARE")
+            account.getId(),
+            new OpenPosition()
+                .setInitialBalance(12)
+                .setInstrumentId("SBER")
+                .setInstrumentType("SHARE")
         );
         var position = operationsService.getPositionByInstrumentId(account.getId(), "SBER");
         Assertions.assertNotNull(position);
@@ -102,16 +102,16 @@ public class MockOperationsServiceTest {
 
         // Test isEnoughOfMoney
         Assertions.assertFalse(
-                operationsService.isEnoughOfMoney(
-                        account.getId(),
-                        Money.of("BTC", 100D)
-                )
+            operationsService.isEnoughOfMoney(
+                account.getId(),
+                Money.of("BTC", 100D)
+            )
         );
         Assertions.assertTrue(
-                operationsService.isEnoughOfMoney(
-                        account.getId(),
-                        Money.of("BTC", 0.5)
-                )
+            operationsService.isEnoughOfMoney(
+                account.getId(),
+                Money.of("BTC", 0.5)
+            )
         );
 
         // Test closePosition
@@ -121,34 +121,35 @@ public class MockOperationsServiceTest {
         // Test blockMoney
         operationsService.blockMoney(account.getId(), Money.of("RUB", 12000D));
         Assertions.assertFalse(
-                operationsService.isEnoughOfMoney(account.getId(), Money.of("RUB", 10000D))
+            operationsService.isEnoughOfMoney(account.getId(), Money.of("RUB", 10000D))
         );
         Assertions.assertTrue(
-                operationsService.isEnoughOfMoney(account.getId(), Money.of("RUB", 1000D))
+            operationsService.isEnoughOfMoney(account.getId(), Money.of("RUB", 1000D))
         );
         Assertions.assertEquals(
-                Money.of("RUB", 1000D),
-                operationsService.getAvailableMoney(account.getId(), "RUB")
+            Money.of("RUB", 1000D),
+            operationsService.getAvailableMoney(account.getId(), "RUB")
         );
         Assertions.assertThrowsExactly(
-                InvalidRequestException.class,
-                () -> operationsService.blockMoney(account.getId(), Money.of("RUB", 1000000D))
+            InvalidRequestException.class,
+            () -> operationsService.blockMoney(account.getId(), Money.of("RUB", 1000000D))
         );
 
         // Test unblockMoney
         operationsService.unblockMoney(account.getId(), Money.of("RUB", 10000D));
         Assertions.assertTrue(
-                operationsService.isEnoughOfMoney(account.getId(), Money.of("RUB", 10000D))
+            operationsService.isEnoughOfMoney(account.getId(), Money.of("RUB", 10000D))
         );
         Assertions.assertEquals(
-                Money.of("RUB", 11000D),
-                operationsService.getAvailableMoney(account.getId(), "RUB")
+            Money.of("RUB", 11000D),
+            operationsService.getAvailableMoney(account.getId(), "RUB")
         );
 
         // Test account not found
         Assertions.assertThrows(
-                NotFoundException.class,
-                () -> operationsService.addMoney(UUID.randomUUID().toString(), Money.of("RUB", 12D))
+            NotFoundException.class,
+            () -> operationsService.addMoney(UUID.randomUUID().toString(), Money.of("RUB", 12D))
         );
     }
 }
+

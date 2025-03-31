@@ -6,6 +6,7 @@ import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.InvalidRequestException;
 import com.siberalt.singularity.broker.contract.service.exception.NotFoundException;
 import com.siberalt.singularity.broker.contract.service.instrument.Instrument;
+import com.siberalt.singularity.broker.contract.service.operation.response.Position;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.order.response.ExecutionStatus;
 import com.siberalt.singularity.broker.contract.service.order.response.GetOrdersResponse;
@@ -17,12 +18,12 @@ import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.config.InstrumentConfig;
 import com.siberalt.singularity.broker.impl.mock.config.MockBrokerConfig;
+import com.siberalt.singularity.scheduler.SchedulerInterface;
 import com.siberalt.singularity.simulation.shared.instrument.InstrumentStorageInterface;
 import com.siberalt.singularity.simulation.shared.market.candle.Candle;
 import com.siberalt.singularity.simulation.shared.market.candle.CandleStorageInterface;
-import com.siberalt.singularity.strategy.context.TimeSynchronizerInterface;
-import com.siberalt.singularity.strategy.context.simulation.SimulationContext;
-import com.siberalt.singularity.scheduler.SchedulerInterface;
+import com.siberalt.singularity.strategy.context.Clock;
+import com.siberalt.singularity.strategy.simulation.SimulationContext;
 import com.siberalt.singularity.test.util.ConfigLoader;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,7 +47,7 @@ public abstract class MockOrderServiceTest {
     protected Instant currentTime;
     protected Quotation commissionRatio;
     protected InstrumentStorageInterface instrumentStorage;
-    protected TimeSynchronizerInterface timeSynchronizer;
+    protected Clock clock;
 
     @BeforeEach
     public void setUp() throws Exception {
@@ -60,15 +61,15 @@ public abstract class MockOrderServiceTest {
         when(instrumentStorage.get(instrument.getUid())).thenReturn(instrument);
         candleStorage = mock(CandleStorageInterface.class);
 
-        timeSynchronizer = mock(TimeSynchronizerInterface.class);
-        when(timeSynchronizer.currentTime()).thenReturn(currentTime);
+        clock = mock(Clock.class);
+        when(clock.currentTime()).thenReturn(currentTime);
 
         broker = createBroker(candleStorage, instrumentStorage);
         broker.applyContext(
             new SimulationContext(
                 mock(SchedulerInterface.class),
                 mock(SimulationBrokerContainer.class),
-                timeSynchronizer
+                clock
             )
         );
         testAccount = broker.getUserService().openAccount(
@@ -93,7 +94,7 @@ public abstract class MockOrderServiceTest {
         for (int i = 0; i < response.getOrders().size(); i++) {
             var postOrderResponse = postOrderResponses[i];
 
-            for (var order : response.getOrders()){
+            for (var order : response.getOrders()) {
                 if (order.getOrderId().equals(postOrderResponse.getOrderId())) {
                     assertEquals(postOrderResponse.getOrderId(), order.getOrderId());
                     assertEquals(postOrderResponse.getDirection(), order.getDirection());
@@ -409,17 +410,17 @@ public abstract class MockOrderServiceTest {
         Quotation priceLimit
     ) throws AbstractException {
         InstrumentConfig instrumentConfig = config.getInstrument();
-        var ordersService = broker.getOrderService();
-        var operationsService = broker.getOperationsService();
-        var isDelayedLimitOrder = orderType == OrderType.LIMIT
+        MockOrderService ordersService = broker.getOrderService();
+        MockOperationsService operationsService = broker.getOperationsService();
+        boolean isDelayedLimitOrder = orderType == OrderType.LIMIT
             && priceLimit != null
             && priceLimit.isMore(priceCandle.getOpenPrice());
 
         when(candleStorage.getAt(instrumentConfig.getUid(), priceCandle.getTime()))
             .thenReturn(Optional.of(priceCandle));
-        when(timeSynchronizer.currentTime()).thenReturn(priceCandle.getTime());
+        when(clock.currentTime()).thenReturn(priceCandle.getTime());
 
-        var request = new PostOrderRequest()
+        PostOrderRequest request = new PostOrderRequest()
             .setInstrumentId(instrumentConfig.getUid())
             .setQuantity(quantity)
             .setPrice(priceLimit)
@@ -427,9 +428,9 @@ public abstract class MockOrderServiceTest {
             .setDirection(OrderDirection.SELL)
             .setOrderType(orderType);
 
-        var position = operationsService.getPositionByInstrumentId(testAccount.getId(), instrumentConfig.getUid());
-        var instrumentBalance = (position != null) ? position.getBalance() : 0;
-        var avialableMoney = operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
+        Position position = operationsService.getPositionByInstrumentId(testAccount.getId(), instrumentConfig.getUid());
+        long instrumentBalance = (position != null) ? position.getBalance() : 0;
+        Money avialableMoney = operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
 
         PostOrderResponse postResponse = ordersService.post(request);
         Quotation initialPricePerOne = calculateInitialPricePerOne(
@@ -453,7 +454,7 @@ public abstract class MockOrderServiceTest {
                 operationsService.getPositionByInstrumentId(testAccount.getId(), instrumentConfig.getUid()).getBalance()
             );
         } else {
-            var totalPricePerOne = initialPricePerOne.add(initialPricePerOne.multiply(commissionRatio));
+            Quotation totalPricePerOne = initialPricePerOne.subtract(initialPricePerOne.multiply(commissionRatio));
 
             assertEquals(quantity, postResponse.getLotsExecuted());
             assertEquals(quantity, postResponse.getLotsRequested());
@@ -463,8 +464,8 @@ public abstract class MockOrderServiceTest {
             assertEquals(initialPricePerOne, postResponse.getInitialPricePerOne().getQuotation());
             assertEquals(ExecutionStatus.FILL, postResponse.getExecutionStatus());
 
-            var newInstrumentBalance = instrumentBalance - quantity;
-            var newAvialableMoney = avialableMoney.add(
+            long newInstrumentBalance = instrumentBalance - quantity;
+            Money newAvialableMoney = avialableMoney.add(
                 Money.of(instrumentConfig.getCurrency(), totalPricePerOne.multiply(quantity))
             );
 
@@ -502,7 +503,7 @@ public abstract class MockOrderServiceTest {
 
         when(candleStorage.getAt(instrumentConfig.getUid(), priceCandle.getTime()))
             .thenReturn(Optional.of(priceCandle));
-        when(timeSynchronizer.currentTime()).thenReturn(priceCandle.getTime());
+        when(clock.currentTime()).thenReturn(priceCandle.getTime());
 
         var request = new PostOrderRequest()
             .setInstrumentId(instrumentConfig.getUid())

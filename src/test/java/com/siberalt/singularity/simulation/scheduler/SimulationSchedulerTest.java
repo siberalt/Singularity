@@ -5,8 +5,9 @@ import com.siberalt.singularity.scheduler.SchedulerInterface;
 import com.siberalt.singularity.scheduler.simulation.SimulationScheduler;
 import com.siberalt.singularity.simulation.EventObserver;
 import com.siberalt.singularity.simulation.EventSimulator;
-import com.siberalt.singularity.strategy.context.TimeSynchronizerInterface;
-import com.siberalt.singularity.strategy.context.simulation.time.SimulationTimeSynchronizer;
+import com.siberalt.singularity.simulation.SimulationClock;
+import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
+import com.siberalt.singularity.strategy.context.Clock;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,15 +20,15 @@ import java.util.UUID;
 
 public class SimulationSchedulerTest {
     protected SimulationScheduler scheduler;
-    protected SimulationTimeSynchronizer timeSynchronizer;
+    protected SimulationClock timeSynchronizer;
     protected EventObserver eventObserver;
     protected EventSimulator simulator;
 
     @BeforeEach
     protected void init() {
-        timeSynchronizer = new SimulationTimeSynchronizer();
+        timeSynchronizer = new SimpleSimulationClock();
         eventObserver = new EventObserver();
-        scheduler = new SimulationScheduler(timeSynchronizer);
+        scheduler = new SimulationScheduler();
 
         simulator = new EventSimulator(eventObserver, timeSynchronizer);
         simulator.addTimeDependentUnit(scheduler);
@@ -189,7 +190,7 @@ public class SimulationSchedulerTest {
         String taskId,
         List<Schedule> schedulesList,
         SchedulerInterface scheduler,
-        TimeSynchronizerInterface timeSynchronizer
+        Clock timeSynchronizer
     ) {
         return new Runnable() {
             private static final int MAX_ITERATIONS = 10;

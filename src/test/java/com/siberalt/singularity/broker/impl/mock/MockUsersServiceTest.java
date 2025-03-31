@@ -5,8 +5,8 @@ import com.siberalt.singularity.broker.contract.service.user.AccessLevel;
 import com.siberalt.singularity.broker.contract.service.user.AccountStatus;
 import com.siberalt.singularity.broker.contract.service.user.AccountType;
 import com.siberalt.singularity.broker.contract.service.user.GetAccountsRequest;
-import com.siberalt.singularity.strategy.context.simulation.SimulationContext;
-import com.siberalt.singularity.strategy.context.simulation.time.SimulationTimeSynchronizer;
+import com.siberalt.singularity.strategy.context.simulation.time.ClockStub;
+import com.siberalt.singularity.strategy.simulation.SimulationContext;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -16,10 +16,10 @@ public class MockUsersServiceTest {
     @Test
     void testBasic() throws AbstractException {
         var openDate = Instant.parse("2020-12-30T07:00:00Z");
-        var timeSynchronizer = new SimulationTimeSynchronizer();
-        timeSynchronizer.syncCurrentTime(openDate);
+        var clock = new ClockStub();
+        clock.syncCurrentTime(openDate);
         var mockBroker = new MockBroker(null, null);
-        mockBroker.applyContext(new SimulationContext(null, null, timeSynchronizer));
+        mockBroker.applyContext(new SimulationContext(null, null, clock));
 
         var userService = mockBroker.getUserService();
         var accountName = "testAccount";
@@ -52,7 +52,7 @@ public class MockUsersServiceTest {
 
         // Test closeAccount
         var closeDate = Instant.parse("2020-12-31T07:00:00Z");
-        timeSynchronizer.syncCurrentTime(closeDate);
+        clock.syncCurrentTime(closeDate);
         userService.closeAccount(account.getId());
 
         accounts = userService.getAccounts(new GetAccountsRequest());

@@ -139,7 +139,7 @@ public class MockMarketDataService implements MarketDataServiceInterface {
                 .setTime(firstCandle.getTime());
     }
 
-    protected Candle getInstrumentLastCandle(String instrumentUid) {
+    protected Candle getInstrumentCurrentCandle(String instrumentUid) {
         return candleStorage.getAt(instrumentUid, virtualBroker.context.getCurrentTime()).orElse(null);
     }
 }

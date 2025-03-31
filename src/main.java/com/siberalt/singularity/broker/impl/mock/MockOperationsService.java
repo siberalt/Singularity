@@ -12,10 +12,7 @@ import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.AccountBalance;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.OpenPosition;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 
 public class MockOperationsService implements OperationsServiceInterface {
     private final Map<String, AccountBalance> accountBalances = new HashMap<>();
@@ -42,6 +39,12 @@ public class MockOperationsService implements OperationsServiceInterface {
         checkAccountExists(accountId);
 
         return getOrCreateBalance(accountId).isEnoughOfMoney(amount);
+    }
+
+    public List<Money> getAvailableMoney(String accountId) throws AbstractException {
+        checkAccountExists(accountId);
+
+        return getOrCreateBalance(accountId).getAvailableMoney();
     }
 
     public Money getAvailableMoney(String accountId, String currencyIso) throws AbstractException {

@@ -5,7 +5,7 @@ import com.siberalt.singularity.simulation.Event;
 import com.siberalt.singularity.simulation.EventInvokerInterface;
 import com.siberalt.singularity.simulation.EventObserver;
 import com.siberalt.singularity.simulation.TimeDependentUnitInterface;
-import com.siberalt.singularity.strategy.context.TimeSynchronizerInterface;
+import com.siberalt.singularity.strategy.context.Clock;
 
 import java.time.Instant;
 import java.util.*;
@@ -20,11 +20,6 @@ public class SimulationScheduler implements SimulationSchedulerInterface, EventI
     protected Map<UUID, Event> events = new HashMap<>();
     protected Iterator<UUID> currentTaskIterator;
     protected UUID currentScheduleId;
-    protected TimeSynchronizerInterface timeSynchronizer;
-
-    public SimulationScheduler(TimeSynchronizerInterface timeSynchronizer) {
-        this.timeSynchronizer = timeSynchronizer;
-    }
 
     @Override
     public UUID schedule(Runnable task, Schedule schedule) {
@@ -44,8 +39,8 @@ public class SimulationScheduler implements SimulationSchedulerInterface, EventI
     }
 
     @Override
-    public void tick() {
-        Instant time = timeSynchronizer.currentTime();
+    public void tick(Clock clock) {
+        Instant time = clock.currentTime();
         if (taskExecutionTable.hasPlannedExecutions(time)) {
             List<UUID> invokedSchedulesIds = new ArrayList<>();
             currentTaskIterator = taskExecutionTable.getPlannedExecutions(time).iterator();
