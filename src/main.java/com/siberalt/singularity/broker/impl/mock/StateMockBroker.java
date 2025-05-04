@@ -1,14 +1,19 @@
 package com.siberalt.singularity.broker.impl.mock;
 
-import com.siberalt.singularity.simulation.shared.instrument.InstrumentStorageInterface;
-import com.siberalt.singularity.simulation.shared.market.candle.CandleStorageInterface;
+import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
+import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.entity.order.OrderRepository;
 
 public class StateMockBroker extends MockBroker {
     protected StateMockOrderService orderService;
 
-    public StateMockBroker(CandleStorageInterface candleRepository, InstrumentStorageInterface instrumentStorage) {
-        super(candleRepository, instrumentStorage);
-        this.orderService = new StateMockOrderService(this);
+    public StateMockBroker(
+        ReadCandleRepository candleRepository,
+        ReadInstrumentRepository instrumentStorage,
+        OrderRepository orderRepository
+    ) {
+        super(candleRepository, instrumentStorage, orderRepository);
+        this.orderService = new StateMockOrderService(this, orderRepository);
     }
 
     @Override

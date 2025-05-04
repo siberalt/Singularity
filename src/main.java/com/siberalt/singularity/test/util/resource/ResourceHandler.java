@@ -4,7 +4,6 @@ import java.util.function.Supplier;
 
 public class ResourceHandler<T extends AutoCloseable> {
     protected T resource;
-
     protected final Supplier<T> supplier;
 
     public ResourceHandler(Supplier<T> supplier) {

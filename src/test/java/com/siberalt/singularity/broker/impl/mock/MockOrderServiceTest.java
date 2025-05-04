@@ -5,7 +5,7 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.InvalidRequestException;
 import com.siberalt.singularity.broker.contract.service.exception.NotFoundException;
-import com.siberalt.singularity.broker.contract.service.instrument.Instrument;
+import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.broker.contract.service.operation.response.Position;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.order.response.ExecutionStatus;
@@ -18,10 +18,12 @@ import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.config.InstrumentConfig;
 import com.siberalt.singularity.broker.impl.mock.config.MockBrokerConfig;
-import com.siberalt.singularity.scheduler.SchedulerInterface;
-import com.siberalt.singularity.simulation.shared.instrument.InstrumentStorageInterface;
-import com.siberalt.singularity.simulation.shared.market.candle.Candle;
-import com.siberalt.singularity.simulation.shared.market.candle.CandleStorageInterface;
+import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
+import com.siberalt.singularity.entity.order.OrderRepository;
+import com.siberalt.singularity.scheduler.Scheduler;
+import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
+import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.strategy.context.Clock;
 import com.siberalt.singularity.strategy.simulation.SimulationContext;
 import com.siberalt.singularity.test.util.ConfigLoader;
@@ -42,11 +44,12 @@ public abstract class MockOrderServiceTest {
     protected MockBroker broker;
     protected MockBrokerConfig config;
     protected MockOrderService orderService;
-    protected CandleStorageInterface candleStorage;
+    protected ReadCandleRepository candleStorage;
     protected Account testAccount;
     protected Instant currentTime;
     protected Quotation commissionRatio;
-    protected InstrumentStorageInterface instrumentStorage;
+    protected ReadInstrumentRepository instrumentStorage;
+    protected OrderRepository orderRepository;
     protected Clock clock;
 
     @BeforeEach
@@ -57,17 +60,18 @@ public abstract class MockOrderServiceTest {
         Instrument instrument = createInstrument(config.getInstrument());
         currentTime = Instant.parse("2021-12-15T15:00:00Z");
 
-        instrumentStorage = mock(InstrumentStorageInterface.class);
+        instrumentStorage = mock(ReadInstrumentRepository.class);
         when(instrumentStorage.get(instrument.getUid())).thenReturn(instrument);
-        candleStorage = mock(CandleStorageInterface.class);
+        candleStorage = mock(ReadCandleRepository.class);
+        orderRepository = new InMemoryOrderRepository();
 
         clock = mock(Clock.class);
         when(clock.currentTime()).thenReturn(currentTime);
 
-        broker = createBroker(candleStorage, instrumentStorage);
+        broker = createBroker(candleStorage, instrumentStorage, orderRepository);
         broker.applyContext(
             new SimulationContext(
-                mock(SchedulerInterface.class),
+                mock(Scheduler.class),
                 mock(SimulationBrokerContainer.class),
                 clock
             )
@@ -82,8 +86,9 @@ public abstract class MockOrderServiceTest {
     }
 
     abstract MockBroker createBroker(
-        CandleStorageInterface candleStorage,
-        InstrumentStorageInterface instrumentStorage
+        ReadCandleRepository candleStorage,
+        ReadInstrumentRepository instrumentStorage,
+        OrderRepository orderRepository
     );
 
     @Test

@@ -1,6 +1,6 @@
 package com.siberalt.singularity.strategy.context;
 
-import com.siberalt.singularity.scheduler.SchedulerInterface;
+import com.siberalt.singularity.scheduler.Scheduler;
 import com.siberalt.singularity.broker.container.AbstractBrokerContainer;
 import com.siberalt.singularity.broker.contract.execution.BrokerInterface;
 
@@ -11,12 +11,12 @@ import java.util.Map;
 // TODO improve and fix
 public abstract class AbstractContext<brokerT extends BrokerInterface> {
     private final AbstractBrokerContainer<brokerT> brokers;
-    private final SchedulerInterface scheduler;
+    private final Scheduler scheduler;
     protected final Clock timeSynchronizer;
     protected Map<String, Object> params = new HashMap<>();
 
     public AbstractContext(
-            SchedulerInterface scheduler,
+            Scheduler scheduler,
             AbstractBrokerContainer<brokerT> brokers,
             Clock timeSynchronizer
     ) {
@@ -25,7 +25,7 @@ public abstract class AbstractContext<brokerT extends BrokerInterface> {
         this.timeSynchronizer = timeSynchronizer;
     }
 
-    public SchedulerInterface getScheduler() {
+    public Scheduler getScheduler() {
         return scheduler;
     }
 

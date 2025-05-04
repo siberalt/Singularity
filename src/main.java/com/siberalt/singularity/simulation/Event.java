@@ -5,9 +5,7 @@ import java.util.UUID;
 
 public class Event {
     protected String id;
-
     protected Instant timePoint;
-
     protected EventInvokerInterface eventInvoker;
 
     private Event(String id, Instant timePoint, EventInvokerInterface eventInvoker) {
@@ -23,7 +21,6 @@ public class Event {
     public Instant getTimePoint() {
         return timePoint;
     }
-
 
     public EventInvokerInterface getEventInvoker() {
         return eventInvoker;

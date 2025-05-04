@@ -1,7 +1,7 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared.translation;
 
 import com.siberalt.singularity.broker.contract.service.order.response.OrderState;
-import com.siberalt.singularity.broker.common.ListTranslator;
+import com.siberalt.singularity.broker.shared.ListTranslator;
 
 public class OrderStateTranslator {
     public static ru.tinkoff.piapi.contract.v1.OrderState toTinkoff(OrderState orderState) {

@@ -3,15 +3,15 @@ package com.siberalt.singularity.broker.impl.mock;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
 import com.siberalt.singularity.broker.contract.service.instrument.response.GetResponse;
-import com.siberalt.singularity.simulation.shared.instrument.InstrumentStorageInterface;
+import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
 import com.siberalt.singularity.broker.contract.service.instrument.InstrumentServiceInterface;
 
 public class MockInstrumentService implements InstrumentServiceInterface {
-    protected InstrumentStorageInterface instrumentStorage;
+    protected ReadInstrumentRepository instrumentStorage;
 
     protected MockBroker virtualBroker;
 
-    public MockInstrumentService(MockBroker virtualBroker, InstrumentStorageInterface instrumentStorage) {
+    public MockInstrumentService(MockBroker virtualBroker, ReadInstrumentRepository instrumentStorage) {
         this.instrumentStorage = instrumentStorage;
         this.virtualBroker = virtualBroker;
     }

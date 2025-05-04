@@ -1,6 +1,6 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared;
 
-import com.siberalt.singularity.broker.common.ListTranslator;
+import com.siberalt.singularity.broker.shared.ListTranslator;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.order.OrderServiceInterface;
 import com.siberalt.singularity.broker.contract.service.order.request.*;

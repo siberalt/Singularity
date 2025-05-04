@@ -1,6 +1,6 @@
 package com.siberalt.singularity.broker.contract.value.quotation;
 
-import com.siberalt.singularity.simulation.shared.market.candle.ComparisonOperator;
+import com.siberalt.singularity.entity.candle.ComparisonOperator;
 
 import java.math.BigDecimal;
 import java.math.MathContext;

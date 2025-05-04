@@ -1,7 +1,7 @@
 package com.siberalt.singularity.broker.impl.tinkoff.sandbox;
 
 import com.siberalt.singularity.broker.contract.service.exception.*;
-import com.siberalt.singularity.broker.contract.service.instrument.Instrument;
+import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
 import com.siberalt.singularity.broker.contract.service.market.request.*;
 import com.siberalt.singularity.broker.contract.service.operation.request.GetPositionsRequest;

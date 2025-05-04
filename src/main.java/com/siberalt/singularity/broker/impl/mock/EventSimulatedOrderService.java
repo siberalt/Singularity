@@ -1,7 +1,7 @@
 package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
-import com.siberalt.singularity.broker.contract.service.instrument.Instrument;
+import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.broker.contract.service.order.request.PostOrderRequest;
@@ -9,15 +9,16 @@ import com.siberalt.singularity.broker.contract.service.order.response.Execution
 import com.siberalt.singularity.broker.contract.service.order.response.PostOrderResponse;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.shared.exception.MockBrokerException;
-import com.siberalt.singularity.broker.impl.mock.shared.order.Order;
+import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.broker.impl.mock.shared.order.OrderEvent;
+import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.simulation.Event;
 import com.siberalt.singularity.simulation.EventInvokerInterface;
 import com.siberalt.singularity.simulation.EventObserver;
 import com.siberalt.singularity.simulation.TimeDependentUnitInterface;
-import com.siberalt.singularity.simulation.shared.market.candle.Candle;
-import com.siberalt.singularity.simulation.shared.market.candle.ComparisonOperator;
-import com.siberalt.singularity.simulation.shared.market.candle.FindPriceParams;
+import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.ComparisonOperator;
+import com.siberalt.singularity.entity.candle.FindPriceParams;
 import com.siberalt.singularity.strategy.context.Clock;
 
 import java.time.Instant;
@@ -33,14 +34,20 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
     protected EventMockBroker mockBroker;
     protected Map<String, OrderEvent> orderEvents = new HashMap<>();
     protected Map<Instant, List<OrderEvent>> orderEventsByTime = new HashMap<>();
+    protected Clock clock;
 
-    public EventSimulatedOrderService(EventMockBroker mockBroker) {
-        super(mockBroker);
+    public EventSimulatedOrderService(EventMockBroker mockBroker, OrderRepository orderRepository) {
+        super(mockBroker, orderRepository);
         this.mockBroker = mockBroker;
     }
 
     @Override
-    public void tick(Clock clock) {
+    public void applyClock(Clock clock) {
+        this.clock = clock;
+    }
+
+    @Override
+    public void tick() {
         var currentTime = clock.currentTime();
 
         if (orderEventsByTime.containsKey(currentTime)) {
@@ -175,7 +182,7 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
             .setOrderType(order.getOrderType())
             .setLotsRequested(order.getLotsRequested())
             .setRequestedPrice(order.getRequestedPrice())
-            .setCreatedDate(currentTime)
+            .setCreatedTime(currentTime)
             .setInitialPrice(order.getInitialPrice())
             .setInitialPricePerOne(order.getInitialPricePerOne())
             .setTotalPricePerOne(order.getTotalPricePerOne())

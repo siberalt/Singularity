@@ -1,6 +1,6 @@
 package com.siberalt.singularity.broker.contract.service.market.request;
 
-import com.siberalt.singularity.simulation.shared.market.candle.Candle;
+import com.siberalt.singularity.entity.candle.Candle;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;

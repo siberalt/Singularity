@@ -1,7 +1,7 @@
 package com.siberalt.singularity.broker.contract.service.market.response;
 
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
-import com.siberalt.singularity.simulation.shared.market.candle.Candle;
+import com.siberalt.singularity.entity.candle.Candle;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

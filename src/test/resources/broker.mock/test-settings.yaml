@@ -1,6 +1,6 @@
 instrument:
   uid: TMOS
-  dataPath: src/test/resources/simulation.shared.market.candle.storage.cvs/TMOS
+  dataPath: src/test/resources/entity.candle.cvs/TMOS
   lot: 1
   currency: RUB
   name: TMOS

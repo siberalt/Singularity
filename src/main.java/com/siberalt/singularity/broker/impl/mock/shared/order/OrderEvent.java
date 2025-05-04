@@ -1,5 +1,6 @@
 package com.siberalt.singularity.broker.impl.mock.shared.order;
 
+import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.simulation.Event;
 
 public class OrderEvent {

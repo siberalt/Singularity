@@ -1,6 +1,5 @@
 package com.siberalt.singularity.strategy;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,41 +20,6 @@ public class StrategyManager {
 
     public void clearStrategies() {
         strategies.clear();
-    }
-
-    public void start(String id) {
-        StrategyInfo strategy = getStrategyOrThrow(id);
-        strategy.getStrategy().execute(StrategyCommand.START);
-    }
-
-    public void start() {
-        for (StrategyInfo strategy : strategies.values()) {
-            strategy.getStrategy().execute(StrategyCommand.START);
-        }
-    }
-
-    public void stop(String id) {
-        StrategyInfo strategy = getStrategyOrThrow(id);
-        strategy.getStrategy().execute(StrategyCommand.STOP);
-    }
-
-    public void pause(String id) {
-        StrategyInfo strategy = getStrategyOrThrow(id);
-        strategy.getStrategy().execute(StrategyCommand.PAUSE);
-    }
-
-    public void resume(String id) {
-        StrategyInfo strategy = getStrategyOrThrow(id);
-        strategy.getStrategy().execute(StrategyCommand.RESUME);
-    }
-
-    public void restart(String id) throws IOException {
-
-    }
-
-    public void shutdown(String id) {
-        StrategyInfo strategy = getStrategyOrThrow(id);
-        strategy.getStrategy().execute(StrategyCommand.SHUTDOWN);
     }
 
     private StrategyInfo getStrategyOrThrow(String id) {

@@ -1,6 +1,6 @@
 package com.siberalt.singularity.broker.contract.service.instrument.response;
 
-import com.siberalt.singularity.broker.contract.service.instrument.Instrument;
+import com.siberalt.singularity.entity.instrument.Instrument;
 
 public class GetResponse {
     protected Instrument instrument = null;

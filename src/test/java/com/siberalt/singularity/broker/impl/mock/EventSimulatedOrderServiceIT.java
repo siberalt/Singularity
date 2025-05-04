@@ -1,19 +1,22 @@
 package com.siberalt.singularity.broker.impl.mock;
 
-import com.siberalt.singularity.broker.common.SandboxBrokerFacade;
+import com.siberalt.singularity.broker.shared.SandboxBrokerFacade;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
-import com.siberalt.singularity.broker.contract.service.instrument.Instrument;
+import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.config.MockBrokerConfig;
+import com.siberalt.singularity.entity.instrument.InstrumentRepository;
+import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
+import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.scheduler.simulation.SimulationScheduler;
 import com.siberalt.singularity.scheduler.simulation.SimulationSchedulerInterface;
 import com.siberalt.singularity.simulation.EventSimulator;
 import com.siberalt.singularity.simulation.SimulationClock;
-import com.siberalt.singularity.simulation.shared.instrument.RuntimeInstrumentStorage;
-import com.siberalt.singularity.simulation.shared.market.candle.Candle;
-import com.siberalt.singularity.simulation.shared.market.candle.CandleStorageInterface;
-import com.siberalt.singularity.simulation.shared.market.candle.storage.cvs.CvsCandleStorage;
+import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
+import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.entity.candle.cvs.CvsCandleRepository;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
 import com.siberalt.singularity.strategy.simulation.SimulationContext;
 import com.siberalt.singularity.strategy.simulation.UserActionSimulator;
@@ -40,7 +43,7 @@ public class EventSimulatedOrderServiceIT {
     private static Logger logger;
     private EventMockBroker broker;
     private UserActionSimulator<Map<String, Object>> userActionSimulator;
-    private CandleStorageInterface candleStorage;
+    private ReadCandleRepository candleStorage;
     private SimulationClock clock;
     private EventSimulator eventSimulator;
     private MockBrokerConfig config;
@@ -72,9 +75,13 @@ public class EventSimulatedOrderServiceIT {
             .setUid(config.getInstrument().getUid());
 
         userActionSimulator = new UserActionSimulator<>(userContext);
-        candleStorage = mock(CvsCandleStorage.class);
+        candleStorage = mock(CvsCandleRepository.class);
 
-        broker = new EventMockBroker(candleStorage, new RuntimeInstrumentStorage().add(instrument));
+        InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
+        instrumentRepository.save(instrument);
+        OrderRepository orderRepository = new InMemoryOrderRepository();
+
+        broker = new EventMockBroker(candleStorage, instrumentRepository, orderRepository);
         clock = new SimpleSimulationClock();
         SimulationSchedulerInterface scheduler = new SimulationScheduler();
         broker.applyContext(new SimulationContext(scheduler, null, clock));

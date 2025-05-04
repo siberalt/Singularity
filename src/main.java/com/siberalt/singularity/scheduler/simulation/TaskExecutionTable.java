@@ -3,15 +3,15 @@ package com.siberalt.singularity.scheduler.simulation;
 import java.time.Instant;
 import java.util.*;
 
-public class TaskExecutionTable {
-    protected SortedMap<Instant, Set<UUID>> schedulesByTime = new TreeMap<>();
-    protected Map<UUID, Runnable> tasksByScheduleId = new HashMap<>();
+public class TaskExecutionTable<idType> {
+    protected SortedMap<Instant, Set<idType>> schedulesByTime = new TreeMap<>();
+    protected Map<idType, Runnable> tasksByScheduleId = new HashMap<>();
 
-    public void registerTask(UUID scheduleId, Runnable task) {
+    public void registerTask(idType scheduleId, Runnable task) {
         tasksByScheduleId.put(scheduleId, task);
     }
 
-    public void unregisterTask(UUID scheduleId) {
+    public void unregisterTask(idType scheduleId) {
         schedulesByTime.entrySet().removeIf(entry -> {
             entry.getValue().remove(scheduleId);
             return entry.getValue().isEmpty();
@@ -28,14 +28,14 @@ public class TaskExecutionTable {
         schedulesByTime.remove(time);
     }
 
-    public void cancelExecution(UUID scheduleId) {
+    public void cancelExecution(idType scheduleId) {
         schedulesByTime.entrySet().removeIf(entry -> {
             entry.getValue().remove(scheduleId);
             return entry.getValue().isEmpty();
         });
     }
 
-    public Runnable getTask(UUID scheduleId) {
+    public Runnable getTask(idType scheduleId) {
         return tasksByScheduleId.get(scheduleId);
     }
 
@@ -43,7 +43,7 @@ public class TaskExecutionTable {
         schedulesByTime.remove(time);
     }
 
-    public Set<UUID> getPlannedExecutions(Instant executionTime) {
+    public Set<idType> getPlannedExecutions(Instant executionTime) {
         return schedulesByTime.getOrDefault(executionTime, Collections.emptySet());
     }
 
@@ -51,15 +51,15 @@ public class TaskExecutionTable {
         return schedulesByTime.containsKey(executionTime);
     }
 
-    public boolean isExecutionPlanned(UUID scheduleId) {
+    public boolean isExecutionPlanned(idType scheduleId) {
         return tasksByScheduleId.containsKey(scheduleId);
     }
 
-    public boolean isExecutionPlanned(Instant executionTime, UUID scheduleId) {
+    public boolean isExecutionPlanned(Instant executionTime, idType scheduleId) {
         return schedulesByTime.getOrDefault(executionTime, Collections.emptySet()).contains(scheduleId);
     }
 
-    public void planExecution(Instant executionTime, UUID scheduleId) {
+    public void planExecution(Instant executionTime, idType scheduleId) {
         if (executionTime == null) {
             throw new IllegalArgumentException("Execution time cannot be null");
         }

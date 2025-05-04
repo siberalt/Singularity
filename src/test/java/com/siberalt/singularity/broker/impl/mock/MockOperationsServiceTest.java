@@ -23,7 +23,7 @@ import java.util.function.Function;
 public class MockOperationsServiceTest {
     @Test
     void testBasic() throws AbstractException {
-        MockBroker mockBroker = new MockBroker(null, null);
+        MockBroker mockBroker = new MockBroker(null, null, null);
         ClockStub clock = new ClockStub();
         clock.syncCurrentTime(Instant.parse("2020-12-30T07:00:00Z"));
         mockBroker.applyContext(new SimulationContext(null, null, clock));

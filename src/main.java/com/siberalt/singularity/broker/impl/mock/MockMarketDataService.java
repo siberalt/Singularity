@@ -7,11 +7,11 @@ import com.siberalt.singularity.broker.contract.service.market.request.GetLastPr
 import com.siberalt.singularity.broker.contract.service.market.response.GetLastPricesResponse;
 import com.siberalt.singularity.broker.contract.service.market.response.HistoricCandle;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
-import com.siberalt.singularity.simulation.shared.market.candle.CandleStorageInterface;
-import com.siberalt.singularity.simulation.shared.market.candle.FindPriceParams;
+import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.entity.candle.FindPriceParams;
 import com.siberalt.singularity.broker.contract.service.market.response.GetCandlesResponse;
 import com.siberalt.singularity.broker.contract.service.market.response.LastPrice;
-import com.siberalt.singularity.simulation.shared.market.candle.Candle;
+import com.siberalt.singularity.entity.candle.Candle;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -22,9 +22,9 @@ import java.util.stream.StreamSupport;
 
 public class MockMarketDataService implements MarketDataServiceInterface {
     protected MockBroker virtualBroker;
-    protected CandleStorageInterface candleStorage;
+    protected ReadCandleRepository candleStorage;
 
-    public MockMarketDataService(MockBroker virtualBroker, CandleStorageInterface candleStorage) {
+    public MockMarketDataService(MockBroker virtualBroker, ReadCandleRepository candleStorage) {
         this.virtualBroker = virtualBroker;
         this.candleStorage = candleStorage;
     }

@@ -1,7 +1,7 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared;
 
 import com.siberalt.singularity.broker.contract.service.market.response.GetLastPricesResponse;
-import com.siberalt.singularity.broker.common.ListTranslator;
+import com.siberalt.singularity.broker.shared.ListTranslator;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.market.MarketDataServiceInterface;
 import com.siberalt.singularity.broker.contract.service.market.request.GetCandlesRequest;

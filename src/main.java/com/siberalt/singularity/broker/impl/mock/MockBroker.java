@@ -4,9 +4,10 @@ import com.siberalt.singularity.broker.contract.execution.SandboxServiceAwareBro
 import com.siberalt.singularity.broker.contract.execution.StopOrderServiceAwareBrokerInterface;
 import com.siberalt.singularity.broker.contract.service.order.stop.StopOrderServiceInterface;
 import com.siberalt.singularity.broker.contract.service.sandbox.SandboxService;
+import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.event.EventManagerInterface;
-import com.siberalt.singularity.simulation.shared.instrument.InstrumentStorageInterface;
-import com.siberalt.singularity.simulation.shared.market.candle.CandleStorageInterface;
+import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
+import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.strategy.context.AbstractContext;
 import com.siberalt.singularity.strategy.context.ContextAwareInterface;
 
@@ -19,8 +20,12 @@ class MockBroker implements StopOrderServiceAwareBrokerInterface, ContextAwareIn
     protected MockUserService userService;
     protected MockSandboxService sandboxService;
 
-    public MockBroker(CandleStorageInterface candleRepository, InstrumentStorageInterface instrumentStorage) {
-        orderService = new MockOrderService(this);
+    public MockBroker(
+        ReadCandleRepository candleRepository,
+        ReadInstrumentRepository instrumentStorage,
+        OrderRepository orderRepository
+    ) {
+        orderService = new MockOrderService(this, orderRepository);
         marketDataService = new MockMarketDataService(this, candleRepository);
         operationsService = new MockOperationsService(this);
         instrumentService = new MockInstrumentService(this, instrumentStorage);

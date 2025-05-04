@@ -11,7 +11,7 @@ public class EventSimulator {
     protected List<TimeDependentUnitInterface> timeDependentUnits = new ArrayList<>();
     protected SimulationClock clock;
     protected List<Initializable> initializableUnits = new ArrayList<>();
-    private List<EventInvokerInterface> eventInvokers = new ArrayList<>();
+    private final List<EventInvokerInterface> eventInvokers = new ArrayList<>();
 
     public EventSimulator(SimulationClock clock) {
         this.eventObserver = new EventObserver();
@@ -30,7 +30,6 @@ public class EventSimulator {
 
     public void addEventInvoker(EventInvokerInterface eventInvoker) {
         eventInvokers.add(eventInvoker);
-        eventInvoker.observeEventsBy(eventObserver);
     }
 
     public void addInitializableUnit(Initializable initializableUnit) {
@@ -43,13 +42,16 @@ public class EventSimulator {
 
     public void run(Instant from, Instant to) {
         var currentTime = from;
+        clock.syncCurrentTime(currentTime);
+        eventInvokers.forEach(eventInvoker -> eventInvoker.observeEventsBy(eventObserver));
+
         init(from, to);
 
         while (currentTime.isBefore(to) || currentTime.equals(to)) {
             clock.syncCurrentTime(currentTime);
 
             for (var timeDependentUnit : timeDependentUnits) {
-                timeDependentUnit.tick(clock);
+                timeDependentUnit.tick();
             }
 
             if (!eventObserver.hasUpcomingEvents()) {
@@ -62,10 +64,16 @@ public class EventSimulator {
     }
 
     protected void init(Instant startTime, Instant endTime) {
+        for (var initializableUnit : initializableUnits) {
+            initializableUnit.init(startTime, endTime);
+        }
+
         for (var timeDependentUnit : timeDependentUnits) {
-            if (timeDependentUnit instanceof Initializable) {
-                ((Initializable) timeDependentUnit).init(startTime, endTime);
-            }
+            timeDependentUnit.applyClock(clock);
+        }
+
+        for (var eventInvoker : eventInvokers) {
+            eventInvoker.observeEventsBy(eventObserver);
         }
     }
 }

@@ -1,37 +1,39 @@
 package com.siberalt.singularity.broker.impl.mock;
 
-import com.siberalt.singularity.broker.contract.service.instrument.Instrument;
-import com.siberalt.singularity.broker.contract.service.operation.response.Position;
-import com.siberalt.singularity.broker.contract.service.order.request.*;
-import com.siberalt.singularity.broker.contract.service.order.response.*;
-import com.siberalt.singularity.broker.contract.value.money.Money;
-import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.ExceptionBuilder;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
+import com.siberalt.singularity.broker.contract.service.operation.response.Position;
 import com.siberalt.singularity.broker.contract.service.order.OrderServiceInterface;
+import com.siberalt.singularity.broker.contract.service.order.request.*;
+import com.siberalt.singularity.broker.contract.service.order.response.*;
+import com.siberalt.singularity.broker.contract.value.money.Money;
+import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.shared.exception.MockBrokerException;
-import com.siberalt.singularity.broker.impl.mock.shared.order.Order;
 import com.siberalt.singularity.broker.impl.mock.shared.user.AccountState;
-import com.siberalt.singularity.simulation.shared.market.candle.Candle;
+import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.instrument.Instrument;
+import com.siberalt.singularity.entity.order.Order;
+import com.siberalt.singularity.entity.order.OrderRepository;
 
 import java.math.BigDecimal;
 import java.time.Duration;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 
 public class MockOrderService implements OrderServiceInterface {
     protected MockBroker mockBroker;
     protected double buyBestPriceRatio = 0.3;
     protected double sellBestPriceRatio = 0.7;
     protected double commissionRatio = 0.003;
-    protected Map<String, Map<String, Order>> orders = new HashMap<>();
     protected Duration limitOrderLifeTime = Duration.ofDays(1);
-    protected Set<String> ordersRequestIds = new HashSet<>();
+    protected OrderRepository orderRepository;
 
-    public MockOrderService(MockBroker mockBroker) {
+    public MockOrderService(MockBroker mockBroker, OrderRepository orderRepository) {
         this.mockBroker = mockBroker;
+        this.orderRepository = orderRepository;
     }
 
     @Override
@@ -61,13 +63,11 @@ public class MockOrderService implements OrderServiceInterface {
     public CancelOrderResponse cancel(CancelOrderRequest request) throws AbstractException {
         checkAccountAvailable(request.getAccountId());
 
-        Map<String, Order> accountOrders = orders.getOrDefault(request.getAccountId(), new HashMap<>());
+        Order cancelOrder = orderRepository.getByAccountIdAndOrderId(request.getAccountId(), request.getOrderId());
 
-        if (!accountOrders.containsKey(request.getOrderId())) {
+        if (null == cancelOrder) {
             throw ExceptionBuilder.create(ErrorCode.ORDER_NOT_FOUND);
         }
-
-        Order cancelOrder = accountOrders.get(request.getOrderId());
 
         if (cancelOrder.getExecutionStatus() != ExecutionStatus.NEW) {
             throw ExceptionBuilder.create(ErrorCode.CANCEL_ORDER_ERROR);
@@ -83,31 +83,32 @@ public class MockOrderService implements OrderServiceInterface {
     public OrderState getState(GetOrderStateRequest request) throws AbstractException {
         checkAccountAvailable(request.getAccountId());
 
-        Map<String, Order> accountOrders = orders.getOrDefault(request.getAccountId(), new HashMap<>());
+        if (request.getOrderId() == null) {
+            throw ExceptionBuilder.create(ErrorCode.MISSING_PARAMETER_ORDER_ID);
+        }
 
-        if (!accountOrders.containsKey(request.getOrderId())) {
+        Order order = orderRepository.getByAccountIdAndOrderId(request.getAccountId(), request.getOrderId());
+
+        if (order == null) {
             throw ExceptionBuilder.create(ErrorCode.ORDER_NOT_FOUND);
         }
 
-        Order accountOrder = accountOrders.get(request.getOrderId());
-
-        if (request.getPriceType() != null && accountOrder.getPriceType() != request.getPriceType()) {
+        if (request.getPriceType() != null && order.getPriceType() != request.getPriceType()) {
             throw ExceptionBuilder.create(ErrorCode.ORDER_NOT_FOUND);
         }
 
-        return accountOrder.getState();
+        return order.getState();
     }
 
     @Override
     public GetOrdersResponse get(GetOrdersRequest request) throws AbstractException {
         checkAccountAvailable(request.getAccountId());
 
-        List<OrderState> accountOrders = orders
-            .computeIfAbsent(request.getAccountId(), k -> new HashMap<>())
-            .values()
+        List<OrderState> accountOrders = orderRepository
+            .getByAccountId(request.getAccountId())
             .stream()
             .map(Order::getState)
-            .collect(Collectors.toList());
+            .toList();
 
         return new GetOrdersResponse().setOrders(accountOrders);
     }
@@ -182,6 +183,7 @@ public class MockOrderService implements OrderServiceInterface {
         MockOperationsService operationsService = mockBroker.operationsService;
 
         order
+            .setExecutedTime(mockBroker.context.getCurrentTime())
             .setExecutionStatus(ExecutionStatus.FILL)
             .setLotsExecuted(order.getLotsRequested());
 
@@ -203,6 +205,7 @@ public class MockOrderService implements OrderServiceInterface {
     protected void buyInstrument(Order order) throws AbstractException {
         MockOperationsService operationsService = mockBroker.operationsService;
         order
+            .setExecutedTime(mockBroker.context.getCurrentTime())
             .setExecutionStatus(ExecutionStatus.FILL)
             .setLotsExecuted(order.getLotsRequested());
 
@@ -254,7 +257,7 @@ public class MockOrderService implements OrderServiceInterface {
 
         return new Order()
             .setOrderId(UUID.randomUUID().toString())
-            .setCreatedDate(mockBroker.context.getCurrentTime())
+            .setCreatedTime(mockBroker.context.getCurrentTime())
             .setLotsRequested(request.getQuantity())
             .setAccountId(request.getAccountId())
             .setDirection(request.getDirection())
@@ -373,14 +376,10 @@ public class MockOrderService implements OrderServiceInterface {
     protected void registerOrder(Order order) throws AbstractException {
         if (order.getIdempotencyKey() == null) {
             order.setIdempotencyKey(UUID.randomUUID().toString());
-        } else if (ordersRequestIds.contains(order.getIdempotencyKey())) {
+        } else if (null == orderRepository.getByIdempotencyKey(order.getIdempotencyKey())) {
             throw ExceptionBuilder.create(ErrorCode.DUPLICATE_ORDER);
         }
 
-        ordersRequestIds.add(order.getIdempotencyKey());
-
-        orders
-            .computeIfAbsent(order.getAccountId(), x -> new HashMap<>())
-            .put(order.getOrderId(), order);
+        orderRepository.save(order);
     }
 }

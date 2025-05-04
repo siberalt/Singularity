@@ -1,6 +1,6 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared.translation;
 
-import com.siberalt.singularity.broker.contract.service.instrument.Instrument;
+import com.siberalt.singularity.entity.instrument.Instrument;
 
 public class InstrumentTranslator {
     public static ru.tinkoff.piapi.contract.v1.InstrumentShort toTinkoff(Instrument instrument) {

@@ -11,10 +11,11 @@ import com.siberalt.singularity.broker.contract.service.order.response.Execution
 import com.siberalt.singularity.broker.contract.service.order.response.OrderState;
 import com.siberalt.singularity.broker.contract.service.order.response.PostOrderResponse;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
+import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.simulation.EventObserver;
-import com.siberalt.singularity.simulation.shared.instrument.InstrumentStorageInterface;
-import com.siberalt.singularity.simulation.shared.market.candle.Candle;
-import com.siberalt.singularity.simulation.shared.market.candle.CandleStorageInterface;
+import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
+import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -31,8 +32,12 @@ public class EventSimulatedOrderServiceTest extends MockOrderServiceTest {
     protected EventObserver eventObserver;
 
     @Override
-    MockBroker createBroker(CandleStorageInterface candleStorage, InstrumentStorageInterface instrumentStorage) {
-        var broker = new EventMockBroker(candleStorage, instrumentStorage);
+    MockBroker createBroker(
+        ReadCandleRepository candleStorage,
+        ReadInstrumentRepository instrumentStorage,
+        OrderRepository orderRepository
+    ) {
+        var broker = new EventMockBroker(candleStorage, instrumentStorage, orderRepository);
         eventObserver = new EventObserver();
         broker.getOrderService().observeEventsBy(eventObserver);
 

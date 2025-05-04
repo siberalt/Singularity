@@ -3,24 +3,25 @@ package com.siberalt.singularity.broker.impl.mock;
 import com.siberalt.singularity.broker.contract.service.market.response.GetLastPricesResponse;
 import com.siberalt.singularity.broker.contract.service.market.response.HistoricCandle;
 import com.siberalt.singularity.broker.impl.mock.config.MockBrokerConfig;
+import com.siberalt.singularity.entity.instrument.InstrumentRepository;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
 import com.siberalt.singularity.strategy.simulation.SimulationContext;
 import com.siberalt.singularity.test.util.ConfigLoader;
 import com.siberalt.singularity.test.util.resource.ResourceHandler;
-import com.siberalt.singularity.broker.contract.service.instrument.Instrument;
+import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
 import com.siberalt.singularity.broker.contract.service.market.request.GetCandlesRequest;
 import com.siberalt.singularity.broker.contract.service.market.request.GetLastPricesRequest;
 import com.siberalt.singularity.broker.contract.service.market.response.GetCandlesResponse;
 import com.siberalt.singularity.broker.contract.service.market.response.LastPrice;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
-import com.siberalt.singularity.simulation.shared.instrument.RuntimeInstrumentStorage;
-import com.siberalt.singularity.simulation.shared.market.candle.Candle;
-import com.siberalt.singularity.simulation.shared.market.candle.ComparisonOperator;
-import com.siberalt.singularity.simulation.shared.market.candle.FindPriceParams;
-import com.siberalt.singularity.simulation.shared.market.candle.factory.CvsFileCandleStorageFactory;
-import com.siberalt.singularity.simulation.shared.market.candle.storage.cvs.CvsCandleStorage;
+import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
+import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.ComparisonOperator;
+import com.siberalt.singularity.entity.candle.FindPriceParams;
+import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory;
+import com.siberalt.singularity.entity.candle.cvs.CvsCandleRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class MockMarketDataServiceIT {
     private MockMarketDataService marketDataService;
     private MockBroker broker;
-    private ResourceHandler<CvsCandleStorage> storageHandler;
+    private ResourceHandler<CvsCandleRepository> storageHandler;
     private MockBrokerConfig config;
     private SimulationClock clock;
 
@@ -51,17 +52,18 @@ class MockMarketDataServiceIT {
                 .setInstrumentType(config.getInstrument().getInstrumentType())
                 .setUid(config.getInstrument().getUid());
 
-        var instrumentStorage = new RuntimeInstrumentStorage().add(instrument);
+        InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
+        instrumentRepository.save(instrument);
 
         storageHandler = ResourceHandler.newHandler(() ->
-                new CvsFileCandleStorageFactory().create(
+                new CvsFileCandleRepositoryFactory().create(
                         config.getInstrument().getUid(),
                         config.getInstrument().getDataPath()
                 )
         );
 
         clock = new SimpleSimulationClock();
-        broker = new MockBroker(storageHandler.create(), instrumentStorage);
+        broker = new MockBroker(storageHandler.create(), instrumentRepository, null);
         broker.applyContext(new SimulationContext(null, null, clock));
         marketDataService = broker.getMarketDataService();
     }
@@ -156,7 +158,7 @@ class MockMarketDataServiceIT {
                 new GetCandlesRequest()
                         .setInstrumentUid(config.getInstrument().getUid())
                         .setFrom(Instant.parse("2021-01-01T00:00:00Z"))
-                        .setTo(Instant.parse("2021-12-30T00:00:00Z"))
+                        .setTo(Instant.parse("2021-05-30T00:00:00Z"))
                         .setInterval(CandleInterval.MONTH),
                 0
         );

@@ -3,5 +3,7 @@ package com.siberalt.singularity.simulation;
 import com.siberalt.singularity.strategy.context.Clock;
 
 public interface TimeDependentUnitInterface {
-    void tick(Clock clock);
+    void applyClock(Clock clock);
+
+    void tick();
 }

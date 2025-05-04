@@ -13,6 +13,7 @@ public class UserActionSimulator<T> implements TimeDependentUnitInterface, Event
     private final T userContext;
     private EventObserver eventObserver;
     private final SortedMap<Instant, Consumer<T>> actions = new TreeMap<>(Comparator.naturalOrder());
+    private Clock clock;
 
     public UserActionSimulator(T userContext) {
         this.userContext = userContext;
@@ -31,7 +32,12 @@ public class UserActionSimulator<T> implements TimeDependentUnitInterface, Event
     }
 
     @Override
-    public void tick(Clock clock) {
+    public void applyClock(Clock clock) {
+        this.clock = clock;
+    }
+
+    @Override
+    public void tick() {
         Instant time = clock.currentTime();
 
         if (actions.containsKey(time)) {
