@@ -8,7 +8,7 @@ public class EventObserver {
             Comparator.comparingLong(Instant::toEpochMilli)
     );
 
-    public void scheduleEvent(Event event) {
+    public synchronized void scheduleEvent(Event event) {
         var timePoint = event.getTimePoint();
 
         if (!eventsSortedByTime.containsKey(timePoint)) {
@@ -18,7 +18,7 @@ public class EventObserver {
         }
     }
 
-    public void cancelEvent(Event event) {
+    public synchronized void cancelEvent(Event event) {
         var timePoint = event.getTimePoint();
 
         if (eventsSortedByTime.containsKey(timePoint)) {

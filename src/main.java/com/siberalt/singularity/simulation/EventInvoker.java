@@ -1,5 +1,5 @@
 package com.siberalt.singularity.simulation;
 
-public interface EventInvokerInterface {
+public interface EventInvoker {
     void observeEventsBy(EventObserver observer);
 }

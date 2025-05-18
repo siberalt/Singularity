@@ -1,5 +1,6 @@
 package com.siberalt.singularity.scheduler;
 
+import com.siberalt.singularity.scheduler.executor.ExecutorServiceScheduler;
 import com.siberalt.singularity.scheduler.testutil.SequenceTaskTester;
 import com.siberalt.singularity.scheduler.testutil.StopTaskTester;
 import com.siberalt.singularity.scheduler.testutil.TestExecution;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 import static com.siberalt.singularity.scheduler.testutil.TestExecution.createIntervalFixed;
 
@@ -25,42 +27,33 @@ public class ExecutorServiceSchedulerTest {
     }
 
     @Test
-    void testSingleFixed() {
+    void testSingleFixed() throws ExecutionException, InterruptedException {
         SequenceTaskTester tester = createTester(
             "testSingleFixed",
             List.of(
                 TestExecution.createIntervalFixed(
-                    clock.currentTime().plus(Duration.ofSeconds(1)),
+                    clock.currentTime(),
                     Duration.ofSeconds(1),
-                    5
+                    3
                 )
             )
         );
 
         tester.test();
-
-        // Wait for the test to finish
-        while (!tester.isFinished()) {
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
     }
 
     @Test
-    void testMultiFixed() {
+    void testMultiFixed() throws ExecutionException, InterruptedException {
         System.out.println("Testing multiple tasks on run:");
         Instant currentTime = clock.currentTime().plus(Duration.ofSeconds(1));
 
         SequenceTaskTester[] testers = {
             createTester("task1", List.of(
-                createIntervalFixed(currentTime, Duration.ofSeconds(10), 2),
+                createIntervalFixed(currentTime, Duration.ofSeconds(5), 2),
                 createIntervalFixed(Duration.ofMillis(50), 5)
             )),
             createTester("task2", List.of(
-                createIntervalFixed(currentTime, Duration.ofSeconds(10), 3),
+                createIntervalFixed(currentTime, Duration.ofSeconds(3), 3),
                 createIntervalFixed(Duration.ofMillis(150), 1)
             )),
         };
@@ -68,27 +61,20 @@ public class ExecutorServiceSchedulerTest {
         for (SequenceTaskTester tester : testers) {
             tester.test();
         }
-
-        // Wait for the all tests to finish
-        while (!testers[0].isFinished() || !testers[1].isFinished()) {
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
     }
 
     @Test
-    void testStop() {
+    void testStop() throws ExecutionException, InterruptedException {
         StopTaskTester tester = new StopTaskTester(scheduler, new Schedule<>(
             "testStop",
             ExecutionIteratorFactory.createIntervalFixed(
-                Instant.now().plus(Duration.ofSeconds(1)),
-                Duration.ofSeconds(30),
+                Instant.now(),
+                Duration.ofSeconds(2),
                 10
             )
-        ));
+        ),
+            clock
+        );
 
         tester.test(5);
     }

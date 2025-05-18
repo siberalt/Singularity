@@ -6,9 +6,9 @@ import java.util.UUID;
 public class Event {
     protected String id;
     protected Instant timePoint;
-    protected EventInvokerInterface eventInvoker;
+    protected EventInvoker eventInvoker;
 
-    private Event(String id, Instant timePoint, EventInvokerInterface eventInvoker) {
+    private Event(String id, Instant timePoint, EventInvoker eventInvoker) {
         this.id = id;
         this.timePoint = timePoint;
         this.eventInvoker = eventInvoker;
@@ -22,11 +22,11 @@ public class Event {
         return timePoint;
     }
 
-    public EventInvokerInterface getEventInvoker() {
+    public EventInvoker getEventInvoker() {
         return eventInvoker;
     }
 
-    public static Event create(Instant timePoint, EventInvokerInterface eventInvoker) {
+    public static Event create(Instant timePoint, EventInvoker eventInvoker) {
         return new Event(UUID.randomUUID().toString(), timePoint, eventInvoker);
     }
 }

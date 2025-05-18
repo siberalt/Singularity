@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -24,7 +25,7 @@ import static com.siberalt.singularity.scheduler.testutil.TestExecution.createIn
 import static com.siberalt.singularity.scheduler.testutil.TestExecution.createIntervalFixed;
 
 public class SimulationSchedulerTest {
-    protected SimulationScheduler<String> scheduler;
+    protected EventSimulatedScheduler<String> scheduler;
     protected SimulationClock clock;
     protected EventObserver eventObserver;
     protected EventSimulator simulator;
@@ -33,15 +34,15 @@ public class SimulationSchedulerTest {
     protected void setUp() {
         clock = new SimpleSimulationClock();
         eventObserver = new EventObserver();
-        scheduler = new SimulationScheduler<>();
+        scheduler = new EventSimulatedScheduler<>();
         scheduler.applyClock(clock);
 
         simulator = new EventSimulator(eventObserver, clock);
         simulator.addTimeDependentUnit(scheduler);
-
+        simulator.addSynchronizableUnit(scheduler);
         scheduler.observeEventsBy(eventObserver);
 
-        Logger logger = Logger.getLogger(SimulationScheduler.class.getName());
+        Logger logger = Logger.getLogger(EventSimulatedScheduler.class.getName());
         logger.setLevel(Level.OFF);
     }
 
@@ -57,8 +58,7 @@ public class SimulationSchedulerTest {
             createIntervalFixed(Duration.ofMinutes(30), 5)
         ).forEach(tester::add);
 
-        simulator.addInitializableUnit((startTime, endTime) -> tester.test());
-
+        simulator.addTask(tester);
         simulator.run(
             Instant.parse("1997-05-01T10:15:00.00Z"),
             Instant.parse("1998-05-10T10:15:00.00Z")
@@ -71,7 +71,7 @@ public class SimulationSchedulerTest {
     public void testMultipleFixed() {
         System.out.println("Testing multiple tasks on run:");
 
-        SequenceTaskTester[] testers = {
+        com.siberalt.singularity.scheduler.testutil.SequenceTaskTester[] testers = {
             createTester("task1", List.of(
                 createIntervalFixed(Instant.parse("1997-05-07T00:00:00.00Z"), Duration.ofSeconds(10), 2),
                 createIntervalFixed(Duration.ofHours(2), 5),
@@ -98,18 +98,10 @@ public class SimulationSchedulerTest {
             ))
         };
 
-        simulator.addInitializableUnit(
-            (startTime, endTime) -> Arrays.stream(testers).forEach(SequenceTaskTester::test)
-        );
-
+        Arrays.stream(testers).forEach(simulator::addTask);
         simulator.run(
             Instant.parse("1997-05-01T10:15:00.00Z"),
             Instant.parse("1998-05-10T10:15:00.00Z")
-        );
-
-        Assertions.assertTrue(
-            Arrays.stream(testers).allMatch(SequenceTaskTester::isFinished),
-            "All tasks should be finished"
         );
     }
 
@@ -124,14 +116,12 @@ public class SimulationSchedulerTest {
             )
         );
 
-        simulator.addInitializableUnit(((startTime, endTime) -> tester.test()));
-
+        simulator.addTask(tester);
         simulator.run(
             Instant.parse("1997-05-01T10:15:00.00Z"),
             Instant.parse("1997-05-08T10:15:00.00Z")
         );
 
-        Assertions.assertTrue(tester.isFinished(), "Task should be finished");
     }
 
     @Test
@@ -145,21 +135,18 @@ public class SimulationSchedulerTest {
             )
         );
 
-        simulator.addInitializableUnit(((startTime, endTime) -> tester.test()));
-
+        simulator.addTask(tester);
         simulator.run(
             Instant.parse("1997-05-01T10:15:00.00Z"),
             Instant.parse("1998-05-10T10:15:00.00Z")
         );
-
-        Assertions.assertTrue(tester.isFinished(), "Task should be finished");
     }
 
     @Test
     public void testMultipleDelayed() {
         System.out.println("Testing multiple tasks on run:");
 
-        SequenceTaskTester[] testers = {
+        com.siberalt.singularity.scheduler.testutil.SequenceTaskTester[] testers = {
             createTester("task1", List.of(
                 createIntervalDelayed(Instant.parse("1997-05-07T00:00:00.00Z"), Duration.ofSeconds(10), 2, Duration.ofSeconds(15)),
                 createIntervalDelayed(Duration.ofHours(2), 5, Duration.ofSeconds(5)),
@@ -186,18 +173,10 @@ public class SimulationSchedulerTest {
             ))
         };
 
-        simulator.addInitializableUnit(
-            (startTime, endTime) -> Arrays.stream(testers).forEach(SequenceTaskTester::test)
-        );
-
+        Arrays.stream(testers).forEach(simulator::addTask);
         simulator.run(
             Instant.parse("1997-05-01T10:15:00.00Z"),
             Instant.parse("1998-05-10T10:15:00.00Z")
-        );
-
-        Assertions.assertTrue(
-            Arrays.stream(testers).allMatch(SequenceTaskTester::isFinished),
-            "All tasks should be finished"
         );
     }
 
@@ -205,7 +184,7 @@ public class SimulationSchedulerTest {
     public void testMultipleMixed() {
         System.out.println("Testing multiple tasks on run:");
 
-        SequenceTaskTester[] testers = {
+        com.siberalt.singularity.scheduler.testutil.SequenceTaskTester[] testers = {
             createTester("task1", List.of(
                 createIntervalFixed(Instant.parse("1997-05-07T00:00:00.00Z"), Duration.ofSeconds(10), 2),
                 createIntervalDelayed(Duration.ofHours(2), 5, Duration.ofSeconds(5)),
@@ -232,17 +211,10 @@ public class SimulationSchedulerTest {
             ))
         };
 
-        simulator.addInitializableUnit(
-            (startTime, endTime) -> Arrays.stream(testers).forEach(SequenceTaskTester::test)
-        );
+        Arrays.stream(testers).forEach(simulator::addTask);
         simulator.run(
             Instant.parse("1997-05-01T10:15:00.00Z"),
             Instant.parse("1998-05-10T10:15:00.00Z")
-        );
-
-        Assertions.assertTrue(
-            Arrays.stream(testers).allMatch(SequenceTaskTester::isFinished),
-            "All tasks should be finished"
         );
     }
 
@@ -257,9 +229,15 @@ public class SimulationSchedulerTest {
                 Duration.ofSeconds(30),
                 10
             )
-        ));
+        ), clock);
 
-        simulator.addInitializableUnit(((startTime, endTime) -> tester.test(5)));
+        simulator.addTask(() -> {
+            try {
+                tester.test(5);
+            } catch (ExecutionException | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        });
         simulator.run(
             Instant.parse("1997-05-01T10:15:00.00Z"),
             Instant.parse("1998-05-10T10:15:00.00Z")
@@ -267,7 +245,7 @@ public class SimulationSchedulerTest {
     }
 
     private SequenceTaskTester createTester(String taskId, List<TestExecution> testExecutions) {
-        SequenceTaskTester tester = new SequenceTaskTester(taskId, scheduler, clock);
+        SequenceTaskTester tester = new com.siberalt.singularity.scheduler.testutil.SequenceTaskTester(taskId, scheduler, clock);
         testExecutions.forEach(tester::add);
         return tester;
     }

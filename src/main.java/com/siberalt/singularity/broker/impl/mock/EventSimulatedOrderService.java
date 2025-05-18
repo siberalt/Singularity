@@ -13,9 +13,9 @@ import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.broker.impl.mock.shared.order.OrderEvent;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.simulation.Event;
-import com.siberalt.singularity.simulation.EventInvokerInterface;
+import com.siberalt.singularity.simulation.EventInvoker;
 import com.siberalt.singularity.simulation.EventObserver;
-import com.siberalt.singularity.simulation.TimeDependentUnitInterface;
+import com.siberalt.singularity.simulation.TimeDependentUnit;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ComparisonOperator;
 import com.siberalt.singularity.entity.candle.FindPriceParams;
@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
-public class EventSimulatedOrderService extends MockOrderService implements EventInvokerInterface, TimeDependentUnitInterface {
+public class EventSimulatedOrderService extends MockOrderService implements EventInvoker, TimeDependentUnit {
     private static final Logger logger = Logger.getLogger(EventSimulatedOrderService.class.getName());
     protected EventObserver eventObserver;
     protected EventMockBroker mockBroker;

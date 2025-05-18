@@ -1,5 +1,7 @@
 package com.siberalt.singularity.simulation;
 
+import com.siberalt.singularity.simulation.synch.Synchronizable;
+import com.siberalt.singularity.simulation.synch.TaskSynchronizer;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
 
 import java.time.Instant;
@@ -7,11 +9,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class EventSimulator {
-    protected EventObserver eventObserver;
-    protected List<TimeDependentUnitInterface> timeDependentUnits = new ArrayList<>();
-    protected SimulationClock clock;
-    protected List<Initializable> initializableUnits = new ArrayList<>();
-    private final List<EventInvokerInterface> eventInvokers = new ArrayList<>();
+    private final EventObserver eventObserver;
+    private final List<TimeDependentUnit> timeDependentUnits = new ArrayList<>();
+    private final SimulationClock clock;
+    private final List<Initializable> initializableUnits = new ArrayList<>();
+    private final List<EventInvoker> eventInvokers = new ArrayList<>();
+    private final List<Synchronizable> synchronizableUnits = new ArrayList<>();
+    private final TaskSynchronizer synchronizer = new TaskSynchronizer(Thread.currentThread());
 
     public EventSimulator(SimulationClock clock) {
         this.eventObserver = new EventObserver();
@@ -28,7 +32,7 @@ public class EventSimulator {
         this.clock = clock;
     }
 
-    public void addEventInvoker(EventInvokerInterface eventInvoker) {
+    public void addEventInvoker(EventInvoker eventInvoker) {
         eventInvokers.add(eventInvoker);
     }
 
@@ -36,16 +40,29 @@ public class EventSimulator {
         this.initializableUnits.add(initializableUnit);
     }
 
-    public void addTimeDependentUnit(TimeDependentUnitInterface timeDependentUnit) {
+    public void addTimeDependentUnit(TimeDependentUnit timeDependentUnit) {
         this.timeDependentUnits.add(timeDependentUnit);
+    }
+
+    public void addSynchronizableUnit(Synchronizable synchronizableUnit) {
+        this.synchronizableUnits.add(synchronizableUnit);
+    }
+
+    public void addTask(Runnable task) {
+        synchronizer.registerTask(task);
+    }
+
+    public void ignoreThreadUncaughtExceptions(boolean ignore) {
+        synchronizer.setIgnoreUncaughtExceptions(ignore);
     }
 
     public void run(Instant from, Instant to) {
         var currentTime = from;
         clock.syncCurrentTime(currentTime);
-        eventInvokers.forEach(eventInvoker -> eventInvoker.observeEventsBy(eventObserver));
 
         init(from, to);
+        synchronizer.start();
+        synchronizer.waitForTasks();
 
         while (currentTime.isBefore(to) || currentTime.equals(to)) {
             clock.syncCurrentTime(currentTime);
@@ -54,7 +71,10 @@ public class EventSimulator {
                 timeDependentUnit.tick();
             }
 
+            synchronizer.waitForTasks();
+
             if (!eventObserver.hasUpcomingEvents()) {
+                System.out.println("No more events to process. Ending simulation.");
                 break;
             }
 
@@ -64,16 +84,9 @@ public class EventSimulator {
     }
 
     protected void init(Instant startTime, Instant endTime) {
-        for (var initializableUnit : initializableUnits) {
-            initializableUnit.init(startTime, endTime);
-        }
-
-        for (var timeDependentUnit : timeDependentUnits) {
-            timeDependentUnit.applyClock(clock);
-        }
-
-        for (var eventInvoker : eventInvokers) {
-            eventInvoker.observeEventsBy(eventObserver);
-        }
+        synchronizableUnits.forEach(synchronizableUnit -> synchronizableUnit.synchWith(synchronizer));
+        timeDependentUnits.forEach(timeDependentUnit -> timeDependentUnit.applyClock(clock));
+        eventInvokers.forEach(eventInvoker -> eventInvoker.observeEventsBy(eventObserver));
+        initializableUnits.forEach(initializableUnit -> initializableUnit.init(startTime, endTime));
     }
 }

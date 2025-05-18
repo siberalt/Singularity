@@ -9,7 +9,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Consumer;
 
-public class UserActionSimulator<T> implements TimeDependentUnitInterface, EventInvokerInterface, Initializable {
+public class UserActionSimulator<T> implements TimeDependentUnit, EventInvoker, Initializable {
     private final T userContext;
     private EventObserver eventObserver;
     private final SortedMap<Instant, Consumer<T>> actions = new TreeMap<>(Comparator.naturalOrder());

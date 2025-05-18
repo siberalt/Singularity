@@ -9,8 +9,8 @@ import com.siberalt.singularity.broker.impl.mock.config.MockBrokerConfig;
 import com.siberalt.singularity.entity.instrument.InstrumentRepository;
 import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
 import com.siberalt.singularity.entity.order.OrderRepository;
+import com.siberalt.singularity.scheduler.simulation.EventSimulatedScheduler;
 import com.siberalt.singularity.scheduler.simulation.SimulationScheduler;
-import com.siberalt.singularity.scheduler.simulation.SimulationSchedulerInterface;
 import com.siberalt.singularity.simulation.EventSimulator;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
@@ -83,7 +83,7 @@ public class EventSimulatedOrderServiceIT {
 
         broker = new EventMockBroker(candleStorage, instrumentRepository, orderRepository);
         clock = new SimpleSimulationClock();
-        SimulationSchedulerInterface scheduler = new SimulationScheduler();
+        SimulationScheduler<String> scheduler = new EventSimulatedScheduler<>();
         broker.applyContext(new SimulationContext(scheduler, null, clock));
 
         EventSimulatedOrderService orderService = broker.getOrderService();

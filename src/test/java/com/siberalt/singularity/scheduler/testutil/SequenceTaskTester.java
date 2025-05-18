@@ -9,19 +9,18 @@ import org.junit.jupiter.api.Assertions;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
-public class SequenceTaskTester {
+public class SequenceTaskTester implements Runnable {
     private final List<TestExecution> testExecutions = new ArrayList<>();
-    private Iterator<TestExecution> testExecutionsIterator;
-    private Schedule<String> currentSchedule;
-    private boolean finished = false;
     private final Scheduler<String> scheduler;
     private final String taskId;
     private final Clock clock;
     private int scheduleIncrement = 0;
     private Instant lastExecutionTime = null;
+    private boolean finished = false;
 
     public SequenceTaskTester(
         String taskId,
@@ -37,28 +36,38 @@ public class SequenceTaskTester {
         testExecutions.add(testExecution);
     }
 
-    public boolean isFinished() {
-        return finished;
-    }
+    public void test() throws ExecutionException, InterruptedException {
+        for (TestExecution testExecution : testExecutions) {
+            Schedule<String> schedule = createSchedule(testExecution.executionIterator());
+            System.out.printf("[%s]: Start %s\n", schedule.id(), schedule);
+            Runnable task = () -> run(schedule.id(), clock.currentTime());
 
-    public void test() {
-        testExecutionsIterator = testExecutions.iterator();
-        moveToNextSchedule();
+            if (testExecution.executionTime() != null) {
+                task = new TimedRunnableDecorator(task, testExecution.executionTime().toMillis());
+            }
+
+            Future<?> future = scheduler.schedule(task, schedule);
+            future.get();
+
+            Assertions.assertFalse(
+                future.isCancelled(),
+                String.format("Schedule %s was cancelled", schedule.id())
+            );
+            Assertions.assertTrue(
+                future.isDone(),
+                String.format("Schedule %s is not done", schedule.id())
+            );
+            System.out.printf("[%s]: Schedule %s has ended\n", schedule.id(), schedule.id());
+        }
+
+        finished = true;
     }
 
     private Schedule<String> createSchedule(ExecutionIterator executionIterator) {
         return new Schedule<>(
             String.format("%s-%d", taskId, scheduleIncrement++),
-            new ExecutionIteratorAsserter(executionIterator),
-            this::onFinish
+            new ExecutionIteratorAsserter(executionIterator)
         );
-    }
-
-    private void onFinish(Schedule<String> schedule) {
-        System.out.printf("[%s]: Schedule %s has ended\n", currentSchedule.id(), currentSchedule.id());
-        Assertions.assertEquals(currentSchedule, schedule);
-
-        moveToNextSchedule();
     }
 
     private void run(String currentScheduleId, Instant currentTime) {
@@ -72,21 +81,16 @@ public class SequenceTaskTester {
         System.out.printf("[%s]: CallTime: %s\n", currentScheduleId, currentTime);
     }
 
-    private void moveToNextSchedule() {
-        if (testExecutionsIterator.hasNext()) {
-            TestExecution testExecution = testExecutionsIterator.next();
-            currentSchedule = createSchedule(testExecution.executionIterator());
-            System.out.printf("[%s]: Start %s\n", currentSchedule.id(), currentSchedule);
-            Runnable task = () -> run(currentSchedule.id(), clock.currentTime());
+    public boolean isFinished() {
+        return finished;
+    }
 
-            if (testExecution.executionTime() != null) {
-                task = new TimedRunnableDecorator(task, testExecution.executionTime().toMillis());
-            }
-
-            scheduler.schedule(task, currentSchedule);
-        } else {
-            currentSchedule = null;
-            finished = true;
+    @Override
+    public void run() {
+        try {
+            test();
+        } catch (ExecutionException | InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 }

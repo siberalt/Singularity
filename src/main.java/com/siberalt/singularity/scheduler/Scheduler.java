@@ -1,7 +1,7 @@
 package com.siberalt.singularity.scheduler;
 
-public interface Scheduler<idType> {
-    void schedule(Runnable task, Schedule<idType> schedule);
+import java.util.concurrent.ScheduledFuture;
 
-    void stop(idType scheduleId);
+public interface Scheduler<idType> {
+    ScheduledFuture<?> schedule(Runnable task, Schedule<idType> schedule);
 }
