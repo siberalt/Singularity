@@ -1,14 +1,13 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
-import com.siberalt.singularity.broker.contract.service.instrument.InstrumentServiceInterface;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
 import com.siberalt.singularity.broker.contract.service.instrument.response.GetResponse;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.exception.ExceptionConverter;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.InstrumentTranslator;
 import ru.tinkoff.piapi.core.InstrumentsService;
 
-public class InstrumentService implements InstrumentServiceInterface {
+public class InstrumentService implements com.siberalt.singularity.broker.contract.service.instrument.InstrumentService {
     protected InstrumentsService instrumentsService;
 
     public InstrumentService(InstrumentsService instrumentsService) {

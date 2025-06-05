@@ -23,7 +23,7 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.Objects;
 
-public class TinkoffSandboxBrokerTest {
+public class TinkoffSandboxBrokerTestIT {
     protected TinkoffSandboxBroker tinkoffBroker;
     protected ConfigInterface configuration;
     protected String testAccountId;
@@ -160,7 +160,6 @@ public class TinkoffSandboxBrokerTest {
         var tinkoffBroker = getTinkoffSandbox();
         var share = getTestShare();
         var marketDataService = tinkoffBroker.getMarketDataService();
-        var techAnalysisService = tinkoffBroker.getTechAnalysisService();
 
         System.out.println("\nTesting method getLastPrices: \n");
         var lastPricesResponse = marketDataService.getLastPrices(GetLastPricesRequest.of(share.getUid()));
@@ -188,22 +187,6 @@ public class TinkoffSandboxBrokerTest {
             System.out.printf("low: %s\n", candle.getLow());
             System.out.printf("volume: %s\n", candle.getVolume());
             System.out.printf("time: %s\n", candle.getTime());
-            System.out.println();
-        }
-
-        var getTechAnalysisResponse = techAnalysisService.getTechAnalysis(
-                new GetTechAnalysisRequest()
-                        .setFrom(Instant.parse("2023-11-20T12:00:00.00Z"))
-                        .setTo(Instant.parse("2023-11-30T12:00:00.00Z"))
-                        .setInstrumentUid(share.getUid())
-                        .setInterval(IndicatorInterval.HOUR_4)
-                        .setPriceType(com.siberalt.singularity.broker.contract.service.market.request.PriceType.AVG)
-                        .setIndicatorType(IndicatorType.EMA)
-                        .setLength(1)
-        );
-
-        for (var techAnalysisItem : getTechAnalysisResponse.getTechnicalIndicators()) {
-            System.out.println(techAnalysisItem);
             System.out.println();
         }
     }

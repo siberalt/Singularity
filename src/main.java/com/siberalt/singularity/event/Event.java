@@ -1,17 +1,19 @@
 package com.siberalt.singularity.event;
 
-import com.siberalt.singularity.shared.IdentifiableInterface;
+import java.util.UUID;
 
-public class Event implements IdentifiableInterface {
-    protected String id;
+public abstract class Event {
+    protected UUID id;
 
-    @Override
-    public String getId() {
+    public Event(UUID id) {
+        this.id = id;
+    }
+
+    public UUID getId() {
         return id;
     }
 
-    @Override
-    public void setId(String id) {
-        this.id = id;
-    }
+    abstract public boolean equals(Object o);
+
+    abstract public int hashCode();
 }

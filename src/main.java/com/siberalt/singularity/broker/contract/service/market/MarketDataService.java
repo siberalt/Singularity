@@ -8,7 +8,7 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.broker.contract.service.market.response.GetCandlesResponse;
 
 
-public interface MarketDataServiceInterface {
+public interface MarketDataService {
     GetCandlesResponse getCandles(GetCandlesRequest request) throws AbstractException;
 
     GetLastPricesResponse getLastPrices(GetLastPricesRequest request) throws AbstractException;

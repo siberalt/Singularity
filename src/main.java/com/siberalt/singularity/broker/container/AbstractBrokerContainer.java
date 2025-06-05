@@ -1,10 +1,10 @@
 package com.siberalt.singularity.broker.container;
 
-import com.siberalt.singularity.broker.contract.execution.BrokerInterface;
+import com.siberalt.singularity.broker.contract.execution.Broker;
 
 import java.util.Map;
 
-public abstract class AbstractBrokerContainer<brokerT extends BrokerInterface> {
+public abstract class AbstractBrokerContainer<brokerT extends Broker> {
     protected Map<String, brokerT> brokers;
 
     protected String defaultBrokerId;

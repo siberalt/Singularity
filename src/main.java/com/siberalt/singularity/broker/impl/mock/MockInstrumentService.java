@@ -4,9 +4,9 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
 import com.siberalt.singularity.broker.contract.service.instrument.response.GetResponse;
 import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
-import com.siberalt.singularity.broker.contract.service.instrument.InstrumentServiceInterface;
+import com.siberalt.singularity.broker.contract.service.instrument.InstrumentService;
 
-public class MockInstrumentService implements InstrumentServiceInterface {
+public class MockInstrumentService implements InstrumentService {
     protected ReadInstrumentRepository instrumentStorage;
 
     protected MockBroker virtualBroker;

@@ -4,6 +4,6 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
 import com.siberalt.singularity.broker.contract.service.instrument.response.GetResponse;
 
-public interface InstrumentServiceInterface {
+public interface InstrumentService {
     GetResponse get(GetRequest request) throws AbstractException;
 }

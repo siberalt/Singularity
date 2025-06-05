@@ -3,7 +3,6 @@ package com.siberalt.singularity.broker.impl.tinkoff.shared;
 import com.siberalt.singularity.broker.contract.service.operation.response.GetPositionsResponse;
 import com.siberalt.singularity.broker.shared.ListTranslator;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
-import com.siberalt.singularity.broker.contract.service.operation.OperationsServiceInterface;
 import com.siberalt.singularity.broker.contract.service.operation.request.GetPositionsRequest;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.exception.ExceptionConverter;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.MoneyValueTranslator;
@@ -13,7 +12,7 @@ import ru.tinkoff.piapi.contract.v1.PositionsRequest;
 
 import javax.annotation.Nonnull;
 
-public class OperationsService implements OperationsServiceInterface {
+public class OperationsService implements com.siberalt.singularity.broker.contract.service.operation.OperationsService {
     protected final OperationsServiceGrpc.OperationsServiceBlockingStub operationsBlockingStub;
 
     public OperationsService(

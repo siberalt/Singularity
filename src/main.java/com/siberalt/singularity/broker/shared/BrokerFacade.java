@@ -1,6 +1,6 @@
 package com.siberalt.singularity.broker.shared;
 
-import com.siberalt.singularity.broker.contract.execution.BrokerInterface;
+import com.siberalt.singularity.broker.contract.execution.Broker;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.order.response.CancelOrderResponse;
@@ -9,9 +9,9 @@ import com.siberalt.singularity.broker.contract.service.order.response.PostOrder
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 
 public class BrokerFacade {
-    protected BrokerInterface broker;
+    protected Broker broker;
 
-    public BrokerFacade(BrokerInterface broker) {
+    public BrokerFacade(Broker broker) {
         this.broker = broker;
     }
 

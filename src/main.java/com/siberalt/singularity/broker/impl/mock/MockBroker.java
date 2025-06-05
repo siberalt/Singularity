@@ -5,7 +5,7 @@ import com.siberalt.singularity.broker.contract.execution.StopOrderServiceAwareB
 import com.siberalt.singularity.broker.contract.service.order.stop.StopOrderServiceInterface;
 import com.siberalt.singularity.broker.contract.service.sandbox.SandboxService;
 import com.siberalt.singularity.entity.order.OrderRepository;
-import com.siberalt.singularity.event.EventManagerInterface;
+import com.siberalt.singularity.event.EventDispatcher;
 import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.strategy.context.AbstractContext;
@@ -56,11 +56,6 @@ class MockBroker implements StopOrderServiceAwareBrokerInterface, ContextAwareIn
     @Override
     public MockUserService getUserService() {
         return userService;
-    }
-
-    @Override
-    public EventManagerInterface getEventManager() {
-        return null;
     }
 
     @Override

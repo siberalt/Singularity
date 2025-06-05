@@ -1,6 +1,6 @@
 package com.siberalt.singularity.broker.impl.mock;
 
-import com.siberalt.singularity.broker.contract.service.market.MarketDataServiceInterface;
+import com.siberalt.singularity.broker.contract.service.market.MarketDataService;
 import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
 import com.siberalt.singularity.broker.contract.service.market.request.GetCandlesRequest;
 import com.siberalt.singularity.broker.contract.service.market.request.GetLastPricesRequest;
@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.StreamSupport;
 
-public class MockMarketDataService implements MarketDataServiceInterface {
+public class MockMarketDataService implements MarketDataService {
     protected MockBroker virtualBroker;
     protected ReadCandleRepository candleStorage;
 

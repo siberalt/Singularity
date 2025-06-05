@@ -5,7 +5,7 @@ import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.ExceptionBuilder;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
 import com.siberalt.singularity.broker.contract.service.operation.response.Position;
-import com.siberalt.singularity.broker.contract.service.order.OrderServiceInterface;
+import com.siberalt.singularity.broker.contract.service.order.OrderService;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.order.response.*;
 import com.siberalt.singularity.broker.contract.value.money.Money;
@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-public class MockOrderService implements OrderServiceInterface {
+public class MockOrderService implements OrderService {
     protected MockBroker mockBroker;
     protected double buyBestPriceRatio = 0.3;
     protected double sellBestPriceRatio = 0.7;

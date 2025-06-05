@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.logging.Logger;
 
@@ -33,7 +34,7 @@ public class EventSimulatedScheduler<idType> implements
     private static final Logger logger = Logger.getLogger(EventSimulatedScheduler.class.getName());
 
     private EventObserver eventObserver;
-    private final Map<idType, Schedule<idType>> schedules = new HashMap<>();
+    private final Map<idType, Schedule<idType>> schedules = new ConcurrentHashMap<>();
     private final TaskExecutionTable<idType> taskExecutionTable = new TaskExecutionTable<>();
     private final Map<idType, Event> events = new HashMap<>();
     private Clock clock;
@@ -53,7 +54,7 @@ public class EventSimulatedScheduler<idType> implements
     }
 
     @Override
-    public ScheduledFuture<?> schedule(Runnable task, Schedule<idType> schedule) {
+    public synchronized ScheduledFuture<?> schedule(Runnable task, Schedule<idType> schedule) {
         idType scheduleId = schedule.id();
 
         if (scheduleId == null) {

@@ -2,7 +2,7 @@ package com.siberalt.singularity.entity.candle.cvs;
 
 import com.siberalt.singularity.service.DependencyManager;
 import com.siberalt.singularity.service.ServiceDetails;
-import com.siberalt.singularity.service.factory.FactoryInterface;
+import com.siberalt.singularity.service.factory.Factory;
 import com.siberalt.singularity.shared.stream.input.ZipFileInputStream;
 
 import java.io.*;
@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-public class CvsFileCandleRepositoryFactory implements FactoryInterface {
+public class CvsFileCandleRepositoryFactory implements Factory {
     public CvsCandleRepository create(String instrumentUid, String filesDir) {
         File[] files = new File(filesDir).listFiles();
 

@@ -2,7 +2,6 @@ package com.siberalt.singularity.broker.impl.tinkoff.shared;
 
 import com.siberalt.singularity.broker.shared.ListTranslator;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
-import com.siberalt.singularity.broker.contract.service.order.OrderServiceInterface;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.order.response.CancelOrderResponse;
 import com.siberalt.singularity.broker.contract.service.order.response.GetOrdersResponse;
@@ -13,7 +12,7 @@ import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.*;
 import ru.tinkoff.piapi.contract.v1.Quotation;
 import ru.tinkoff.piapi.core.OrdersService;
 
-public class OrderService implements OrderServiceInterface {
+public class OrderService implements com.siberalt.singularity.broker.contract.service.order.OrderService {
     protected OrdersService ordersServiceApi;
 
     public OrderService(OrdersService ordersServiceApi) {

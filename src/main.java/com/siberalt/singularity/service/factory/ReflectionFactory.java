@@ -4,7 +4,7 @@ import com.siberalt.singularity.service.Configurable;
 import com.siberalt.singularity.service.DependencyManager;
 import com.siberalt.singularity.service.ServiceDetails;
 
-public class ReflectionFactory implements FactoryInterface {
+public class ReflectionFactory implements Factory {
     @Override
     public Object create(ServiceDetails serviceDetails, DependencyManager dependencyManager) {
         try {

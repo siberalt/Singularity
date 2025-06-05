@@ -1,23 +1,21 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared;
 
-import com.siberalt.singularity.broker.contract.service.user.UserServiceInterface;
-import com.siberalt.singularity.broker.contract.execution.TechAnalysisServiceAwareBrokerInterface;
-import com.siberalt.singularity.broker.contract.service.market.MarketDataServiceInterface;
-import com.siberalt.singularity.broker.contract.service.market.TechAnalysisServiceInterface;
-import com.siberalt.singularity.broker.contract.service.operation.OperationsServiceInterface;
-import com.siberalt.singularity.broker.contract.service.order.OrderServiceInterface;
-import com.siberalt.singularity.event.EventManagerInterface;
+import com.siberalt.singularity.broker.contract.execution.SubsctiptionManagerAwareBroker;
+import com.siberalt.singularity.broker.contract.service.market.MarketDataService;
+import com.siberalt.singularity.broker.contract.service.operation.OperationsService;
+import com.siberalt.singularity.broker.contract.service.order.OrderService;
+import com.siberalt.singularity.broker.contract.service.user.UserService;
 import ru.tinkoff.piapi.contract.v1.OperationsServiceGrpc;
 import ru.tinkoff.piapi.core.InvestApi;
 
-public abstract class AbstractTinkoffBroker implements TechAnalysisServiceAwareBrokerInterface {
+public abstract class AbstractTinkoffBroker implements SubsctiptionManagerAwareBroker {
     protected InvestApi api;
-    protected OrderService orderService;
-    protected MarketDataService marketDataService;
-    protected OperationsService operationsService;
-    protected UserService userService;
+    protected com.siberalt.singularity.broker.impl.tinkoff.shared.OrderService orderService;
+    protected com.siberalt.singularity.broker.impl.tinkoff.shared.MarketDataService marketDataService;
+    protected com.siberalt.singularity.broker.impl.tinkoff.shared.OperationsService operationsService;
+    protected com.siberalt.singularity.broker.impl.tinkoff.shared.UserService userService;
     protected InstrumentService instrumentService;
-    protected TechAnalysisService techAnalysisService;
+    protected SubscriptionManager subscriptionManager;
 
     public AbstractTinkoffBroker(String token) {
         init(token);
@@ -26,12 +24,12 @@ public abstract class AbstractTinkoffBroker implements TechAnalysisServiceAwareB
     protected void init(String token) {
         api = createApi(token);
         var channel = api.getChannel();
-        orderService = new OrderService(api.getOrdersService());
-        marketDataService = new MarketDataService(api.getMarketDataService());
-        techAnalysisService = new TechAnalysisService(api.getMarketDataService());
-        operationsService = new OperationsService(OperationsServiceGrpc.newBlockingStub(channel));
-        userService = new UserService(api.getUserService());
+        orderService = new com.siberalt.singularity.broker.impl.tinkoff.shared.OrderService(api.getOrdersService());
+        marketDataService = new com.siberalt.singularity.broker.impl.tinkoff.shared.MarketDataService(api.getMarketDataService());
+        operationsService = new com.siberalt.singularity.broker.impl.tinkoff.shared.OperationsService(OperationsServiceGrpc.newBlockingStub(channel));
+        userService = new com.siberalt.singularity.broker.impl.tinkoff.shared.UserService(api.getUserService());
         instrumentService = new InstrumentService(api.getInstrumentsService());
+        subscriptionManager = new SubscriptionManager(api);
     }
 
     protected InvestApi createApi(String token) {
@@ -39,37 +37,32 @@ public abstract class AbstractTinkoffBroker implements TechAnalysisServiceAwareB
     }
 
     @Override
-    public MarketDataServiceInterface getMarketDataService() {
+    public MarketDataService getMarketDataService() {
         return marketDataService;
     }
 
     @Override
-    public TechAnalysisServiceInterface getTechAnalysisService() {
-        return techAnalysisService;
-    }
-
-    @Override
-    public OperationsServiceInterface getOperationsService() {
+    public OperationsService getOperationsService() {
         return operationsService;
     }
 
     @Override
-    public OrderServiceInterface getOrderService() {
+    public OrderService getOrderService() {
         return orderService;
     }
 
     @Override
-    public UserServiceInterface getUserService() {
+    public UserService getUserService() {
         return userService;
-    }
-
-    @Override
-    public EventManagerInterface getEventManager() {
-        return null;
     }
 
     @Override
     public InstrumentService getInstrumentService() {
         return instrumentService;
+    }
+
+    @Override
+    public SubscriptionManager getSubscriptionManager() {
+        return subscriptionManager;
     }
 }

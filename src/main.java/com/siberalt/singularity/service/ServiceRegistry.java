@@ -4,7 +4,7 @@ import com.siberalt.singularity.configuration.*;
 import com.siberalt.singularity.service.exception.InvalidServiceTypeException;
 import com.siberalt.singularity.service.exception.ServiceDependencyException;
 import com.siberalt.singularity.service.exception.ServiceNotFoundException;
-import com.siberalt.singularity.service.factory.FactoryInterface;
+import com.siberalt.singularity.service.factory.Factory;
 import com.siberalt.singularity.service.factory.ReflectionFactory;
 
 import java.util.HashMap;
@@ -14,7 +14,7 @@ public class ServiceRegistry {
     protected Map<String, Definition> serviceDefinitions = new HashMap<>();
     protected Map<String, Object> services = new HashMap<>();
     protected DependencyManager dependencyManager = new DependencyManager(this);
-    protected FactoryInterface defaultFactory = new ReflectionFactory();
+    protected Factory defaultFactory = new ReflectionFactory();
 
     public void reconfigure(String serviceId, ConfigInterface newConfig) {
         reconfigure(serviceId, newConfig, MergeType.MERGE);
@@ -78,11 +78,11 @@ public class ServiceRegistry {
         );
     }
 
-    public <T> void setFactory(Class<T> serviceClass, FactoryInterface factory, ConfigInterface config) {
+    public <T> void setFactory(Class<T> serviceClass, Factory factory, ConfigInterface config) {
         setFactory(serviceClass.getName(), factory, config);
     }
 
-    public void setFactory(String serviceId, FactoryInterface factory, ConfigInterface config) {
+    public void setFactory(String serviceId, Factory factory, ConfigInterface config) {
         if (serviceDefinitions.containsKey(serviceId)) {
             var definition = serviceDefinitions.get(serviceId);
             var serviceDetails = definition.serviceDetails();
@@ -112,11 +112,11 @@ public class ServiceRegistry {
         }
     }
 
-    public <T> void setFactory(Class<T> serviceClass, FactoryInterface factory) {
+    public <T> void setFactory(Class<T> serviceClass, Factory factory) {
         setFactory(serviceClass.getName(), factory);
     }
 
-    public void setFactory(String serviceId, FactoryInterface factory) {
+    public void setFactory(String serviceId, Factory factory) {
         setFactory(serviceId, factory, new NullConfig());
     }
 

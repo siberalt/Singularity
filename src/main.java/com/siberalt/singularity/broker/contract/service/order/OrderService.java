@@ -10,7 +10,7 @@ import com.siberalt.singularity.broker.contract.service.order.response.GetOrders
 import com.siberalt.singularity.broker.contract.service.order.response.OrderState;
 import com.siberalt.singularity.broker.contract.service.order.response.PostOrderResponse;
 
-public interface OrderServiceInterface {
+public interface OrderService {
     PostOrderResponse post(PostOrderRequest request) throws AbstractException;
 
     CancelOrderResponse cancel(CancelOrderRequest request) throws AbstractException;

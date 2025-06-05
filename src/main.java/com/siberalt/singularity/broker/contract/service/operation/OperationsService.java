@@ -4,6 +4,6 @@ import com.siberalt.singularity.broker.contract.service.operation.request.GetPos
 import com.siberalt.singularity.broker.contract.service.operation.response.GetPositionsResponse;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 
-public interface OperationsServiceInterface {
+public interface OperationsService {
     GetPositionsResponse getPositions(GetPositionsRequest request) throws AbstractException;
 }

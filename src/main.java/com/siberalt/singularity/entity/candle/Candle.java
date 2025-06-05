@@ -115,8 +115,23 @@ public class Candle {
                 .setClosePrice(close);
     }
 
+    public static Candle of(Instant time, String instrumentUid, long volume, double repeatedValue) {
+        return Candle.of(time, instrumentUid, volume, repeatedValue, repeatedValue, repeatedValue, repeatedValue);
+    }
+
     public static Candle of(Instant time, long volume, double repeatedValue) {
         return Candle.of(time, volume, repeatedValue, repeatedValue, repeatedValue, repeatedValue);
+    }
+
+    public static Candle of(Instant time, String instrumentUid, long volume, double open, double high, double low, double close) {
+        return new Candle()
+            .setInstrumentUid(instrumentUid)
+            .setTime(time)
+            .setVolume(volume)
+            .setOpenPrice(Quotation.of(open))
+            .setHighPrice(Quotation.of(high))
+            .setLowPrice(Quotation.of(low))
+            .setClosePrice(Quotation.of(close));
     }
 
     public static Candle of(Instant time, long volume, double open, double high, double low, double close) {

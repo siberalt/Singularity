@@ -4,7 +4,7 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.ExceptionBuilder;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
-import com.siberalt.singularity.broker.contract.service.operation.OperationsServiceInterface;
+import com.siberalt.singularity.broker.contract.service.operation.OperationsService;
 import com.siberalt.singularity.broker.contract.service.operation.request.GetPositionsRequest;
 import com.siberalt.singularity.broker.contract.service.operation.response.GetPositionsResponse;
 import com.siberalt.singularity.broker.contract.service.operation.response.Position;
@@ -14,7 +14,7 @@ import com.siberalt.singularity.broker.impl.mock.shared.operation.OpenPosition;
 
 import java.util.*;
 
-public class MockOperationsService implements OperationsServiceInterface {
+public class MockOperationsService implements OperationsService {
     private final Map<String, AccountBalance> accountBalances = new HashMap<>();
     private final MockBroker mockBroker;
 

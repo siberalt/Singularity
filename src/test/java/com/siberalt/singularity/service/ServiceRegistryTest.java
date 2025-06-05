@@ -5,7 +5,7 @@ import com.siberalt.singularity.configuration.MergeType;
 import com.siberalt.singularity.configuration.StringMapConfig;
 import com.siberalt.singularity.service.exception.ServiceDependencyException;
 import com.siberalt.singularity.service.exception.ServiceNotFoundException;
-import com.siberalt.singularity.service.factory.FactoryInterface;
+import com.siberalt.singularity.service.factory.Factory;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,7 +70,7 @@ public class ServiceRegistryTest {
 
     @Test
     void testSetFactoryWithClass() {
-        FactoryInterface factory = mock(FactoryInterface.class);
+        Factory factory = mock(Factory.class);
         when(factory.create(any(), any())).thenReturn(new DummyServiceA());
         serviceRegistry.setFactory(DummyServiceA.class, factory);
         Assertions.assertTrue(serviceRegistry.has(DummyServiceA.class));
@@ -82,7 +82,7 @@ public class ServiceRegistryTest {
     @Test
     void testSetFactoryWithString() {
         String serviceId = "testService";
-        FactoryInterface factory = mock(FactoryInterface.class);
+        Factory factory = mock(Factory.class);
         when(factory.create(any(), any())).thenReturn(new DummyServiceA());
         serviceRegistry.setFactory(serviceId, factory);
         Assertions.assertTrue(serviceRegistry.has(serviceId));
@@ -142,7 +142,7 @@ public class ServiceRegistryTest {
     @Test
     void testSetFactoryWithNoConfig(){
         String serviceId = "testService";
-        FactoryInterface factory = (serviceDetails, dependencyManager) -> {
+        Factory factory = (serviceDetails, dependencyManager) -> {
             ConfigFacade configFacade = ConfigFacade.of(serviceDetails.config());
             DummyServiceA dummyServiceA = new DummyServiceA();
             dummyServiceA.setStringField(configFacade.getAsString("stringField", "default"));
@@ -165,7 +165,7 @@ public class ServiceRegistryTest {
     @Test
     void testSetFactoryWithConfig(){
         String serviceId = "testService";
-        FactoryInterface factory = (serviceDetails, dependencyManager) -> {
+        Factory factory = (serviceDetails, dependencyManager) -> {
             ConfigFacade configFacade = ConfigFacade.of(serviceDetails.config());
             DummyServiceA dummyServiceA = new DummyServiceA();
             dummyServiceA.setStringField(configFacade.getAsString("stringField", "default"));
@@ -206,7 +206,7 @@ public class ServiceRegistryTest {
         String serviceId = "testService";
         DummyServiceA service = new DummyServiceA();
         ConfigInterface newConfig = mock(ConfigInterface.class);
-        FactoryInterface factory = mock(FactoryInterface.class);
+        Factory factory = mock(Factory.class);
         when(factory.create(any(), any())).thenReturn(service);
 
         serviceRegistry.setFactory(serviceId, factory);
@@ -238,7 +238,7 @@ public class ServiceRegistryTest {
                 "booleanField", false
             )
         );
-        FactoryInterface factory = (serviceDetails, dependencyManager) -> {
+        Factory factory = (serviceDetails, dependencyManager) -> {
             ConfigFacade configFacade = ConfigFacade.of(serviceDetails.config());
             DummyServiceA dummyServiceA = new DummyServiceA();
             dummyServiceA.setStringField(configFacade.getAsString("stringField", "default"));
@@ -283,7 +283,7 @@ public class ServiceRegistryTest {
                 "listField", List.of("val1", "val2")
             )
         );
-        FactoryInterface factory = (serviceDetails, dependencyManager) -> {
+        Factory factory = (serviceDetails, dependencyManager) -> {
             ConfigFacade configFacade = ConfigFacade.of(serviceDetails.config());
             DummyServiceA dummyServiceA = new DummyServiceA();
             dummyServiceA.setStringField(configFacade.getAsString("stringField", "default"));

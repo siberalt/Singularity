@@ -1,10 +1,10 @@
 package com.siberalt.singularity.service;
 
-import com.siberalt.singularity.service.factory.FactoryInterface;
+import com.siberalt.singularity.service.factory.Factory;
 
 public record Definition(
     ServiceDetails serviceDetails,
-    FactoryInterface factory,
+    Factory factory,
     Configurator configurator,
     ConfigSnapshot configSnapshot
 ) {
@@ -16,7 +16,7 @@ public record Definition(
         return new Definition(serviceDetails, this.factory, this.configurator, this.configSnapshot);
     }
 
-    public Definition updateFactory(FactoryInterface factory) {
+    public Definition updateFactory(Factory factory) {
         return new Definition(this.serviceDetails, factory, this.configurator, this.configSnapshot);
     }
 

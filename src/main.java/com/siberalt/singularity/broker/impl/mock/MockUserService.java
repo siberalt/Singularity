@@ -10,7 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-public class MockUserService implements UserServiceInterface {
+public class MockUserService implements UserService {
     protected MockBroker virtualBroker;
     protected Map<String, AccountState> accountsStates = new HashMap<>();
 
