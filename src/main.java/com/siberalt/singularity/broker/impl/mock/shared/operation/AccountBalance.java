@@ -1,39 +1,80 @@
 package com.siberalt.singularity.broker.impl.mock.shared.operation;
 
-import com.siberalt.singularity.broker.contract.service.operation.response.GetPositionsResponse;
 import com.siberalt.singularity.broker.contract.service.operation.response.Position;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
+import com.siberalt.singularity.entity.transaction.Transaction;
+import com.siberalt.singularity.entity.transaction.TransactionStatus;
+import com.siberalt.singularity.entity.transaction.TransactionSpec;
+import com.siberalt.singularity.strategy.context.Clock;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 
 public class AccountBalance {
-    protected String accountId;
+    private final String accountId;
+    private final String brokerId;
+    private final Clock clock;
     protected Map<String, Money> availableMonies = new HashMap<>();
     protected Map<String, Money> blockedMonies = new HashMap<>();
     protected Map<String, Position> positions = new HashMap<>();
 
-    public AccountBalance(String accountId) {
+    public AccountBalance(String accountId, Clock clock, String brokerId) {
         this.accountId = accountId;
-    }
-
-    public GetPositionsResponse toResponse() {
-        return new GetPositionsResponse()
-                .setSecurities(positions.values())
-                .setMoney(availableMonies.values())
-                .setBlocked(blockedMonies.values());
+        this.clock = clock;
+        this.brokerId = brokerId;
     }
 
     public String getAccountId() {
         return accountId;
     }
 
+    public Collection<Money> getBlockedMonies() {
+        return blockedMonies.values();
+    }
+
+    public Collection<Position> getPositions() {
+        return positions.values();
+    }
+
+    public List<Transaction> applyTransactions(List<TransactionSpec> transactions) {
+        List<Transaction> result = new ArrayList<>();
+        for (TransactionSpec transaction : transactions) {
+            Transaction resultTransaction = applyTransaction(transaction);
+            result.add(resultTransaction);
+            if (resultTransaction.getStatus() == TransactionStatus.FAILED) {
+                // If any transaction fails, we stop processing further transactions
+                return result;
+            }
+        }
+        return result;
+    }
+
+    public Transaction applyTransaction(TransactionSpec transaction) {
+        Transaction resultTransaction = new Transaction()
+            .setId(UUID.randomUUID().toString())
+            .setDescription(transaction.description())
+            .setType(transaction.type())
+            .setAmount(transaction.amount())
+            .setDestinationAccountId(accountId)
+            .setSourceAccountId(brokerId)
+            .setCreatedTime(clock.currentTime())
+            .setStatus(TransactionStatus.PENDING);
+
+        try {
+            updateMoneyBalance(availableMonies, transaction.amount(), balance -> balance.add(transaction.amount()));
+        } catch (Exception e) {
+            resultTransaction.setStatus(TransactionStatus.FAILED);
+            resultTransaction.setErrorMessage(e.getMessage());
+            return resultTransaction;
+        }
+
+        return resultTransaction;
+    }
+
     public boolean isEnoughOfMoney(Money amount) {
         return availableMonies.containsKey(amount.getCurrencyIso())
-                && availableMonies.get(amount.getCurrencyIso()).isMoreThanOrEqual(amount);
+            && availableMonies.get(amount.getCurrencyIso()).isMoreThanOrEqual(amount);
     }
 
     public Position getPositionByInstrumentId(String instrumentId) {
@@ -96,8 +137,8 @@ public class AccountBalance {
 
     protected void updateMoneyBalance(Map<String, Money> moneyBalance, Money money, Function<Money, Money> updater) {
         money = moneyBalance.containsKey(money.getCurrencyIso())
-                ? updater.apply(moneyBalance.get(money.getCurrencyIso()))
-                : money;
+            ? updater.apply(moneyBalance.get(money.getCurrencyIso()))
+            : money;
         moneyBalance.put(money.getCurrencyIso(), money);
     }
 
@@ -107,6 +148,6 @@ public class AccountBalance {
     }
 
     private void assertMoneyPositive(Money money) {
-        assert money.getQuotation().isMore(Quotation.of(0D)) : "Money value should be positive";
+        assert money.getQuotation().isGreaterThan(Quotation.of(0D)) : "Money value should be positive";
     }
 }

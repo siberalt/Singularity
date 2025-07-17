@@ -22,7 +22,7 @@ public class InMemoryOrderRepository implements OrderRepository {
     @Override
     public Order getByAccountIdAndOrderId(String accountId, String orderId) {
         return ordersById.values().stream()
-            .filter(order -> order.getAccountId().equals(accountId) && order.getOrderId().equals(orderId))
+            .filter(order -> order.getAccountId().equals(accountId) && order.getId().equals(orderId))
             .findFirst()
             .orElse(null);
     }
@@ -35,21 +35,23 @@ public class InMemoryOrderRepository implements OrderRepository {
     }
 
     @Override
-    public Iterable<Order> getByInstrumentUid(String instrumentUid) {
+    public Iterable<Order> getByAccountIdAndInstrumentUid(String accountId, String instrumentUid) {
         return ordersById.values().stream()
-            .filter(order -> order.getInstrument().getUid().equals(instrumentUid))
+            .filter(
+                order -> order.getInstrument().getUid().equals(instrumentUid) && order.getAccountId().equals(accountId)
+            )
             .collect(Collectors.toList());
     }
 
     @Override
     public void save(Order order) {
-        ordersById.put(order.getOrderId(), order);
+        ordersById.put(order.getId(), order);
         ordersByIdempotencyKey.put(order.getIdempotencyKey(), order);
     }
 
     @Override
     public void delete(Order order) {
-        ordersById.remove(order.getOrderId());
+        ordersById.remove(order.getId());
         ordersByIdempotencyKey.remove(order.getIdempotencyKey());
     }
 

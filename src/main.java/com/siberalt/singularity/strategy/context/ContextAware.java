@@ -1,5 +1,5 @@
 package com.siberalt.singularity.strategy.context;
 
-public interface ContextAwareInterface {
+public interface ContextAware {
     void applyContext(AbstractContext<?> context);
 }

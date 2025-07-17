@@ -8,10 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable {
     protected static final int READ_LIMIT = 1024 * 1024 * 1024;
@@ -43,21 +40,57 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
     }
 
     @Override
-    public Iterable<Candle> getPeriod(String instrumentUid, Instant from, Instant to) {
+    public Optional<Candle> findClosestBefore(String instrumentUid, Instant at) {
+        if (!Objects.equals(this.instrumentUid, instrumentUid)) {
+            return Optional.empty();
+        }
+
+        resetInputStream(inputStream);
+        CvsCandleIterator iterator = new CvsCandleIterator(inputStream).initInstrumentUid(instrumentUid);
+
+        Candle lastCandle = null;
+
+        while (iterator.hasNext()) {
+            Candle candle = iterator.next();
+
+            if (candle.getTime().isAfter(at)) {
+                // If the candle time is after the requested time, we stop searching
+                break;
+            }
+
+            if (candle.getTime().equals(at)) {
+                return Optional.of(candle);
+            }
+
+            lastCandle = candle;
+        }
+
+        return Optional.ofNullable(lastCandle);
+    }
+
+    @Override
+    public List<Candle> getPeriod(String instrumentUid, Instant from, Instant to) {
         if (!Objects.equals(this.instrumentUid, instrumentUid)) {
             return Collections.emptyList();
         }
 
         resetInputStream(inputStream);
 
-        return () -> new CvsCandleIterator(inputStream)
-                .initInstrumentUid(instrumentUid)
-                .initFrom(from)
-                .initTo(to);
+        CvsCandleIterator iterator = new CvsCandleIterator(inputStream)
+            .initInstrumentUid(instrumentUid)
+            .initFrom(from)
+            .initTo(to);
+        List<Candle> resultCandles = new ArrayList<>();
+
+        while (iterator.hasNext()) {
+            resultCandles.add(iterator.next());
+        }
+
+        return resultCandles;
     }
 
     @Override
-    public Iterable<Candle> findByOpenPrice(FindPriceParams params) {
+    public List<Candle> findByOpenPrice(FindPriceParams params) {
         if (!Objects.equals(this.instrumentUid, params.getInstrumentUid())) {
             return Collections.emptyList();
         }

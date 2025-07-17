@@ -3,7 +3,7 @@ package com.siberalt.singularity.broker.impl.mock;
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.events.NewCandleEvent;
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.subscriptions.NewCandleSubscriptionSpec;
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.entity.candle.CandleRepository;
+import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.event.Event;
 import com.siberalt.singularity.event.EventHandler;
 import com.siberalt.singularity.event.subscription.DefaultSubscription;
@@ -20,7 +20,7 @@ import java.time.Instant;
 import java.util.*;
 
 public class NewCandleSubscriptionManager implements SubscriptionManager, EventInvoker, Initializable, TimeDependentUnit {
-    private final CandleRepository candleRepository;
+    private final ReadCandleRepository candleRepository;
     private HashMap<String, Iterator<Candle>> candleIterator;
     private final Set<String> instrumentIds;
     private EventObserver eventObserver;
@@ -29,7 +29,7 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
     private final HashMap<SubscriptionSpec<?>, List<EventHandler<?>>> eventHandlers = new HashMap<>();
     private final HashMap<EventHandler<?>, DefaultSubscription> handlerSubscriptions = new HashMap<>();
 
-    public NewCandleSubscriptionManager(CandleRepository candleRepository, Set<String> instrumentIds) {
+    public NewCandleSubscriptionManager(ReadCandleRepository candleRepository, Set<String> instrumentIds) {
         this.candleRepository = candleRepository;
         this.instrumentIds = instrumentIds;
     }

@@ -1,17 +1,16 @@
 package com.siberalt.singularity.broker.impl.mock;
 
+import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
+import com.siberalt.singularity.broker.contract.service.exception.InvalidRequestException;
+import com.siberalt.singularity.broker.contract.service.exception.NotFoundException;
 import com.siberalt.singularity.broker.contract.service.operation.request.GetPositionsRequest;
 import com.siberalt.singularity.broker.contract.service.user.AccessLevel;
 import com.siberalt.singularity.broker.contract.service.user.Account;
 import com.siberalt.singularity.broker.contract.service.user.AccountType;
+import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.OpenPosition;
 import com.siberalt.singularity.strategy.context.simulation.time.ClockStub;
-import com.siberalt.singularity.strategy.simulation.SimulationContext;
-import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
-import com.siberalt.singularity.broker.contract.service.exception.InvalidRequestException;
-import com.siberalt.singularity.broker.contract.service.exception.NotFoundException;
-import com.siberalt.singularity.broker.contract.value.money.Money;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -23,10 +22,9 @@ import java.util.function.Function;
 public class MockOperationsServiceTest {
     @Test
     void testBasic() throws AbstractException {
-        MockBroker mockBroker = new MockBroker(null, null, null);
         ClockStub clock = new ClockStub();
+        MockBroker mockBroker = new MockBroker(null, null, null, clock);
         clock.syncCurrentTime(Instant.parse("2020-12-30T07:00:00Z"));
-        mockBroker.applyContext(new SimulationContext(null, null, clock));
         MockOperationsService operationsService = mockBroker.getOperationsService();
 
         Account account = mockBroker

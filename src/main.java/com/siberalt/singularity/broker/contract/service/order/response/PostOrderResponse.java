@@ -1,26 +1,26 @@
 package com.siberalt.singularity.broker.contract.service.order.response;
 
-import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
+import com.siberalt.singularity.broker.contract.value.money.Money;
+import com.siberalt.singularity.entity.transaction.Transaction;
+
+import java.util.List;
 
 public class PostOrderResponse {
     protected String orderId;
-    protected ExecutionStatus executionReportStatus;
+    protected ExecutionStatus executionStatus;
     protected long lotsRequested;
     protected long lotsExecuted;
-    protected Money initialPrice;
-    protected Money totalPricePerOne;
-    protected Money totalPrice;
-    protected Money initialCommission;
-    protected Money executedCommission;
+    protected Money totalBalanceChange;
     protected Money aciValue;
     protected OrderDirection direction;
-    protected Money initialPricePerOne;
+    protected Money instrumentPrice;
     protected OrderType orderType;
     protected String message;
     protected String instrumentUid;
     protected String idempotencyKey;
+    protected List<Transaction> transactions;
 
     public String getOrderId() {
         return orderId;
@@ -32,11 +32,11 @@ public class PostOrderResponse {
     }
 
     public ExecutionStatus getExecutionStatus() {
-        return executionReportStatus;
+        return executionStatus;
     }
 
     public PostOrderResponse setExecutionStatus(ExecutionStatus executionReportStatus) {
-        this.executionReportStatus = executionReportStatus;
+        this.executionStatus = executionReportStatus;
         return this;
     }
 
@@ -58,48 +58,12 @@ public class PostOrderResponse {
         return this;
     }
 
-    public Money getInitialPrice() {
-        return initialPrice;
+    public Money getTotalBalanceChange() {
+        return totalBalanceChange;
     }
 
-    public PostOrderResponse setInitialPrice(Money initialPrice) {
-        this.initialPrice = initialPrice;
-        return this;
-    }
-
-    public Money getTotalPricePerOne() {
-        return totalPricePerOne;
-    }
-
-    public PostOrderResponse setTotalPricePerOne(Money totalPricePerOne) {
-        this.totalPricePerOne = totalPricePerOne;
-        return this;
-    }
-
-    public Money getTotalPrice() {
-        return totalPrice;
-    }
-
-    public PostOrderResponse setTotalPrice(Money totalPrice) {
-        this.totalPrice = totalPrice;
-        return this;
-    }
-
-    public Money getInitialCommission() {
-        return initialCommission;
-    }
-
-    public PostOrderResponse setInitialCommission(Money initialCommission) {
-        this.initialCommission = initialCommission;
-        return this;
-    }
-
-    public Money getExecutedCommission() {
-        return executedCommission;
-    }
-
-    public PostOrderResponse setExecutedCommission(Money executedCommission) {
-        this.executedCommission = executedCommission;
+    public PostOrderResponse setTotalBalanceChange(Money totalBalanceChange) {
+        this.totalBalanceChange = totalBalanceChange;
         return this;
     }
 
@@ -121,12 +85,12 @@ public class PostOrderResponse {
         return this;
     }
 
-    public Money getInitialPricePerOne() {
-        return initialPricePerOne;
+    public Money getInstrumentPrice() {
+        return instrumentPrice;
     }
 
-    public PostOrderResponse setInitialPricePerOne(Money initialPricePerOne) {
-        this.initialPricePerOne = initialPricePerOne;
+    public PostOrderResponse setInstrumentPrice(Money instrumentPrice) {
+        this.instrumentPrice = instrumentPrice;
         return this;
     }
 
@@ -163,6 +127,15 @@ public class PostOrderResponse {
 
     public PostOrderResponse setIdempotencyKey(String idempotencyKey) {
         this.idempotencyKey = idempotencyKey;
+        return this;
+    }
+
+    public List<Transaction> getTransactions() {
+        return transactions;
+    }
+
+    public PostOrderResponse setTransactions(List<Transaction> transactions) {
+        this.transactions = transactions;
         return this;
     }
 }

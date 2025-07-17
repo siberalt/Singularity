@@ -3,14 +3,14 @@ package com.siberalt.singularity.broker.contract.service.market.response;
 import java.util.List;
 
 public class GetLastPricesResponse {
-    List<LastPrice> lastPrices;
+    List<LastPrice> prices;
 
-    public List<LastPrice> getLastPrices() {
-        return lastPrices;
+    public List<LastPrice> getPrices() {
+        return prices;
     }
 
-    public GetLastPricesResponse setLastPrices(List<LastPrice> lastPrices) {
-        this.lastPrices = lastPrices;
+    public GetLastPricesResponse setPrices(List<LastPrice> prices) {
+        this.prices = prices;
         return this;
     }
 }

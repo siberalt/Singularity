@@ -1,17 +1,20 @@
 package com.siberalt.singularity.entity.order;
 
+import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
+import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
+import com.siberalt.singularity.broker.contract.service.order.request.PriceType;
 import com.siberalt.singularity.broker.contract.service.order.response.ExecutionStatus;
 import com.siberalt.singularity.broker.contract.service.order.response.OrderState;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.instrument.Instrument;
-import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
-import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
-import com.siberalt.singularity.broker.contract.service.order.request.PriceType;
+import com.siberalt.singularity.entity.transaction.Transaction;
 
 import java.time.Instant;
+import java.util.List;
 
 public class Order {
+    protected String id;
     protected String accountId;
     protected OrderDirection direction;
     protected OrderType orderType;
@@ -21,17 +24,22 @@ public class Order {
     protected Quotation requestedPrice;
     protected ExecutionStatus executionStatus;
     protected Instrument instrument;
-    protected Quotation initialPrice;
-    protected Quotation totalPrice;
-    protected Quotation commissionPrice;
-    protected Quotation totalPricePerOne;
-    protected Quotation initialPricePerOne;
+    protected Quotation balanceChange;
     protected Instant createdTime;
     protected long lotsExecuted;
     protected Instant expirationTime;
     protected Instant executedTime;
     protected Quotation instrumentPrice;
-    protected String orderId;
+    protected List<Transaction> transactions;
+
+    public List<Transaction> getTransactions() {
+        return transactions;
+    }
+
+    public Order setTransactions(List<Transaction> transactions) {
+        this.transactions = transactions;
+        return this;
+    }
 
     public Instant getExpirationTime() {
         return expirationTime;
@@ -87,39 +95,12 @@ public class Order {
         return this;
     }
 
-    public Quotation getTotalPricePerOne() {
-        return totalPricePerOne;
+    public Quotation getBalanceChange() {
+        return balanceChange;
     }
 
-    public Order setTotalPricePerOne(Quotation totalPricePerOne) {
-        this.totalPricePerOne = totalPricePerOne;
-        return this;
-    }
-
-    public Quotation getInitialPrice() {
-        return initialPrice;
-    }
-
-    public Order setInitialPrice(Quotation initialPrice) {
-        this.initialPrice = initialPrice;
-        return this;
-    }
-
-    public Quotation getTotalPrice() {
-        return totalPrice;
-    }
-
-    public Order setTotalPrice(Quotation totalPrice) {
-        this.totalPrice = totalPrice;
-        return this;
-    }
-
-    public Quotation getCommissionPrice() {
-        return commissionPrice;
-    }
-
-    public Order setCommissionPrice(Quotation commissionPrice) {
-        this.commissionPrice = commissionPrice;
+    public Order setBalanceChange(Quotation balanceChange) {
+        this.balanceChange = balanceChange;
         return this;
     }
 
@@ -154,15 +135,6 @@ public class Order {
         return executionStatus;
     }
 
-    public Quotation getInitialPricePerOne() {
-        return initialPricePerOne;
-    }
-
-    public Order setInitialPricePerOne(Quotation initialPricePerOne) {
-        this.initialPricePerOne = initialPricePerOne;
-        return this;
-    }
-
     public Order setExecutionStatus(ExecutionStatus executionStatus) {
         this.executionStatus = executionStatus;
         return this;
@@ -195,12 +167,12 @@ public class Order {
         return this;
     }
 
-    public String getOrderId() {
-        return orderId;
+    public String getId() {
+        return id;
     }
 
-    public Order setOrderId(String orderId) {
-        this.orderId = orderId;
+    public Order setId(String id) {
+        this.id = id;
         return this;
     }
 
@@ -217,7 +189,7 @@ public class Order {
         String instrumentCurrency = getInstrument().getCurrency();
 
         return new OrderState()
-            .setOrderId(orderId)
+            .setOrderId(id)
             .setDirection(direction)
             .setOrderType(orderType)
             .setInstrumentUid(instrument.getUid())
@@ -225,11 +197,7 @@ public class Order {
             .setIdempotencyKey(idempotencyKey)
             .setLotsRequested(lotsRequested)
             .setLotsExecuted(lotsExecuted)
-            .setInitialOrderPrice(Money.of(instrumentCurrency, initialPrice))
-            .setExecutedOrderPrice(Money.of(instrumentCurrency, totalPricePerOne))
-            .setExecutedCommission(Money.of(instrumentCurrency, commissionPrice))
-            .setTotalPrice(Money.of(instrumentCurrency, totalPrice))
-            .setInitialSecurityPrice(Money.of(instrumentCurrency, initialPricePerOne))
+            .setBalanceChange(Money.of(instrumentCurrency, balanceChange))
             .setExecutionStatus(executionStatus)
             .setCurrency(instrumentCurrency);
     }

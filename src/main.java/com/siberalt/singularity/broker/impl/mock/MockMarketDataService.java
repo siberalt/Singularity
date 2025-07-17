@@ -1,43 +1,44 @@
 package com.siberalt.singularity.broker.impl.mock;
 
+import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
+import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
+import com.siberalt.singularity.broker.contract.service.exception.ExceptionBuilder;
 import com.siberalt.singularity.broker.contract.service.market.MarketDataService;
 import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
 import com.siberalt.singularity.broker.contract.service.market.request.GetCandlesRequest;
+import com.siberalt.singularity.broker.contract.service.market.request.GetCurrentPriceRequest;
 import com.siberalt.singularity.broker.contract.service.market.request.GetLastPricesRequest;
-import com.siberalt.singularity.broker.contract.service.market.response.GetLastPricesResponse;
-import com.siberalt.singularity.broker.contract.service.market.response.HistoricCandle;
+import com.siberalt.singularity.broker.contract.service.market.response.*;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.entity.candle.FindPriceParams;
-import com.siberalt.singularity.broker.contract.service.market.response.GetCandlesResponse;
-import com.siberalt.singularity.broker.contract.service.market.response.LastPrice;
 import com.siberalt.singularity.entity.candle.Candle;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.StreamSupport;
 
 public class MockMarketDataService implements MarketDataService {
     protected MockBroker virtualBroker;
-    protected ReadCandleRepository candleStorage;
+    protected ReadCandleRepository candleRepository;
 
     public MockMarketDataService(MockBroker virtualBroker, ReadCandleRepository candleStorage) {
         this.virtualBroker = virtualBroker;
-        this.candleStorage = candleStorage;
+        this.candleRepository = candleStorage;
     }
 
     @Override
     public GetCandlesResponse getCandles(GetCandlesRequest request) {
-        var iterableCandles = candleStorage.getPeriod(
+        Iterable<Candle> iterableCandles = candleRepository.getPeriod(
                 request.getInstrumentUid(),
                 request.getFrom(),
                 request.getTo()
         );
 
-        var candles = adaptCandlesForInterval(iterableCandles, request.getInterval())
+        List<HistoricCandle> candles = adaptCandlesForInterval(iterableCandles, request.getInterval())
                 .stream()
                 .map(HistoricCandle::of)
                 .toList();
@@ -48,31 +49,53 @@ public class MockMarketDataService implements MarketDataService {
 
     @Override
     public GetLastPricesResponse getLastPrices(GetLastPricesRequest request) {
-        var currentTime = virtualBroker.context.getCurrentTime();
+        Instant currentTime = virtualBroker.clock.currentTime();
 
         List<LastPrice> lastPrices = new ArrayList<>();
 
-        for (var instrumentUid : request.getInstrumentsUid()) {
-            var candlesIterable = candleStorage.getPeriod(
+        if (null == request.getPeriod()) {
+            request.setPeriod(Duration.ofMinutes(30));
+        }
+
+        for (String instrumentUid : request.getInstrumentsUid()) {
+            List<Candle> candles = candleRepository.getPeriod(
                     instrumentUid,
                     currentTime.minus(request.getPeriod()),
                     currentTime
             );
-            StreamSupport
-                    .stream(candlesIterable.spliterator(), false)
+            candles.stream()
                     .map(x -> LastPrice.of(instrumentUid, x.getTime(), x.getOpenPrice()))
                     .forEach(lastPrices::add);
         }
 
-        return new GetLastPricesResponse().setLastPrices(lastPrices);
+        return new GetLastPricesResponse().setPrices(lastPrices);
+    }
+
+    @Override
+    public GetCurrentPriceResponse getCurrentPrice(GetCurrentPriceRequest request) throws AbstractException {
+        String instrumentUid = request.getInstrumentUid();
+        Instant at = virtualBroker.clock.currentTime();
+
+        Optional<Candle> candleOpt = candleRepository.findClosestBefore(instrumentUid, at);
+
+        if (candleOpt.isEmpty()) {
+            throw ExceptionBuilder.create(ErrorCode.INSTRUMENT_NOT_FOUND);
+        }
+
+        Candle candle = candleOpt.get();
+        Quotation price = candle.getOpenPrice();
+
+        return new GetCurrentPriceResponse()
+            .setInstrumentUid(instrumentUid)
+            .setPrice(price);
     }
 
     protected Optional<Candle> getCandleAt(String instrumentUid, Instant at) {
-        return candleStorage.getAt(instrumentUid, at);
+        return candleRepository.getAt(instrumentUid, at);
     }
 
     protected List<Candle> findCandlesByOpenPrice(CandleInterval interval, FindPriceParams findParams) {
-        return adaptCandlesForInterval(this.candleStorage.findByOpenPrice(findParams), interval);
+        return adaptCandlesForInterval(this.candleRepository.findByOpenPrice(findParams), interval);
     }
 
     protected List<Candle> adaptCandlesForInterval(Iterable<Candle> candles, CandleInterval candleInterval) {
@@ -140,6 +163,6 @@ public class MockMarketDataService implements MarketDataService {
     }
 
     protected Candle getInstrumentCurrentCandle(String instrumentUid) {
-        return candleStorage.getAt(instrumentUid, virtualBroker.context.getCurrentTime()).orElse(null);
+        return candleRepository.getAt(instrumentUid, virtualBroker.clock.currentTime()).orElse(null);
     }
 }

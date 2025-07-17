@@ -1,6 +1,6 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared;
 
-import com.siberalt.singularity.broker.contract.execution.SubsctiptionManagerAwareBroker;
+import com.siberalt.singularity.broker.contract.execution.EventSubscriptionBroker;
 import com.siberalt.singularity.broker.contract.service.market.MarketDataService;
 import com.siberalt.singularity.broker.contract.service.operation.OperationsService;
 import com.siberalt.singularity.broker.contract.service.order.OrderService;
@@ -8,7 +8,7 @@ import com.siberalt.singularity.broker.contract.service.user.UserService;
 import ru.tinkoff.piapi.contract.v1.OperationsServiceGrpc;
 import ru.tinkoff.piapi.core.InvestApi;
 
-public abstract class AbstractTinkoffBroker implements SubsctiptionManagerAwareBroker {
+public abstract class AbstractTinkoffBroker implements EventSubscriptionBroker {
     protected InvestApi api;
     protected com.siberalt.singularity.broker.impl.tinkoff.shared.OrderService orderService;
     protected com.siberalt.singularity.broker.impl.tinkoff.shared.MarketDataService marketDataService;
@@ -24,7 +24,7 @@ public abstract class AbstractTinkoffBroker implements SubsctiptionManagerAwareB
     protected void init(String token) {
         api = createApi(token);
         var channel = api.getChannel();
-        orderService = new com.siberalt.singularity.broker.impl.tinkoff.shared.OrderService(api.getOrdersService());
+        orderService = new com.siberalt.singularity.broker.impl.tinkoff.shared.OrderService(api.getOrdersService(), this);
         marketDataService = new com.siberalt.singularity.broker.impl.tinkoff.shared.MarketDataService(api.getMarketDataService());
         operationsService = new com.siberalt.singularity.broker.impl.tinkoff.shared.OperationsService(OperationsServiceGrpc.newBlockingStub(channel));
         userService = new com.siberalt.singularity.broker.impl.tinkoff.shared.UserService(api.getUserService());

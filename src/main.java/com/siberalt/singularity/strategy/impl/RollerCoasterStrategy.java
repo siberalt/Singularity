@@ -2,9 +2,10 @@ package com.siberalt.singularity.strategy.impl;
 
 import com.siberalt.singularity.strategy.StrategyInterface;
 import com.siberalt.singularity.strategy.context.AbstractContext;
-import com.siberalt.singularity.strategy.context.ContextAwareInterface;
+import com.siberalt.singularity.strategy.context.ContextAware;
+import com.siberalt.singularity.strategy.observer.Observer;
 
-public class RollerCoasterStrategy implements StrategyInterface, ContextAwareInterface {
+public class RollerCoasterStrategy implements StrategyInterface, ContextAware {
     private AbstractContext<?> context;
     private double sellDelta = 0.03;
     private double buyDelta = 0.03;
@@ -15,7 +16,7 @@ public class RollerCoasterStrategy implements StrategyInterface, ContextAwareInt
     }
 
     @Override
-    public void initialize() {
+    public void run(Observer observer) {
 
     }
 

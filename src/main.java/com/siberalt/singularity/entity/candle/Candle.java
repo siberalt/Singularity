@@ -93,6 +93,58 @@ public class Candle {
                 .setVolume(volume);
     }
 
+    public boolean isEmpty() {
+        return openPrice == null && closePrice == null && highPrice == null && lowPrice == null && volume == 0;
+    }
+
+    public Candle merge(Candle other) {
+        if (other == null || other.isEmpty()) {
+            return this;
+        }
+        return new Candle()
+                .setInstrumentUid(instrumentUid)
+                .setTime(time)
+                .setOpenPrice(openPrice != null ? openPrice : other.openPrice)
+                .setClosePrice(closePrice != null ? closePrice : other.closePrice)
+                .setHighPrice(highPrice != null ? highPrice : other.highPrice)
+                .setLowPrice(lowPrice != null ? lowPrice : other.lowPrice)
+                .setVolume(volume + other.volume);
+    }
+
+    public Candle add(Candle other) {
+        if (other == null) {
+            return this;
+        }
+        return new Candle()
+                .setInstrumentUid(instrumentUid)
+                .setTime(time)
+                .setOpenPrice(openPrice.add(other.openPrice))
+                .setClosePrice(closePrice.add(other.closePrice))
+                .setHighPrice(highPrice.add(other.highPrice))
+                .setLowPrice(lowPrice.add(other.lowPrice))
+                .setVolume(volume + other.volume);
+    }
+
+    public Candle divide(int divisor) {
+        if (divisor <= 0) {
+            throw new IllegalArgumentException("Divisor must be greater than zero");
+        }
+        return new Candle()
+                .setInstrumentUid(instrumentUid)
+                .setTime(time)
+                .setOpenPrice(openPrice.divide(divisor))
+                .setClosePrice(closePrice.divide(divisor))
+                .setHighPrice(highPrice.divide(divisor))
+                .setLowPrice(lowPrice.divide(divisor))
+                .setVolume(volume / divisor);
+    }
+
+    /**
+     * Calculates the average price of the candle using the formula:
+     * (lowPrice + highPrice + closePrice + openPrice) / 4
+     *
+     * @return The average price as a Quotation.
+     */
     public Quotation getAveragePrice() {
         return getAveragePrice(RoundingMode.HALF_EVEN);
     }
@@ -132,6 +184,17 @@ public class Candle {
             .setHighPrice(Quotation.of(high))
             .setLowPrice(Quotation.of(low))
             .setClosePrice(Quotation.of(close));
+    }
+
+    public static Candle of(Instant time, String instrumentUid, long volume, Quotation open, Quotation high, Quotation low, Quotation close) {
+        return new Candle()
+            .setInstrumentUid(instrumentUid)
+            .setTime(time)
+            .setVolume(volume)
+            .setOpenPrice(open)
+            .setHighPrice(high)
+            .setLowPrice(low)
+            .setClosePrice(close);
     }
 
     public static Candle of(Instant time, long volume, double open, double high, double low, double close) {

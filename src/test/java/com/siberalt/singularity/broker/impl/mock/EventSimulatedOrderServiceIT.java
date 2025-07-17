@@ -9,8 +9,6 @@ import com.siberalt.singularity.broker.impl.mock.config.MockBrokerConfig;
 import com.siberalt.singularity.entity.instrument.InstrumentRepository;
 import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
 import com.siberalt.singularity.entity.order.OrderRepository;
-import com.siberalt.singularity.scheduler.simulation.EventSimulatedScheduler;
-import com.siberalt.singularity.scheduler.simulation.SimulationScheduler;
 import com.siberalt.singularity.simulation.EventSimulator;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
@@ -18,7 +16,6 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.entity.candle.cvs.CvsCandleRepository;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
-import com.siberalt.singularity.strategy.simulation.SimulationContext;
 import com.siberalt.singularity.strategy.simulation.UserActionSimulator;
 import com.siberalt.singularity.test.util.ConfigLoader;
 import org.junit.jupiter.api.Assertions;
@@ -80,11 +77,8 @@ public class EventSimulatedOrderServiceIT {
         InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
         instrumentRepository.save(instrument);
         OrderRepository orderRepository = new InMemoryOrderRepository();
-
-        broker = new EventMockBroker(candleStorage, instrumentRepository, orderRepository);
         clock = new SimpleSimulationClock();
-        SimulationScheduler<String> scheduler = new EventSimulatedScheduler<>();
-        broker.applyContext(new SimulationContext(scheduler, null, clock));
+        broker = new EventMockBroker(candleStorage, instrumentRepository, orderRepository, clock);
 
         EventSimulatedOrderService orderService = broker.getOrderService();
         operationsService = broker.getOperationsService();

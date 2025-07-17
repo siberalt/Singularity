@@ -4,6 +4,7 @@ import com.siberalt.singularity.entity.candle.ComparisonOperator;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
+import java.math.RoundingMode;
 
 public class Quotation {
     public static final Quotation ZERO = Quotation.of(BigDecimal.ZERO);
@@ -86,20 +87,20 @@ public class Quotation {
     // endregion Arithmetic operators
 
     // region logic operators
-    public boolean isMore(Quotation value) {
-        return isMore(value.toBigDecimal());
+    public boolean isGreaterThan(Quotation value) {
+        return isGreaterThan(value.toBigDecimal());
     }
 
-    public boolean isMore(BigDecimal value) {
+    public boolean isGreaterThan(BigDecimal value) {
         return toBigDecimal().compareTo(value) > 0;
     }
 
-    public boolean isMoreOrEqual(BigDecimal value) {
+    public boolean isGreaterOrEqual(BigDecimal value) {
         return toBigDecimal().compareTo(value) >= 0;
     }
 
-    public boolean isMoreOrEqual(Quotation value) {
-        return isMoreOrEqual(value.toBigDecimal());
+    public boolean isGreaterOrEqual(Quotation value) {
+        return isGreaterOrEqual(value.toBigDecimal());
     }
 
     public boolean isEqual(Quotation value) {
@@ -161,8 +162,8 @@ public class Quotation {
             case EQUAL -> quotationA.isEqual(quotationB);
             case LESS -> quotationA.isLess(quotationB);
             case LESS_OR_EQUAL -> quotationA.isLessOrEqual(quotationB);
-            case MORE -> quotationA.isMore(quotationB);
-            case MORE_OR_EQUAL -> quotationA.isMoreOrEqual(quotationB);
+            case MORE -> quotationA.isGreaterThan(quotationB);
+            case MORE_OR_EQUAL -> quotationA.isGreaterOrEqual(quotationB);
             case NOT_EQUAL -> !quotationA.isEqual(quotationB);
         };
     }
@@ -187,5 +188,20 @@ public class Quotation {
         return new Quotation()
                 .setUnits(value.longValue())
                 .setNano(value.remainder(BigDecimal.ONE).multiply(BigDecimal.valueOf(1_000_000_000)).intValue());
+    }
+
+    public BigDecimal divide(BigDecimal bigDecimal, RoundingMode roundingMode) {
+        if (bigDecimal.compareTo(BigDecimal.ZERO) == 0) {
+            throw new ArithmeticException("Division by zero is not allowed.");
+        }
+        return toBigDecimal().divide(bigDecimal, roundingMode);
+    }
+
+    public boolean isZero() {
+        return units == 0 && nano == 0;
+    }
+
+    public boolean isNegative() {
+        return units < 0 || (units == 0 && nano < 0);
     }
 }

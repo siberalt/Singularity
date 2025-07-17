@@ -1,7 +1,6 @@
 package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
-import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.broker.contract.service.order.request.PostOrderRequest;
@@ -9,16 +8,18 @@ import com.siberalt.singularity.broker.contract.service.order.response.Execution
 import com.siberalt.singularity.broker.contract.service.order.response.PostOrderResponse;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.shared.exception.MockBrokerException;
-import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.broker.impl.mock.shared.order.OrderEvent;
+import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.ComparisonOperator;
+import com.siberalt.singularity.entity.candle.FindPriceParams;
+import com.siberalt.singularity.entity.instrument.Instrument;
+import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.entity.order.OrderRepository;
+import com.siberalt.singularity.entity.transaction.TransactionSpec;
 import com.siberalt.singularity.simulation.Event;
 import com.siberalt.singularity.simulation.EventInvoker;
 import com.siberalt.singularity.simulation.EventObserver;
 import com.siberalt.singularity.simulation.TimeDependentUnit;
-import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.entity.candle.ComparisonOperator;
-import com.siberalt.singularity.entity.candle.FindPriceParams;
 import com.siberalt.singularity.strategy.context.Clock;
 
 import java.time.Instant;
@@ -55,13 +56,15 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
                 logger.info(
                     String.format("[%s] Executing order event: %s", clock.currentTime(), orderEvent.getEvent().getId())
                 );
-                Order order = orderEvent.getOrder();
 
                 try {
+                    Order order = orderEvent.getOrder();
+                    List<TransactionSpec> transactionSpecs = calculateTransactions(order);
+
                     if (order.getDirection() == OrderDirection.BUY) {
-                        buyInstrument(order);
+                        buyInstrument(order, transactionSpecs);
                     } else {
-                        sellInstrument(order);
+                        sellInstrument(order, transactionSpecs);
                     }
                 } catch (AbstractException e) {
                     logger.severe(
@@ -85,50 +88,50 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
     }
 
     @Override
-    protected void buyInstrument(Order order) throws AbstractException {
+    protected void buyInstrument(Order order, List<TransactionSpec> transactionSpecs) throws AbstractException {
         logger.info(
             String.format(
                 "[%s] Buying instrument %s, Amount: %d, Instrument Price: %s, Total Price: %s, Commission: %s",
-                mockBroker.context.getCurrentTime(),
+                mockBroker.clock.currentTime(),
                 order.getInstrument().getUid(),
                 order.getLotsRequested(),
                 order.getInstrumentPrice(),
-                order.getTotalPrice(),
-                order.getCommissionPrice()
+                order.getBalanceChange(),
+                transactionSpecs
             )
         );
-        super.buyInstrument(order);
+        super.buyInstrument(order, transactionSpecs);
     }
 
     @Override
-    protected PostOrderResponse sellInstrument(Order order) throws AbstractException {
+    protected PostOrderResponse sellInstrument(Order order, List<TransactionSpec> transactionSpecs) throws AbstractException {
         logger.info(
             String.format(
                 "[%s] Selling instrument %s, Amount: %d, Instrument Price: %s, Total Price: %s, Commission: %s",
-                mockBroker.context.getCurrentTime(),
+                mockBroker.clock.currentTime(),
                 order.getInstrument().getUid(),
                 order.getLotsRequested(),
                 order.getInstrumentPrice(),
-                order.getTotalPrice(),
-                order.getCommissionPrice()
+                order.getBalanceChange(),
+                transactionSpecs
             )
         );
-        return super.sellInstrument(order);
+        return super.sellInstrument(order, transactionSpecs);
     }
 
     protected PostOrderResponse buy(PostOrderRequest request) throws AbstractException {
         var order = createOrder(request);
-        calculateOrderPrices(order);
+        List<TransactionSpec> transactionSpecs = calculateTransactions(order);
         checkEnoughOfMoneyToBuy(order);
 
-        if (canBuyNow(request.getOrderType(), request.getPrice(), order.getInitialPricePerOne())) {
-            buyInstrument(order);
+        if (canBuyNow(order)) {
+            buyInstrument(order, transactionSpecs);
         } else {
             logger.info(
                 String.format(
                     "[%s] Predicting market event for order %s",
-                    mockBroker.context.getCurrentTime(),
-                    order.getOrderId()
+                    mockBroker.clock.currentTime(),
+                    order.getId()
                 )
             );
             predictMarketEvent(order);
@@ -139,18 +142,18 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
 
     @Override
     protected PostOrderResponse sell(PostOrderRequest request) throws AbstractException {
-        var order = createOrder(request);
-        calculateOrderPrices(order);
+        Order order = createOrder(request);
+        List<TransactionSpec> transactionSpecs = calculateTransactions(order);
         checkEnoughOfPositionToSell(order);
 
-        if (canSellNow(request.getOrderType(), request.getPrice(), order.getInstrumentPrice())) {
-            sellInstrument(order);
+        if (canSellNow(order)) {
+            sellInstrument(order, transactionSpecs);
         } else {
             logger.info(
                 String.format(
                     "[%s] Predicting market event for order %s",
-                    mockBroker.context.getCurrentTime(),
-                    order.getOrderId()
+                    mockBroker.clock.currentTime(),
+                    order.getId()
                 )
             );
             predictMarketEvent(order);
@@ -160,7 +163,7 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
     }
 
     protected void predictMarketEvent(Order order) throws AbstractException {
-        var currentTime = mockBroker.context.getCurrentTime();
+        var currentTime = mockBroker.clock.currentTime();
         var endOrderLifeTime = currentTime.plus(limitOrderLifeTime);
         Instrument instrument = order.getInstrument();
 
@@ -175,18 +178,14 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
         Instant eventTime;
         ExecutionStatus executionStatus;
 
-        Order newOrderState = new Order()
+        Order futureOrder = new Order()
             .setAccountId(order.getAccountId())
-            .setOrderId(order.getOrderId())
+            .setId(order.getId())
             .setDirection(order.getDirection())
             .setOrderType(order.getOrderType())
             .setLotsRequested(order.getLotsRequested())
             .setRequestedPrice(order.getRequestedPrice())
             .setCreatedTime(currentTime)
-            .setInitialPrice(order.getInitialPrice())
-            .setInitialPricePerOne(order.getInitialPricePerOne())
-            .setTotalPricePerOne(order.getTotalPricePerOne())
-            .setTotalPrice(order.getTotalPrice())
             .setInstrument(order.getInstrument())
             .setInstrumentPrice(order.getInstrumentPrice());
 
@@ -198,7 +197,7 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
                 order.getDirection(),
                 marketSignalCandle
             );
-            calculateOrderPrices(newOrderState.setInstrumentPrice(instrumentPrice));
+            futureOrder.setInstrumentPrice(instrumentPrice);
         } else {
             var lastCandle = mockBroker.marketDataService.getCandleAt(
                 instrument.getUid(),
@@ -213,16 +212,15 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
             executionStatus = ExecutionStatus.REJECTED;
         }
 
-        newOrderState.setExecutionStatus(executionStatus);
+        futureOrder.setExecutionStatus(executionStatus);
 
-        var event = Event.create(eventTime, this);
-        var orderEvent = new OrderEvent(newOrderState, event);
-        orderEvents.put(newOrderState.getOrderId(), orderEvent);
+        Event event = Event.create(eventTime, this);
+        OrderEvent orderEvent = new OrderEvent(futureOrder, event);
+        orderEvents.put(futureOrder.getId(), orderEvent);
         orderEventsByTime.computeIfAbsent(eventTime, k -> new ArrayList<>()).add(orderEvent);
 
         order
-            .setTotalPricePerOne(Quotation.ZERO)
-            .setTotalPrice(Quotation.ZERO)
+            .setBalanceChange(Quotation.ZERO)
             .setLotsExecuted(0)
             .setExecutionStatus(ExecutionStatus.NEW);
 
@@ -233,7 +231,7 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
     @Override
     protected void cancel(Order order) {
         super.cancel(order);
-        eventObserver.cancelEvent(orderEvents.get(order.getOrderId()).getEvent());
+        eventObserver.cancelEvent(orderEvents.get(order.getId()).getEvent());
     }
 
     protected Candle findMarketSignalCandle(

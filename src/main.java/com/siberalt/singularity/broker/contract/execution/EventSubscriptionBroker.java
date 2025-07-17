@@ -2,7 +2,7 @@ package com.siberalt.singularity.broker.contract.execution;
 
 import com.siberalt.singularity.event.subscription.SubscriptionManager;
 
-public interface SubsctiptionManagerAwareBroker extends Broker {
+public interface EventSubscriptionBroker extends Broker {
     /**
      * Gets the event dispatcher.
      *

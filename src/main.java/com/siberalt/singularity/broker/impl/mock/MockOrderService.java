@@ -5,13 +5,16 @@ import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.ExceptionBuilder;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
 import com.siberalt.singularity.broker.contract.service.operation.response.Position;
-import com.siberalt.singularity.broker.contract.service.order.OrderService;
+import com.siberalt.singularity.broker.contract.service.order.*;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.order.response.*;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.shared.exception.MockBrokerException;
+import com.siberalt.singularity.broker.impl.mock.shared.operation.AccountBalance;
 import com.siberalt.singularity.broker.impl.mock.shared.user.AccountState;
+import com.siberalt.singularity.entity.transaction.Transaction;
+import com.siberalt.singularity.entity.transaction.TransactionSpec;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.entity.order.Order;
@@ -19,9 +22,7 @@ import com.siberalt.singularity.entity.order.OrderRepository;
 
 import java.math.BigDecimal;
 import java.time.Duration;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 
 public class MockOrderService implements OrderService {
     protected MockBroker mockBroker;
@@ -30,6 +31,10 @@ public class MockOrderService implements OrderService {
     protected double commissionRatio = 0.003;
     protected Duration limitOrderLifeTime = Duration.ofDays(1);
     protected OrderRepository orderRepository;
+    protected CommissionTransactionSpecProvider commissionTransactionSpecProvider = new CommissionTransactionSpecProvider(commissionRatio);
+    protected TransactionService transactionService = new TransactionService()
+        .addProvider(new OrderTransactionSpecProvider())
+        .addProvider(commissionTransactionSpecProvider);
 
     public MockOrderService(MockBroker mockBroker, OrderRepository orderRepository) {
         this.mockBroker = mockBroker;
@@ -37,20 +42,23 @@ public class MockOrderService implements OrderService {
     }
 
     @Override
+    public CalculateResponse calculate(CalculateRequest request) throws AbstractException {
+        validatePostOrderRequest(request.getPostOrderRequest());
+
+        Order order = createOrder(request.getPostOrderRequest());
+        List<TransactionSpec> transactionSpecs = calculateTransactions(order);
+
+        return new CalculateResponse(
+            order.getInstrument().getUid(),
+            order.getBalanceChange(),
+            order.getLotsRequested(),
+            transactionSpecs
+        );
+    }
+
+    @Override
     public PostOrderResponse post(PostOrderRequest request) throws AbstractException {
-        checkAccountAvailable(request.getAccountId());
-
-        if (request.getPrice() == null && OrderType.LIMIT == request.getOrderType()) {
-            throw ExceptionBuilder.create(ErrorCode.MISSING_PARAMETER_PRICE);
-        }
-
-        if (request.getPrice() != null && request.getPrice().isLessOrEqual(BigDecimal.ZERO)) {
-            throw ExceptionBuilder.create(ErrorCode.INVALID_PARAMETER_PRICE);
-        }
-
-        if (request.getQuantity() <= 0) {
-            throw ExceptionBuilder.create(ErrorCode.QUANTITY_MUST_BE_POSITIVE);
-        }
+        validatePostOrderRequest(request);
 
         return switch (request.getDirection()) {
             case BUY -> buy(request);
@@ -75,8 +83,7 @@ public class MockOrderService implements OrderService {
 
         cancel(cancelOrder);
 
-        return new CancelOrderResponse()
-            .setTime(mockBroker.context.getCurrentTime());
+        return new CancelOrderResponse().setTime(mockBroker.clock.currentTime());
     }
 
     @Override
@@ -145,6 +152,11 @@ public class MockOrderService implements OrderService {
     }
 
     public void setCommissionRatio(double commissionRatio) {
+        if (commissionRatio < 0 || commissionRatio > 1) {
+            throw new IllegalArgumentException("Commission ratio must be between 0 and 1");
+        }
+
+        commissionTransactionSpecProvider.setCommissionRatio(commissionRatio);
         this.commissionRatio = commissionRatio;
     }
 
@@ -154,88 +166,122 @@ public class MockOrderService implements OrderService {
             .setExecutionStatus(ExecutionStatus.CANCELLED);
     }
 
+    protected void validatePostOrderRequest(PostOrderRequest request) throws AbstractException {
+        if (request.getAccountId() == null || request.getAccountId().isEmpty()) {
+            throw ExceptionBuilder.create(ErrorCode.MISSING_PARAMETER_ACCOUNT_ID);
+        }
+
+        checkAccountAvailable(request.getAccountId());
+
+        if (request.getInstrumentId() == null || request.getInstrumentId().isEmpty()) {
+            throw ExceptionBuilder.create(ErrorCode.MISSING_PARAMETER_INSTRUMENT_ID);
+        }
+
+        if (request.getDirection() == null) {
+            throw ExceptionBuilder.create(ErrorCode.MISSING_PARAMETER_DIRECTION);
+        }
+
+        if (request.getOrderType() == null) {
+            throw ExceptionBuilder.create(ErrorCode.MISSING_PARAMETER_ORDER_TYPE);
+        }
+
+        if (request.getQuantity() <= 0) {
+            throw ExceptionBuilder.create(ErrorCode.QUANTITY_MUST_BE_POSITIVE);
+        }
+
+        if (request.getOrderType().equals(OrderType.LIMIT)) {
+            if (request.getPrice() == null) {
+                throw ExceptionBuilder.create(ErrorCode.MISSING_PARAMETER_PRICE);
+            }
+
+            if (request.getPrice().isLessOrEqual(Quotation.ZERO)) {
+                throw ExceptionBuilder.create(ErrorCode.INVALID_PARAMETER_PRICE);
+            }
+        }
+    }
+
     protected PostOrderResponse buy(PostOrderRequest request) throws AbstractException {
         Order order = createOrder(request);
-        calculateOrderPrices(order);
+        List<TransactionSpec> transactionSpecs = calculateTransactions(order);
         checkEnoughOfMoneyToBuy(order);
 
-        if (!canBuyNow(request.getOrderType(), request.getPrice(), order.getInitialPricePerOne())) {
+        if (!canBuyNow(order)) {
             throw ExceptionBuilder
                 .newBuilder(ErrorCode.UNIMPLEMENTED)
                 .withMessage("Limit orders are not implemented yet")
                 .build();
         }
 
-        buyInstrument(order);
+        buyInstrument(order, transactionSpecs);
 
         return toServiceResponse(order);
     }
 
-    protected boolean canBuyNow(OrderType orderType, Quotation priceLimit, Quotation currentPrice) {
-        return OrderType.LIMIT != orderType || priceLimit.isMoreOrEqual(currentPrice);
+    protected boolean canBuyNow(Order order) {
+        Quotation priceLimit = order.getRequestedPrice();
+
+        return OrderType.LIMIT != order.getOrderType() || priceLimit.isGreaterOrEqual(order.getInstrumentPrice());
     }
 
-    protected boolean canSellNow(OrderType orderType, Quotation priceLimit, Quotation currentPrice) {
-        return OrderType.LIMIT != orderType || priceLimit.isLessOrEqual(currentPrice);
+    protected boolean canSellNow(Order order) {
+        Quotation priceLimit = order.getRequestedPrice();
+
+        return OrderType.LIMIT != order.getOrderType() || priceLimit.isLessOrEqual(order.getInstrumentPrice());
     }
 
-    protected PostOrderResponse sellInstrument(Order order) throws AbstractException {
+    protected PostOrderResponse sellInstrument(Order order, List<TransactionSpec> transactionSpecs) throws AbstractException {
         MockOperationsService operationsService = mockBroker.operationsService;
 
         order
-            .setExecutedTime(mockBroker.context.getCurrentTime())
+            .setExecutedTime(mockBroker.clock.currentTime())
             .setExecutionStatus(ExecutionStatus.FILL)
             .setLotsExecuted(order.getLotsRequested());
 
-        calculateOrderPrices(order);
         registerOrder(order);
 
-        operationsService.addMoney(
-            order.getAccountId(), Money.of(order.getInstrument().getCurrency(), order.getTotalPrice())
-        );
+        AccountBalance balance = operationsService.getAccountBalance(order.getAccountId());
+        List<Transaction> transactions = balance.applyTransactions(transactionSpecs);
         operationsService.subtractFromPosition(
             order.getAccountId(),
             order.getInstrument().getUid(),
             order.getLotsRequested() * order.getInstrument().getLot()
         );
+        order.setTransactions(transactions);
 
         return toServiceResponse(order);
     }
 
-    protected void buyInstrument(Order order) throws AbstractException {
+    protected void buyInstrument(Order order, List<TransactionSpec> transactionSpecs) throws AbstractException {
         MockOperationsService operationsService = mockBroker.operationsService;
         order
-            .setExecutedTime(mockBroker.context.getCurrentTime())
+            .setExecutedTime(mockBroker.clock.currentTime())
             .setExecutionStatus(ExecutionStatus.FILL)
             .setLotsExecuted(order.getLotsRequested());
-
         registerOrder(order);
 
-        Money totalPriceMoney = Money.of(order.getInstrument().getCurrency(), order.getTotalPrice());
-
-        operationsService.subtractMoney(
-            order.getAccountId(), totalPriceMoney
-        );
+        AccountBalance balance = operationsService.getAccountBalance(order.getAccountId());
+        List<Transaction> transactions = balance.applyTransactions(transactionSpecs);
         operationsService.addToPosition(
             order.getAccountId(),
             order.getInstrument().getUid(),
             order.getLotsRequested() * order.getInstrument().getLot()
         );
+        order.setTransactions(transactions);
     }
 
     protected PostOrderResponse sell(PostOrderRequest request) throws AbstractException {
         Order order = createOrder(request);
-        calculateOrderPrices(order);
+        List<TransactionSpec> transactionSpecs = calculateTransactions(order);
         checkEnoughOfPositionToSell(order);
 
-        if (!canSellNow(request.getOrderType(), request.getPrice(), order.getInstrumentPrice())) {
+        if (!canSellNow(order)) {
             throw ExceptionBuilder
                 .newBuilder(ErrorCode.UNIMPLEMENTED)
                 .withMessage("Limit orders are not implemented yet")
                 .build();
         }
 
-        return sellInstrument(order);
+        return sellInstrument(order, transactionSpecs);
     }
 
     protected Order createOrder(PostOrderRequest request) throws AbstractException {
@@ -256,8 +302,9 @@ public class MockOrderService implements OrderService {
         Quotation instrumentPrice = calculateCurrentPrice(request.getOrderType(), request.getDirection(), currentCandle);
 
         return new Order()
-            .setOrderId(UUID.randomUUID().toString())
-            .setCreatedTime(mockBroker.context.getCurrentTime())
+            .setId(UUID.randomUUID().toString())
+            .setRequestedPrice(request.getPrice())
+            .setCreatedTime(mockBroker.clock.currentTime())
             .setLotsRequested(request.getQuantity())
             .setAccountId(request.getAccountId())
             .setDirection(request.getDirection())
@@ -308,7 +355,7 @@ public class MockOrderService implements OrderService {
     protected void checkEnoughOfMoneyToBuy(Order order) throws AbstractException {
         boolean isEnoughOfMoney = this.mockBroker.operationsService.isEnoughOfMoney(
             order.getAccountId(),
-            Money.of(order.getInstrument().getCurrency(), order.getTotalPrice())
+            Money.of(order.getInstrument().getCurrency(), order.getBalanceChange())
         );
 
         if (!isEnoughOfMoney) {
@@ -330,47 +377,28 @@ public class MockOrderService implements OrderService {
 
     protected PostOrderResponse toServiceResponse(Order order) {
         String currency = order.getInstrument().getCurrency();
-        Money commissionPriceMoney = Money.of(currency, order.getCommissionPrice());
 
         return new PostOrderResponse()
-            .setOrderId(order.getOrderId())
+            .setOrderId(order.getId())
             .setIdempotencyKey(order.getIdempotencyKey())
             .setDirection(order.getDirection())
-            .setTotalPricePerOne(Money.of(currency, order.getTotalPricePerOne()))
-            .setExecutedCommission(commissionPriceMoney)
-            .setInitialCommission(commissionPriceMoney)
+            .setTransactions(order.getTransactions())
             .setInstrumentUid(order.getInstrument().getUid())
             .setOrderType(order.getOrderType())
             .setLotsExecuted(order.getLotsExecuted())
             .setLotsRequested(order.getLotsRequested())
-            .setTotalPrice(Money.of(currency, order.getTotalPrice()))
-            .setInitialPrice(Money.of(currency, order.getInitialPrice()))
-            .setInitialPricePerOne(Money.of(currency, order.getInitialPricePerOne()))
+            .setTotalBalanceChange(Money.of(currency, order.getBalanceChange()))
+            .setInstrumentPrice(Money.of(currency, order.getInstrumentPrice()))
             .setExecutionStatus(order.getExecutionStatus());
     }
 
-    protected void calculateOrderPrices(Order order) {
-        Instrument instrument = order.getInstrument();
-        Quotation instrumentPrice = order.getInstrumentPrice();
+    protected List<TransactionSpec> calculateTransactions(Order order) {
+        List<TransactionSpec> transactionSpecs = transactionService.calculateSpecs(order);
 
-        long quantity = order.getLotsRequested();
-        int lotSize = instrument.getLot();
+        Quotation balanceChange = transactionService.sumSpecs(transactionSpecs);
+        order.setBalanceChange(balanceChange);
 
-        Quotation initialPrice = instrumentPrice
-            .multiply(BigDecimal.valueOf(lotSize))
-            .multiply(BigDecimal.valueOf(quantity));
-        Quotation commissionPrice = initialPrice.multiply(Quotation.of(commissionRatio));
-        Quotation totalPrice = OrderDirection.BUY == order.getDirection()
-            ? initialPrice.add(commissionPrice)
-            : initialPrice.subtract(commissionPrice);
-        Quotation totalPricePerOne = totalPrice.divide(BigDecimal.valueOf(quantity * lotSize));
-
-        order
-            .setCommissionPrice(commissionPrice)
-            .setInitialPrice(initialPrice)
-            .setInitialPricePerOne(instrumentPrice)
-            .setTotalPrice(totalPrice)
-            .setTotalPricePerOne(totalPricePerOne);
+        return transactionSpecs;
     }
 
     protected void registerOrder(Order order) throws AbstractException {

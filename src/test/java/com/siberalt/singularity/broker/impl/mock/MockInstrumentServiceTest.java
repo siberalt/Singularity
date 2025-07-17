@@ -34,9 +34,8 @@ public class MockInstrumentServiceTest {
                 .setPositionUid(instrumentPositionUid)
         );
 
-        var mockBroker = new MockBroker(null, instrumentRepository, null);
+        var mockBroker = new MockBroker(null, instrumentRepository, null, new ClockStub());
         var instrumentService = mockBroker.getInstrumentService();
-        mockBroker.applyContext(new SimulationContext(null, null, new ClockStub()));
 
         var response = instrumentService.get(GetRequest.of(instrumentUid));
         var instrument = response.getInstrument();

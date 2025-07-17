@@ -5,6 +5,7 @@ import com.siberalt.singularity.entity.candle.Candle;
 
 import java.io.InputStream;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Iterator;
 import java.util.Scanner;
 import java.util.regex.Pattern;
@@ -22,7 +23,7 @@ class CvsCandleIterator implements Iterator<Candle> {
 
     @Override
     public boolean hasNext() {
-        return currentTime.isBefore(to) && scanner.hasNext();
+        return (currentTime == null || to == null || currentTime.isBefore(to)) && scanner.hasNext();
     }
 
     @Override
@@ -36,10 +37,11 @@ class CvsCandleIterator implements Iterator<Candle> {
             line = scanner.nextLine();
         }
 
-        String[] data = line.split(";");
-        currentTime = Instant.parse(data[1]);
+        try {
+            String[] data = line.split(";");
+            currentTime = Instant.parse(data[1]);
 
-        return new Candle()
+            return new Candle()
                 .setInstrumentUid(instrumentUid == null ? data[0] : instrumentUid)
                 .setTime(currentTime)
                 .setOpenPrice(Quotation.of(data[2]))
@@ -47,6 +49,10 @@ class CvsCandleIterator implements Iterator<Candle> {
                 .setHighPrice(Quotation.of(data[4]))
                 .setLowPrice(Quotation.of(data[5]))
                 .setVolume(Long.parseLong(data[6]));
+        } catch (DateTimeParseException exception) {
+            System.out.println("Invalid date format in line: " + line);
+            return this.next();
+        }
     }
 
     public CvsCandleIterator initFrom(Instant from) {

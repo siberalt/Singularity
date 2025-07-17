@@ -17,10 +17,6 @@ public class GetLastPricesRequest {
     }
 
     public Duration getPeriod() {
-        if (null == period) {
-            return Duration.ofMinutes(30);
-        }
-
         return period;
     }
 

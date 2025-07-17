@@ -128,11 +128,40 @@ class EventManagerTest {
         when(spec.getEventType()).thenReturn(Event.class);
 
         Subscription subscription = eventManager.subscribe(spec, handler);
-        subscription.unsubscribe();
+        subscription.stop();
         eventManager.dispatch(new SomeOtherEvent(UUID.randomUUID())).join();
 
         assertFalse(subscription.isActive());
         verify(triggerManager).disable(spec);
         verifyNoInteractions(handler);
+    }
+
+    @Test
+    void closeDisablesAllTriggers() {
+        EventManager eventManager = new EventManager(Executors.newSingleThreadExecutor(), Set.of(Event.class));
+        eventManager.setTriggerManager(triggerManager);
+
+        SubscriptionSpec<Event> spec1 = mock(SubscriptionSpec.class);
+        SubscriptionSpec<Event> spec2 = mock(SubscriptionSpec.class);
+        when(spec1.getEventType()).thenReturn(Event.class);
+        when(spec2.getEventType()).thenReturn(Event.class);
+
+        eventManager.subscribe(spec1, mock(EventHandler.class));
+        eventManager.subscribe(spec2, mock(EventHandler.class));
+
+        eventManager.close();
+
+        verify(triggerManager).disable(spec1);
+        verify(triggerManager).disable(spec2);
+    }
+
+    @Test
+    void closeDoesNothingWhenNoSubscriptionsExist() {
+        EventManager eventManager = new EventManager(Executors.newSingleThreadExecutor(), Set.of(Event.class));
+        eventManager.setTriggerManager(triggerManager);
+
+        eventManager.close();
+
+        verifyNoInteractions(triggerManager);
     }
 }

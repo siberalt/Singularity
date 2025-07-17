@@ -48,6 +48,21 @@ public class EventSimulator {
         this.synchronizableUnits.add(synchronizableUnit);
     }
 
+    public void addSimulationUnit(SimulationUnit simulationUnit) {
+        if (simulationUnit instanceof TimeDependentUnit timeDependentUnit) {
+            addTimeDependentUnit(timeDependentUnit);
+        }
+        if (simulationUnit instanceof Initializable initializableUnit) {
+            addInitializableUnit(initializableUnit);
+        }
+        if (simulationUnit instanceof EventInvoker eventInvoker) {
+            addEventInvoker(eventInvoker);
+        }
+        if (simulationUnit instanceof Synchronizable synchronizableUnit) {
+            addSynchronizableUnit(synchronizableUnit);
+        }
+    }
+
     public void addTask(Runnable task) {
         synchronizer.registerTask(task);
     }

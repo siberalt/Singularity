@@ -11,5 +11,5 @@ public interface ReadOrderRepository {
 
     List<Order> getByAccountId(String accountId);
 
-    Iterable<Order> getByInstrumentUid(String instrumentUid);
+    Iterable<Order> getByAccountIdAndInstrumentUid(String accountId, String instrumentUid);
 }

@@ -16,6 +16,7 @@ import com.siberalt.singularity.simulation.EventObserver;
 import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.strategy.context.Clock;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -35,9 +36,10 @@ public class EventSimulatedOrderServiceTest extends MockOrderServiceTest {
     MockBroker createBroker(
         ReadCandleRepository candleStorage,
         ReadInstrumentRepository instrumentStorage,
-        OrderRepository orderRepository
+        OrderRepository orderRepository,
+        Clock clock
     ) {
-        var broker = new EventMockBroker(candleStorage, instrumentStorage, orderRepository);
+        var broker = new EventMockBroker(candleStorage, instrumentStorage, orderRepository, clock);
         eventObserver = new EventObserver();
         broker.getOrderService().observeEventsBy(eventObserver);
 
@@ -93,8 +95,7 @@ public class EventSimulatedOrderServiceTest extends MockOrderServiceTest {
         assertEquals(ExecutionStatus.CANCELLED, state.getExecutionStatus());
         assertEquals(10, state.getLotsRequested());
         assertEquals(0, state.getLotsExecuted());
-        assertEquals(Quotation.of(0), state.getTotalPrice().getQuotation());
-        assertEquals(Quotation.of(0), state.getExecutedOrderPrice().getQuotation());
+        assertEquals(Quotation.of(0), state.getBalanceChange().getQuotation());
 
         assertThrowsWithErrorCode(
             InvalidRequestException.class,

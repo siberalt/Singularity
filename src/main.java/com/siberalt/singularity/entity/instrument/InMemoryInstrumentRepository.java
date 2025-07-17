@@ -38,4 +38,9 @@ public class InMemoryInstrumentRepository implements InstrumentRepository {
                 ? instrumentsByType.get(instrumentType)
                 : Collections::emptyIterator;
     }
+
+    @Override
+    public List<Instrument> getAll() {
+        return new ArrayList<>(instruments.values());
+    }
 }

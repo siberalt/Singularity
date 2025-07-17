@@ -1,5 +1,7 @@
 package com.siberalt.singularity.simulation.synch;
 
-public interface Synchronizable {
+import com.siberalt.singularity.simulation.SimulationUnit;
+
+public interface Synchronizable extends SimulationUnit {
     void synchWith(TaskSynchronizer synchronizer);
 }

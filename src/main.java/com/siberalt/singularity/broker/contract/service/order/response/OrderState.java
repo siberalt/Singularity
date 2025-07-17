@@ -3,6 +3,7 @@ package com.siberalt.singularity.broker.contract.service.order.response;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
+import com.siberalt.singularity.entity.transaction.TransactionSpec;
 
 import java.time.Instant;
 import java.util.List;
@@ -14,10 +15,8 @@ public class OrderState {
     protected long lotsExecuted;
     protected Money initialOrderPrice;
     protected Money executedOrderPrice;
-    protected Money totalPrice;
+    protected Money balanceChange;
     protected Money averagePositionPrice;
-    protected Money initialCommission;
-    protected Money executedCommission;
     protected OrderDirection direction;
     protected Money initialSecurityPrice;
     protected List<OrderStage> stages;
@@ -27,6 +26,7 @@ public class OrderState {
     protected Instant orderDate;
     protected String instrumentUid;
     protected String idempotencyKey;
+    protected List<TransactionSpec> transactions;
 
     public String getOrderId() {
         return orderId;
@@ -82,12 +82,12 @@ public class OrderState {
         return this;
     }
 
-    public Money getTotalPrice() {
-        return totalPrice;
+    public Money getBalanceChange() {
+        return balanceChange;
     }
 
-    public OrderState setTotalPrice(Money totalPrice) {
-        this.totalPrice = totalPrice;
+    public OrderState setBalanceChange(Money balanceChange) {
+        this.balanceChange = balanceChange;
         return this;
     }
 
@@ -97,24 +97,6 @@ public class OrderState {
 
     public OrderState setAveragePositionPrice(Money averagePositionPrice) {
         this.averagePositionPrice = averagePositionPrice;
-        return this;
-    }
-
-    public Money getInitialCommission() {
-        return initialCommission;
-    }
-
-    public OrderState setInitialCommission(Money initialCommission) {
-        this.initialCommission = initialCommission;
-        return this;
-    }
-
-    public Money getExecutedCommission() {
-        return executedCommission;
-    }
-
-    public OrderState setExecutedCommission(Money executedCommission) {
-        this.executedCommission = executedCommission;
         return this;
     }
 
@@ -199,28 +181,36 @@ public class OrderState {
         return this;
     }
 
+    public List<TransactionSpec> getTransactions() {
+        return transactions;
+    }
+
+    public OrderState setTransactions(List<TransactionSpec> transactions) {
+        this.transactions = transactions;
+        return this;
+    }
+
     @Override
     public String toString() {
         var elements = List.of(
-                String.format("orderId: %s", orderId),
-                String.format("executionStatus: %s", executionStatus),
-                String.format("lotsRequested: %d", lotsRequested),
-                String.format("lotsExecuted: %d", lotsExecuted),
-                String.format("initialOrderPrice: %s", initialOrderPrice),
-                String.format("executedOrderPrice: %s", executedOrderPrice),
-                String.format("totalOrderAmount: %s", totalPrice),
-                String.format("averagePositionPrice: %s", averagePositionPrice),
-                String.format("initialCommission: %s", initialCommission),
-                String.format("executedCommission: %s", executedCommission),
-                String.format("direction: %s", direction),
-                String.format("initialSecurityPrice: %s", initialSecurityPrice),
-                String.format("stages: %s", stages),
-                String.format("serviceCommission: %s", serviceCommission),
-                String.format("currency: %s", currency),
-                String.format("orderType: %s", orderType),
-                String.format("orderDate: %s", orderDate),
-                String.format("instrumentUid: %s", instrumentUid),
-                String.format("orderRequestId: %s", idempotencyKey)
+            String.format("orderId: %s", orderId),
+            String.format("executionStatus: %s", executionStatus),
+            String.format("lotsRequested: %d", lotsRequested),
+            String.format("lotsExecuted: %d", lotsExecuted),
+            String.format("initialOrderPrice: %s", initialOrderPrice),
+            String.format("executedOrderPrice: %s", executedOrderPrice),
+            String.format("totalOrderAmount: %s", balanceChange),
+            String.format("averagePositionPrice: %s", averagePositionPrice),
+            String.format("direction: %s", direction),
+            String.format("initialSecurityPrice: %s", initialSecurityPrice),
+            String.format("stages: %s", stages),
+            String.format("serviceCommission: %s", serviceCommission),
+            String.format("currency: %s", currency),
+            String.format("orderType: %s", orderType),
+            String.format("orderDate: %s", orderDate),
+            String.format("instrumentUid: %s", instrumentUid),
+            String.format("orderRequestId: %s", idempotencyKey),
+            String.format("charges: %s", transactions)
         );
 
         return String.join("\n", elements);

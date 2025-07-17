@@ -22,7 +22,7 @@ public class DefaultSubscription implements Subscription {
     }
 
     @Override
-    public void unsubscribe() {
+    public void stop() {
         onUnsubscribe.run();
         this.active = false;
     }

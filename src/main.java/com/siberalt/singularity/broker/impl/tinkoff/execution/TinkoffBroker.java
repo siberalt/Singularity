@@ -1,11 +1,11 @@
 package com.siberalt.singularity.broker.impl.tinkoff.execution;
 
-import com.siberalt.singularity.broker.contract.execution.StopOrderServiceAwareBrokerInterface;
+import com.siberalt.singularity.broker.contract.execution.StopOrderServiceAwareBroker;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.AbstractTinkoffBroker;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.StopOrderService;
 import com.siberalt.singularity.broker.contract.service.order.stop.StopOrderServiceInterface;
 
-public class TinkoffBroker extends AbstractTinkoffBroker implements StopOrderServiceAwareBrokerInterface {
+public class TinkoffBroker extends AbstractTinkoffBroker implements StopOrderServiceAwareBroker {
     protected StopOrderServiceInterface stopOrderService;
 
     public TinkoffBroker(String token) {

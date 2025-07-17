@@ -6,7 +6,6 @@ import com.siberalt.singularity.broker.contract.service.user.AccountStatus;
 import com.siberalt.singularity.broker.contract.service.user.AccountType;
 import com.siberalt.singularity.broker.contract.service.user.GetAccountsRequest;
 import com.siberalt.singularity.strategy.context.simulation.time.ClockStub;
-import com.siberalt.singularity.strategy.simulation.SimulationContext;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -16,10 +15,9 @@ public class MockUsersServiceTest {
     @Test
     void testBasic() throws AbstractException {
         var openDate = Instant.parse("2020-12-30T07:00:00Z");
-        var clock = new ClockStub();
+        ClockStub clock = new ClockStub();
         clock.syncCurrentTime(openDate);
-        var mockBroker = new MockBroker(null, null, null);
-        mockBroker.applyContext(new SimulationContext(null, null, clock));
+        var mockBroker = new MockBroker(null, null, null, clock);
 
         var userService = mockBroker.getUserService();
         var accountName = "testAccount";

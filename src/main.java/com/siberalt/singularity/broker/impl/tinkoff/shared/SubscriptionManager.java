@@ -4,6 +4,7 @@ import com.siberalt.singularity.broker.contract.service.event.dispatcher.events.
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.subscriptions.NewCandleSubscriptionSpec;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.QuotationTranslator;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.TimestampTranslator;
+import com.siberalt.singularity.broker.shared.EventMatcher;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.event.Event;
 import com.siberalt.singularity.event.EventDispatcher;
@@ -32,6 +33,7 @@ public class SubscriptionManager implements com.siberalt.singularity.event.subsc
     public SubscriptionManager(InvestApi api) {
         this.api = api;
         eventManager = new EventManager(Executors.newSingleThreadExecutor(), Set.of(NewCandleEvent.class));
+        eventManager.setEventMatcher(new EventMatcher());
         eventManager.setTriggerManager(new TriggerManager() {
             @Override
             public void enable(SubscriptionSpec<?> subscriptionSpec, EventDispatcher eventDispatcher) {
@@ -80,12 +82,14 @@ public class SubscriptionManager implements com.siberalt.singularity.event.subsc
             request -> {
                 if (request.hasCandle()) {
                     var candle = request.getCandle();
+                    System.out.println("Received candle: " + candle);
 
                     eventDispatcher.dispatch(
                         new NewCandleEvent(
                             UUID.randomUUID(),
                             Candle.of(
                                 TimestampTranslator.toContract(candle.getTime()),
+                                candle.getInstrumentUid(),
                                 candle.getVolume(),
                                 QuotationTranslator.toContract(candle.getOpen()),
                                 QuotationTranslator.toContract(candle.getHigh()),
@@ -96,11 +100,13 @@ public class SubscriptionManager implements com.siberalt.singularity.event.subsc
                     );
                 }
             },
-            error -> {
-            }
+            error -> System.err.println("Error in market data stream: " + error)
         );
 
-        marketSubscriptionService.subscribeCandles(subscriptionSpec.getInstrumentIds().stream().toList());
+        marketSubscriptionService.subscribeCandles(
+            subscriptionSpec.getInstrumentIds().stream().toList(),
+            true
+        );
 
         return marketSubscriptionService;
     }

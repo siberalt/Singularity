@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -70,8 +71,8 @@ public class NewCandleSubscriptionManagerTest {
         Candle candle2 = Candle.of(candleTime, "instrument2", 2000, 24);
 
         // Stubbing for both "instrument1" and "instrument2"
-        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(Set.of(candle1));
-        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(Set.of(candle2));
+        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(List.of(candle1));
+        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(List.of(candle2));
 
         NewCandleEvent event1 = new NewCandleEvent(candle1);
         EventHandler<NewCandleEvent> handler = mock(EventHandler.class);
@@ -88,8 +89,8 @@ public class NewCandleSubscriptionManagerTest {
     void tickDoesNotNotifyHandlersForUnscheduledEvents() {
         Instant time = Instant.parse("2020-12-30T07:00:00Z");
 
-        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(Collections.emptySet());
-        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(Collections.emptySet());
+        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(Collections.emptyList());
+        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(Collections.emptyList());
 
         EventHandler<NewCandleEvent> handler = mock(EventHandler.class);
         NewCandleSubscriptionSpec subscription = new NewCandleSubscriptionSpec(Set.of("instrument1"));
@@ -112,8 +113,8 @@ public class NewCandleSubscriptionManagerTest {
         Candle candle3 = Candle.of(candleTime3, "instrument2", 2000, 24);
         Candle candle4 = Candle.of(candleTime4, "instrument2", 2100, 25);
 
-        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(Set.of(candle1, candle2));
-        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(Set.of(candle3, candle4));
+        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(List.of(candle1, candle2));
+        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(List.of(candle3, candle4));
 
         NewCandleEvent event1 = new NewCandleEvent(candle1);
         NewCandleEvent event2 = new NewCandleEvent(candle2);
@@ -140,12 +141,12 @@ public class NewCandleSubscriptionManagerTest {
         Candle candle = Candle.of(candleTime, "instrument1", 1000, 12);
 
         EventHandler<NewCandleEvent> handler = mock(EventHandler.class);
-        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(Set.of(candle));
-        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(Collections.emptySet());
+        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(List.of(candle));
+        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(Collections.emptyList());
 
         Subscription subscription = subscriptionManager.subscribe(
             validSpec,
-            (event, subscription1) -> subscription1.unsubscribe()
+            (event, subscription1) -> subscription1.stop()
         );
 
         assertTrue(subscription.isActive());
@@ -169,8 +170,8 @@ public class NewCandleSubscriptionManagerTest {
             throw new RuntimeException("Test exception");
         };
 
-        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(Set.of(candle));
-        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(Collections.emptySet());
+        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(List.of(candle));
+        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(Collections.emptyList());
 
         Subscription subscription = subscriptionManager.subscribe(validSpec, handler);
 

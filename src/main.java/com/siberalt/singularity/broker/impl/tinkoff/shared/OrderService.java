@@ -1,52 +1,89 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared;
 
-import com.siberalt.singularity.broker.shared.ListTranslator;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
+import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
+import com.siberalt.singularity.broker.contract.service.market.request.GetCurrentPriceRequest;
+import com.siberalt.singularity.broker.contract.service.order.CommissionTransactionSpecProvider;
+import com.siberalt.singularity.broker.contract.service.order.OrderTransactionSpecProvider;
+import com.siberalt.singularity.broker.contract.service.order.TransactionService;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
-import com.siberalt.singularity.broker.contract.service.order.response.CancelOrderResponse;
-import com.siberalt.singularity.broker.contract.service.order.response.GetOrdersResponse;
-import com.siberalt.singularity.broker.contract.service.order.response.OrderState;
-import com.siberalt.singularity.broker.contract.service.order.response.PostOrderResponse;
+import com.siberalt.singularity.broker.contract.service.order.response.*;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.exception.ExceptionConverter;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.*;
+import com.siberalt.singularity.broker.shared.ListTranslator;
+import com.siberalt.singularity.entity.instrument.Instrument;
+import com.siberalt.singularity.entity.order.Order;
+import com.siberalt.singularity.entity.transaction.Transaction;
+import com.siberalt.singularity.entity.transaction.TransactionSpec;
+import com.siberalt.singularity.strategy.context.execution.time.RealTimeClock;
+import ru.tinkoff.piapi.contract.v1.OrderExecutionReportStatus;
 import ru.tinkoff.piapi.contract.v1.Quotation;
 import ru.tinkoff.piapi.core.OrdersService;
 
+import java.util.Collections;
+import java.util.List;
+
+import static com.siberalt.singularity.broker.impl.tinkoff.shared.translation.OrderStateTranslator.calculateCommission;
+
 public class OrderService implements com.siberalt.singularity.broker.contract.service.order.OrderService {
     protected OrdersService ordersServiceApi;
+    protected AbstractTinkoffBroker broker;
+    protected double commissionRate = 0.003; // 0.3% commission rate, can be adjusted
+    protected TransactionService transactionService = new TransactionService()
+        .addProvider(new OrderTransactionSpecProvider())
+        .addProvider(new CommissionTransactionSpecProvider(commissionRate));
 
-    public OrderService(OrdersService ordersServiceApi) {
+    public OrderService(OrdersService ordersServiceApi, AbstractTinkoffBroker broker) {
         this.ordersServiceApi = ordersServiceApi;
+        this.broker = broker;
+    }
+
+    public OrderService setCommissionRate(double commissionRate) {
+        this.commissionRate = commissionRate;
+        return this;
+    }
+
+    @Override
+    public CalculateResponse calculate(CalculateRequest request) throws AbstractException {
+        Order order = createOrder(request.getPostOrderRequest());
+        List<TransactionSpec> transactionSpecs = transactionService.calculateSpecs(order);
+
+        return new CalculateResponse(
+            order.getInstrument().getUid(),
+            order.getBalanceChange(),
+            order.getLotsRequested(),
+            transactionSpecs
+        );
     }
 
     @Override
     public PostOrderResponse post(PostOrderRequest request) throws AbstractException {
         var price = null == request.getPrice()
-                ? Quotation.newBuilder().build()
-                : QuotationTranslator.toTinkoff(request.getPrice());
+            ? Quotation.newBuilder().build()
+            : QuotationTranslator.toTinkoff(request.getPrice());
 
         var response = ExceptionConverter.rethrowContractExceptionOnError(
-                () -> ordersServiceApi.postOrderSync(
-                        request.getInstrumentId(),
-                        request.getQuantity(),
-                        price,
-                        OrderDirectionTranslator.toTinkoff(request.getDirection()),
-                        request.getAccountId(),
-                        OrderTypeTranslator.toTinkoff(request.getOrderType()),
-                        request.getIdempotencyKey()
-                )
+            () -> ordersServiceApi.postOrderSync(
+                request.getInstrumentId(),
+                request.getQuantity(),
+                price,
+                OrderDirectionTranslator.toTinkoff(request.getDirection()),
+                request.getAccountId(),
+                OrderTypeTranslator.toTinkoff(request.getOrderType()),
+                request.getIdempotencyKey()
+            )
         );
 
-        return toContractPostOrderResponse(response);
+        return toContractPostOrderResponse(request.getAccountId(), response);
     }
 
     @Override
     public CancelOrderResponse cancel(CancelOrderRequest request) throws AbstractException {
         var response = ExceptionConverter.rethrowContractExceptionOnError(
-                () -> ordersServiceApi.cancelOrderSync(
-                        request.getAccountId(),
-                        request.getOrderId()
-                )
+            () -> ordersServiceApi.cancelOrderSync(
+                request.getAccountId(),
+                request.getOrderId()
+            )
         );
 
         return new CancelOrderResponse().setTime(response);
@@ -55,73 +92,98 @@ public class OrderService implements com.siberalt.singularity.broker.contract.se
     @Override
     public OrderState getState(GetOrderStateRequest request) throws AbstractException {
         var response = ExceptionConverter.rethrowContractExceptionOnError(
-                () -> ordersServiceApi.getOrderStateSync(request.getAccountId(), request.getOrderId())
+            () -> ordersServiceApi.getOrderStateSync(request.getAccountId(), request.getOrderId())
         );
 
         return new OrderState()
-                .setOrderId(response.getOrderId())
-                .setExecutionStatus(OrderExecutionReportStatusTranslator.toContract(response.getExecutionReportStatus()))
-                .setLotsRequested(response.getLotsRequested())
-                .setLotsExecuted(response.getLotsExecuted())
-                .setInitialOrderPrice(MoneyValueTranslator.toContract(response.getInitialOrderPrice()))
-                .setExecutedOrderPrice(MoneyValueTranslator.toContract(response.getExecutedOrderPrice()))
-                .setTotalPrice(MoneyValueTranslator.toContract(response.getTotalOrderAmount()))
-                .setAveragePositionPrice(MoneyValueTranslator.toContract(response.getAveragePositionPrice()))
-                .setInitialCommission(MoneyValueTranslator.toContract(response.getInitialCommission()))
-                .setExecutedCommission(MoneyValueTranslator.toContract(response.getExecutedCommission()))
-                .setDirection(OrderDirectionTranslator.toContract(response.getDirection()))
-                .setInitialSecurityPrice(MoneyValueTranslator.toContract(response.getInitialSecurityPrice()))
-                .setStages(ListTranslator.translate(response.getStagesList(), OrderStageTranslator::toContract))
-                .setServiceCommission(MoneyValueTranslator.toContract(response.getServiceCommission()))
-                .setCurrency(response.getCurrency())
-                .setOrderType(OrderTypeTranslator.toContract(response.getOrderType()))
-                .setOrderDate(TimestampTranslator.toContract(response.getOrderDate()))
-                .setInstrumentUid(response.getInstrumentUid())
-                .setIdempotencyKey(response.getOrderRequestId());
+            .setOrderId(response.getOrderId())
+            .setExecutionStatus(OrderExecutionReportStatusTranslator.toContract(response.getExecutionReportStatus()))
+            .setLotsRequested(response.getLotsRequested())
+            .setLotsExecuted(response.getLotsExecuted())
+            .setInitialOrderPrice(MoneyValueTranslator.toContract(response.getInitialOrderPrice()))
+            .setExecutedOrderPrice(MoneyValueTranslator.toContract(response.getExecutedOrderPrice()))
+            .setBalanceChange(MoneyValueTranslator.toContract(response.getTotalOrderAmount()))
+            .setAveragePositionPrice(MoneyValueTranslator.toContract(response.getAveragePositionPrice()))
+            .setTransactions(List.of(calculateCommission(
+                response.getExecutedCommission(),
+                response.getInitialCommission()
+            )))
+            .setDirection(OrderDirectionTranslator.toContract(response.getDirection()))
+            .setInitialSecurityPrice(MoneyValueTranslator.toContract(response.getInitialSecurityPrice()))
+            .setStages(ListTranslator.translate(response.getStagesList(), OrderStageTranslator::toContract))
+            .setServiceCommission(MoneyValueTranslator.toContract(response.getServiceCommission()))
+            .setCurrency(response.getCurrency())
+            .setOrderType(OrderTypeTranslator.toContract(response.getOrderType()))
+            .setOrderDate(TimestampTranslator.toContract(response.getOrderDate()))
+            .setInstrumentUid(response.getInstrumentUid())
+            .setIdempotencyKey(response.getOrderRequestId());
     }
 
     @Override
     public GetOrdersResponse get(GetOrdersRequest request) throws AbstractException {
         var response = ExceptionConverter.rethrowContractExceptionOnError(
-                () -> ordersServiceApi.getOrdersSync(request.getAccountId())
+            () -> ordersServiceApi.getOrdersSync(request.getAccountId())
         );
 
         return new GetOrdersResponse()
-                .setOrders(ListTranslator.translate(response, OrderStateTranslator::toContract));
+            .setOrders(ListTranslator.translate(response, OrderStateTranslator::toContract));
     }
 
-    public PostOrderResponse replace(ReplaceOrderRequest request) throws AbstractException {
-        var response = ExceptionConverter.rethrowContractExceptionOnError(
-                () -> ordersServiceApi.replaceOrderSync(
-                        request.getAccountId(),
-                        request.getQuantity(),
-                        QuotationTranslator.toTinkoff(request.getPrice()),
-                        request.getIdempotencyKey(),
-                        request.getOrderId(),
-                        PriceTypeTranslator.toTinkoff(request.getPriceType())
+    private Order createOrder(PostOrderRequest request) throws AbstractException {
+        Instrument instrument = broker.getInstrumentService()
+            .get(GetRequest.of(request.getInstrumentId()))
+            .getInstrument();
+
+        com.siberalt.singularity.broker.contract.value.quotation.Quotation currentPrice = broker
+            .getMarketDataService()
+            .getCurrentPrice(new GetCurrentPriceRequest(request.getInstrumentId()))
+            .getPrice();
+
+        return new Order()
+            .setLotsRequested(request.getQuantity())
+            .setAccountId(request.getAccountId())
+            .setDirection(request.getDirection())
+            .setOrderType(request.getOrderType())
+            .setInstrument(instrument)
+            .setInstrumentPrice(currentPrice);
+    }
+
+    protected PostOrderResponse toContractPostOrderResponse(
+        String accountId,
+        ru.tinkoff.piapi.contract.v1.PostOrderResponse response
+    ) {
+        List<Transaction> transactions;
+
+        if (response.getExecutionReportStatus() == OrderExecutionReportStatus.EXECUTION_REPORT_STATUS_FILL) {
+            List<TransactionSpec> transactionSpecs = List.of(
+                calculateCommission(
+                    response.getExecutedCommission(),
+                    response.getInitialCommission()
                 )
-        );
+            );
+            transactions = transactionService.create(
+                transactionSpecs,
+                accountId,
+                "tinkoff",
+                new RealTimeClock()
+            );
+        } else {
+            transactions = Collections.emptyList();
+        }
 
-        return toContractPostOrderResponse(response);
-    }
-
-    protected PostOrderResponse toContractPostOrderResponse(ru.tinkoff.piapi.contract.v1.PostOrderResponse response) {
         return new PostOrderResponse()
-                .setOrderId(response.getOrderId())
-                .setExecutionStatus(OrderExecutionReportStatusTranslator.toContract(response.getExecutionReportStatus()))
-                .setLotsRequested(response.getLotsRequested())
-                .setLotsExecuted(response.getLotsExecuted())
-                .setInitialPrice(MoneyValueTranslator.toContract(response.getInitialOrderPrice()))
-                .setTotalPricePerOne(MoneyValueTranslator.toContract(response.getExecutedOrderPrice()))
-                .setTotalPrice(MoneyValueTranslator.toContract(response.getTotalOrderAmount()))
-                .setInitialCommission(MoneyValueTranslator.toContract(response.getInitialCommission()))
-                .setExecutedCommission(MoneyValueTranslator.toContract(response.getExecutedCommission()))
-                .setAciValue(MoneyValueTranslator.toContract(response.getAciValue()))
-                .setDirection(OrderDirectionTranslator.toContract(response.getDirection()))
-                .setInitialPricePerOne(MoneyValueTranslator.toContract(response.getInitialSecurityPrice()))
-                .setOrderType(OrderTypeTranslator.toContract(response.getOrderType()))
-                .setMessage(response.getMessage())
-                .setInstrumentUid(response.getInstrumentUid())
-                .setIdempotencyKey(response.getOrderRequestId());
+            .setOrderId(response.getOrderId())
+            .setExecutionStatus(OrderExecutionReportStatusTranslator.toContract(response.getExecutionReportStatus()))
+            .setLotsRequested(response.getLotsRequested())
+            .setLotsExecuted(response.getLotsExecuted())
+            .setTotalBalanceChange(MoneyValueTranslator.toContract(response.getTotalOrderAmount()))
+            .setTransactions(transactions)
+            .setAciValue(MoneyValueTranslator.toContract(response.getAciValue()))
+            .setDirection(OrderDirectionTranslator.toContract(response.getDirection()))
+            .setInstrumentPrice(MoneyValueTranslator.toContract(response.getInitialSecurityPrice()))
+            .setOrderType(OrderTypeTranslator.toContract(response.getOrderType()))
+            .setMessage(response.getMessage())
+            .setInstrumentUid(response.getInstrumentUid())
+            .setIdempotencyKey(response.getOrderRequestId());
     }
 }

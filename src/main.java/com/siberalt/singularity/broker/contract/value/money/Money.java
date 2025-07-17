@@ -96,12 +96,12 @@ public class Money {
     // region logic operators
     public boolean isMoreThan(Money money) {
         checkSameCurrency(money);
-        return quotation.isMore(money.getQuotation());
+        return quotation.isGreaterThan(money.getQuotation());
     }
 
     public boolean isMoreThanOrEqual(Money money) {
         checkSameCurrency(money);
-        return quotation.isMoreOrEqual(money.getQuotation());
+        return quotation.isGreaterOrEqual(money.getQuotation());
     }
 
     @Override

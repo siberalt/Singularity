@@ -13,7 +13,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
-public class EventManager implements EventDispatcher, SubscriptionManager {
+public class EventManager implements EventDispatcher, SubscriptionManager, AutoCloseable {
     private final HashMap<SubscriptionSpec<?>, List<EventHandler<?>>> subscriptionsSpecs = new HashMap<>();
     private EventMatcher eventMatcher;
     private final Executor executor;
@@ -101,5 +101,12 @@ public class EventManager implements EventDispatcher, SubscriptionManager {
                 subscription.setErrors(List.of(throwable));
             }
         }, executor);
+    }
+
+    @Override
+    public void close() {
+        subscriptionsSpecs.keySet().forEach(triggerManager::disable);
+        subscriptionsSpecs.clear();
+        handlerSubscriptions.clear();
     }
 }

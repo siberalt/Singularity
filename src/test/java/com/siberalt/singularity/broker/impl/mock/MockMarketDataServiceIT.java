@@ -6,7 +6,6 @@ import com.siberalt.singularity.broker.impl.mock.config.MockBrokerConfig;
 import com.siberalt.singularity.entity.instrument.InstrumentRepository;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
-import com.siberalt.singularity.strategy.simulation.SimulationContext;
 import com.siberalt.singularity.test.util.ConfigLoader;
 import com.siberalt.singularity.test.util.resource.ResourceHandler;
 import com.siberalt.singularity.entity.instrument.Instrument;
@@ -63,8 +62,7 @@ class MockMarketDataServiceIT {
         );
 
         clock = new SimpleSimulationClock();
-        broker = new MockBroker(storageHandler.create(), instrumentRepository, null);
-        broker.applyContext(new SimulationContext(null, null, clock));
+        broker = new MockBroker(storageHandler.create(), instrumentRepository, null, clock);
         marketDataService = broker.getMarketDataService();
     }
 
@@ -188,7 +186,7 @@ class MockMarketDataServiceIT {
         GetLastPricesResponse response = marketDataService.getLastPrices(request);
 
         assertNotNull(response);
-        List<LastPrice> prices = response.getLastPrices();
+        List<LastPrice> prices = response.getPrices();
         assertEquals(11, prices.size());
 
         // Assert first in list
@@ -268,7 +266,7 @@ class MockMarketDataServiceIT {
 
         // each candle has close price more than 5.554
         for (Candle candle : result) {
-            assertTrue(candle.getClosePrice().isMore(Quotation.of(5.554)));
+            assertTrue(candle.getClosePrice().isGreaterThan(Quotation.of(5.554)));
         }
 
         // Assert correctness of time sequence
@@ -353,7 +351,7 @@ class MockMarketDataServiceIT {
         var uniteCandles = StreamSupport
                 .stream(
                         marketDataService
-                                .candleStorage
+                                .candleRepository
                                 .getPeriod(instrumentUid, from, to)
                                 .spliterator(),
                         false

@@ -11,11 +11,11 @@ import java.util.Map;
 import java.util.UUID;
 
 public class MockUserService implements UserService {
-    protected MockBroker virtualBroker;
+    protected MockBroker mockBroker;
     protected Map<String, AccountState> accountsStates = new HashMap<>();
 
     public MockUserService(MockBroker virtualBroker) {
-        this.virtualBroker = virtualBroker;
+        this.mockBroker = virtualBroker;
     }
 
     protected AccountState getAccountState(String accountId) throws AbstractException {
@@ -33,7 +33,7 @@ public class MockUserService implements UserService {
                 .setName(name)
                 .setType(accountType)
                 .setAccessLevel(accessLevel);
-        account.setOpenedDate(virtualBroker.context.getCurrentTime());
+        account.setOpenedDate(mockBroker.clock.currentTime());
         account.setId(UUID.randomUUID().toString());
         account.setStatus(AccountStatus.OPEN);
         accountsStates.put(account.getId(), new AccountState(account));
@@ -48,7 +48,7 @@ public class MockUserService implements UserService {
 
         assert null == account.getClosedDate() : ExceptionBuilder.create(ErrorCode.ACCOUNT_CLOSED);
 
-        account.setClosedDate(virtualBroker.context.getCurrentTime());
+        account.setClosedDate(mockBroker.clock.currentTime());
         account.setStatus(AccountStatus.CLOSED);
     }
 

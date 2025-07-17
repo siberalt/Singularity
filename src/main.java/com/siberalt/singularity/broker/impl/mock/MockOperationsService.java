@@ -11,6 +11,7 @@ import com.siberalt.singularity.broker.contract.service.operation.response.Posit
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.AccountBalance;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.OpenPosition;
+import com.siberalt.singularity.entity.instrument.Instrument;
 
 import java.util.*;
 
@@ -22,11 +23,22 @@ public class MockOperationsService implements OperationsService {
         this.mockBroker = virtualBroker;
     }
 
+    public AccountBalance getAccountBalance(String accountId) throws AbstractException {
+        checkAccountExists(accountId);
+
+        return getOrCreateBalance(accountId);
+    }
+
     @Override
     public GetPositionsResponse getPositions(GetPositionsRequest request) throws AbstractException {
         checkAccountExists(request.getAccountId());
 
-        return getOrCreateBalance(request.getAccountId()).toResponse();
+        AccountBalance balance = getOrCreateBalance(request.getAccountId());
+
+        return new GetPositionsResponse()
+            .setSecurities(balance.getPositions())
+            .setMoney(balance.getAvailableMoney())
+            .setBlocked(balance.getBlockedMonies());
     }
 
     public Position getPositionByInstrumentId(String accountId, String instrumentUid) throws AbstractException {
@@ -39,12 +51,6 @@ public class MockOperationsService implements OperationsService {
         checkAccountExists(accountId);
 
         return getOrCreateBalance(accountId).isEnoughOfMoney(amount);
-    }
-
-    public List<Money> getAvailableMoney(String accountId) throws AbstractException {
-        checkAccountExists(accountId);
-
-        return getOrCreateBalance(accountId).getAvailableMoney();
     }
 
     public Money getAvailableMoney(String accountId, String currencyIso) throws AbstractException {
@@ -113,11 +119,11 @@ public class MockOperationsService implements OperationsService {
         var accountBalance = getOrCreateBalance(accountId);
 
         if (!accountBalance.hasPositionByInstrumentUid(instrumentUid)) {
-            var instrument = mockBroker
+            Instrument instrument = mockBroker
                     .instrumentService
                     .get(GetRequest.of(instrumentUid))
                     .getInstrument();
-            var newPosition = new Position()
+            Position newPosition = new Position()
                     .setBalance(0)
                     .setPositionUid(UUID.randomUUID().toString())
                     .setBlocked(0)
@@ -131,14 +137,14 @@ public class MockOperationsService implements OperationsService {
 
     public void addToPosition(String accountId, String instrumentUid, long count) throws AbstractException {
         checkAccountExists(accountId);
-        var accountBalance = getOrCreateBalance(accountId);
+        AccountBalance accountBalance = getOrCreateBalance(accountId);
 
         if (!accountBalance.hasPositionByInstrumentUid(instrumentUid)) {
-            var instrument = mockBroker
+            Instrument instrument = mockBroker
                     .instrumentService
                     .get(GetRequest.of(instrumentUid))
                     .getInstrument();
-            var newPosition = new Position()
+            Position newPosition = new Position()
                     .setBalance(0)
                     .setPositionUid(UUID.randomUUID().toString())
                     .setBlocked(0)
@@ -152,7 +158,7 @@ public class MockOperationsService implements OperationsService {
 
     private AccountBalance getOrCreateBalance(String accountId) {
         if (!accountBalances.containsKey(accountId)) {
-            accountBalances.put(accountId, new AccountBalance(accountId));
+            accountBalances.put(accountId, new AccountBalance(accountId, mockBroker.clock, mockBroker.getId()));
         }
 
         return accountBalances.get(accountId);
