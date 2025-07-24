@@ -119,21 +119,21 @@ class MockMarketDataServiceIT {
                 new GetCandlesRequest()
                         .setInstrumentUid(config.getInstrument().getUid())
                         .setFrom(Instant.parse("2020-10-15T00:00:00Z"))
-                        .setTo(Instant.parse("2020-10-30T00:00:00Z"))
+                        .setTo(Instant.parse("2020-10-20T00:00:00Z"))
                         .setInterval(CandleInterval.HOUR)
         );
         getCandlesTest(
                 new GetCandlesRequest()
                         .setInstrumentUid(config.getInstrument().getUid())
                         .setFrom(Instant.parse("2021-12-15T00:00:00Z"))
-                        .setTo(Instant.parse("2021-12-30T00:00:00Z"))
+                        .setTo(Instant.parse("2021-12-20T00:00:00Z"))
                         .setInterval(CandleInterval.HOUR_2)
         );
         getCandlesTest(
                 new GetCandlesRequest()
                         .setInstrumentUid(config.getInstrument().getUid())
                         .setFrom(Instant.parse("2021-12-15T00:00:00Z"))
-                        .setTo(Instant.parse("2021-12-30T00:00:00Z"))
+                        .setTo(Instant.parse("2021-12-20T00:00:00Z"))
                         .setInterval(CandleInterval.HOUR_4),
                 0.6
         );

@@ -29,7 +29,6 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 
-//TODO fixme
 public class ProfitTakerStrategySimulation {
     public static void main(String[] args) throws AbstractException {
         CvsFileCandleRepositoryFactory factory = new CvsFileCandleRepositoryFactory();
@@ -103,13 +102,13 @@ public class ProfitTakerStrategySimulation {
             System.out.println("Order ID: " + order.getId());
             System.out.println("Direction: " + order.getDirection());
             System.out.println("Instrument: " + order.getInstrument().getUid());
-            System.out.println("Status: " + order.getState());
+            System.out.println("Status: " + order.getExecutionStatus());
             System.out.println("Price: " + order.getBalanceChange());
             System.out.println("Quantity: " + order.getLotsExecuted());
             System.out.println("Created at: " + order.getCreatedTime());
             System.out.println("----------------------------");
 
-            profit.add(order.getBalanceChange());
+            profit = profit.add(order.getBalanceChange());
         }
 
         Quotation profitPercent = profit.divide(initialInvestment).multiply(100);

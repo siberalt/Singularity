@@ -58,7 +58,7 @@ public class MarketOrdersPresenter extends JFrame {
 
         // Customize renderer to show different colors and shapes for buy/sell orders
         XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer();
-        renderer.setSeriesPaint(0, Color.BLUE); // Stock prices
+        renderer.setSeriesPaint(0, Color.BLACK); // Stock prices
         renderer.setSeriesShapesVisible(0, false); // Hide points for stock prices
         renderer.setSeriesLinesVisible(0, true); // Show line for stock prices
         renderer.setSeriesPaint(1, Color.GREEN); // Buy orders
@@ -86,9 +86,7 @@ public class MarketOrdersPresenter extends JFrame {
         XYSeries buyOrders = new XYSeries("Buy Orders");
         XYSeries sellOrders = new XYSeries("Sell Orders");
 
-        Iterable<Candle> candles = candleRepository.getPeriod(instrumentUid, from, to);
-
-        for (Candle candle : candles) {
+        for (Candle candle : candleRepository.getPeriod(instrumentUid, from, to)) {
             double price = candle.getClosePrice().toBigDecimal().doubleValue();
             stockPrices.add((double) candle.getTime().getEpochSecond() * 1000, price);
         }

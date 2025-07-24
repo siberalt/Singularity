@@ -25,13 +25,14 @@ import java.time.Duration;
 import java.util.*;
 
 public class MockOrderService implements OrderService {
+    public static final double DEFAULT_COMMISSION_RATIO = 0.003;
+
     protected MockBroker mockBroker;
     protected double buyBestPriceRatio = 0.3;
     protected double sellBestPriceRatio = 0.7;
-    protected double commissionRatio = 0.003;
     protected Duration limitOrderLifeTime = Duration.ofDays(1);
     protected OrderRepository orderRepository;
-    protected CommissionTransactionSpecProvider commissionTransactionSpecProvider = new CommissionTransactionSpecProvider(commissionRatio);
+    protected CommissionTransactionSpecProvider commissionTransactionSpecProvider = new CommissionTransactionSpecProvider(DEFAULT_COMMISSION_RATIO);
     protected TransactionService transactionService = new TransactionService()
         .addProvider(new OrderTransactionSpecProvider())
         .addProvider(commissionTransactionSpecProvider);
@@ -51,6 +52,7 @@ public class MockOrderService implements OrderService {
         return new CalculateResponse(
             order.getInstrument().getUid(),
             order.getBalanceChange(),
+            order.getInstrumentPrice(),
             order.getLotsRequested(),
             transactionSpecs
         );
@@ -147,17 +149,12 @@ public class MockOrderService implements OrderService {
         return this;
     }
 
-    public double getCommissionRatio() {
-        return commissionRatio;
-    }
-
     public void setCommissionRatio(double commissionRatio) {
         if (commissionRatio < 0 || commissionRatio > 1) {
             throw new IllegalArgumentException("Commission ratio must be between 0 and 1");
         }
 
         commissionTransactionSpecProvider.setCommissionRatio(commissionRatio);
-        this.commissionRatio = commissionRatio;
     }
 
     protected void cancel(Order order) {

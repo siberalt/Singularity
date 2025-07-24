@@ -59,6 +59,7 @@ class OrderCalculationServiceTest {
         when(orderServiceMock.calculate(any())).thenReturn(new CalculateResponse(
             "instrumentId",
             Quotation.of("1000"),
+            instrumentPrice,
             10,
             List.of() // Assuming no transactions for simplicity
         ));
@@ -219,6 +220,7 @@ class OrderCalculationServiceTest {
         when(orderServiceMock.calculate(any())).thenReturn(new CalculateResponse(
             "instrumentId",
             Quotation.of("1000"),
+            instrumentPrice,
             10,
             List.of() // Assuming no transactions for simplicity
         ));
@@ -238,6 +240,7 @@ class OrderCalculationServiceTest {
         return new CalculateResponse(
             "instrumentId",
             totalBalanceChange,
+            instrumentPrice,
             quantity,
             List.of() // Assuming no transactions for simplicity
         );
