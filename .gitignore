@@ -38,3 +38,4 @@ build/
 .DS_Store
 /.idea/*
 /src/test/resources/broker/tinkoff/test-settings.yaml
+/src/main/resources/presenter/google/PriceChart.json

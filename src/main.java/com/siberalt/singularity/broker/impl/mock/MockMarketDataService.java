@@ -90,8 +90,8 @@ public class MockMarketDataService implements MarketDataService {
             .setPrice(price);
     }
 
-    protected Optional<Candle> getCandleAt(String instrumentUid, Instant at) {
-        return candleRepository.getAt(instrumentUid, at);
+    protected Optional<Candle> findClosestBefore(String instrumentUid, Instant at) {
+        return candleRepository.findClosestBefore(instrumentUid, at);
     }
 
     protected List<Candle> findCandlesByOpenPrice(CandleInterval interval, FindPriceParams findParams) {
@@ -163,6 +163,6 @@ public class MockMarketDataService implements MarketDataService {
     }
 
     protected Candle getInstrumentCurrentCandle(String instrumentUid) {
-        return candleRepository.getAt(instrumentUid, virtualBroker.clock.currentTime()).orElse(null);
+        return candleRepository.findClosestBefore(instrumentUid, virtualBroker.clock.currentTime()).orElse(null);
     }
 }

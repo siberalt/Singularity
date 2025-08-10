@@ -111,11 +111,11 @@ public class Quotation {
         return toBigDecimal().compareTo(value) == 0;
     }
 
-    public boolean isLess(Quotation value) {
-        return isLess(value.toBigDecimal());
+    public boolean isLessThan(Quotation value) {
+        return isLessThan(value.toBigDecimal());
     }
 
-    public boolean isLess(BigDecimal value) {
+    public boolean isLessThan(BigDecimal value) {
         return toBigDecimal().compareTo(value) < 0;
     }
 
@@ -160,7 +160,7 @@ public class Quotation {
     public static boolean compare(Quotation quotationA, Quotation quotationB, ComparisonOperator operator) {
         return switch (operator) {
             case EQUAL -> quotationA.isEqual(quotationB);
-            case LESS -> quotationA.isLess(quotationB);
+            case LESS -> quotationA.isLessThan(quotationB);
             case LESS_OR_EQUAL -> quotationA.isLessOrEqual(quotationB);
             case MORE -> quotationA.isGreaterThan(quotationB);
             case MORE_OR_EQUAL -> quotationA.isGreaterOrEqual(quotationB);

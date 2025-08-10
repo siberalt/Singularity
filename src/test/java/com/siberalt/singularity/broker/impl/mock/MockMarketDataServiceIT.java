@@ -1,26 +1,26 @@
 package com.siberalt.singularity.broker.impl.mock;
 
+import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
+import com.siberalt.singularity.broker.contract.service.market.request.GetCandlesRequest;
+import com.siberalt.singularity.broker.contract.service.market.request.GetLastPricesRequest;
+import com.siberalt.singularity.broker.contract.service.market.response.GetCandlesResponse;
 import com.siberalt.singularity.broker.contract.service.market.response.GetLastPricesResponse;
 import com.siberalt.singularity.broker.contract.service.market.response.HistoricCandle;
+import com.siberalt.singularity.broker.contract.service.market.response.LastPrice;
+import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.config.MockBrokerConfig;
+import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.ComparisonOperator;
+import com.siberalt.singularity.entity.candle.FindPriceParams;
+import com.siberalt.singularity.entity.candle.cvs.CvsCandleRepository;
+import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory;
+import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
+import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.entity.instrument.InstrumentRepository;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
 import com.siberalt.singularity.test.util.ConfigLoader;
 import com.siberalt.singularity.test.util.resource.ResourceHandler;
-import com.siberalt.singularity.entity.instrument.Instrument;
-import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
-import com.siberalt.singularity.broker.contract.service.market.request.GetCandlesRequest;
-import com.siberalt.singularity.broker.contract.service.market.request.GetLastPricesRequest;
-import com.siberalt.singularity.broker.contract.service.market.response.GetCandlesResponse;
-import com.siberalt.singularity.broker.contract.service.market.response.LastPrice;
-import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
-import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
-import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.entity.candle.ComparisonOperator;
-import com.siberalt.singularity.entity.candle.FindPriceParams;
-import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory;
-import com.siberalt.singularity.entity.candle.cvs.CvsCandleRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,9 +28,8 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -46,19 +45,19 @@ class MockMarketDataServiceIT {
         config = ConfigLoader.load(MockBrokerConfig.class, MockBrokerConfig.SETTINGS_PATH);
 
         var instrument = new Instrument()
-                .setCurrency(config.getInstrument().getCurrency())
-                .setLot(config.getInstrument().getLot())
-                .setInstrumentType(config.getInstrument().getInstrumentType())
-                .setUid(config.getInstrument().getUid());
+            .setCurrency(config.getInstrument().getCurrency())
+            .setLot(config.getInstrument().getLot())
+            .setInstrumentType(config.getInstrument().getInstrumentType())
+            .setUid(config.getInstrument().getUid());
 
         InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
         instrumentRepository.save(instrument);
 
         storageHandler = ResourceHandler.newHandler(() ->
-                new CvsFileCandleRepositoryFactory().create(
-                        config.getInstrument().getUid(),
-                        config.getInstrument().getDataPath()
-                )
+            new CvsFileCandleRepositoryFactory().create(
+                config.getInstrument().getUid(),
+                config.getInstrument().getDataPath()
+            )
         );
 
         clock = new SimpleSimulationClock();
@@ -74,91 +73,92 @@ class MockMarketDataServiceIT {
     @Test
     void getCandlesTest() {
         getCandlesTest(
-                new GetCandlesRequest()
-                        .setInstrumentUid(config.getInstrument().getUid())
-                        .setFrom(Instant.parse("2020-12-30T07:09:00Z"))
-                        .setTo(Instant.parse("2020-12-30T07:17:00Z"))
-                        .setInterval(CandleInterval.MIN_1)
+            new GetCandlesRequest()
+                .setInstrumentUid(config.getInstrument().getUid())
+                .setFrom(Instant.parse("2020-12-30T07:09:00Z"))
+                .setTo(Instant.parse("2020-12-30T07:17:00Z"))
+                .setInterval(CandleInterval.MIN_1)
         );
         getCandlesTest(
-                new GetCandlesRequest()
-                        .setInstrumentUid(config.getInstrument().getUid())
-                        .setFrom(Instant.parse("2020-12-30T07:00:00Z"))
-                        .setTo(Instant.parse("2020-12-30T07:17:00Z"))
-                        .setInterval(CandleInterval.MIN_2)
+            new GetCandlesRequest()
+                .setInstrumentUid(config.getInstrument().getUid())
+                .setFrom(Instant.parse("2020-12-30T07:00:00Z"))
+                .setTo(Instant.parse("2020-12-30T07:17:00Z"))
+                .setInterval(CandleInterval.MIN_2)
         );
         getCandlesTest(
-                new GetCandlesRequest()
-                        .setInstrumentUid(config.getInstrument().getUid())
-                        .setFrom(Instant.parse("2020-12-30T07:00:00Z"))
-                        .setTo(Instant.parse("2020-12-30T15:00:00Z"))
-                        .setInterval(CandleInterval.MIN_5)
+            new GetCandlesRequest()
+                .setInstrumentUid(config.getInstrument().getUid())
+                .setFrom(Instant.parse("2020-12-30T07:00:00Z"))
+                .setTo(Instant.parse("2020-12-30T15:00:00Z"))
+                .setInterval(CandleInterval.MIN_5)
         );
         getCandlesTest(
-                new GetCandlesRequest()
-                        .setInstrumentUid(config.getInstrument().getUid())
-                        .setFrom(Instant.parse("2020-12-30T07:00:00Z"))
-                        .setTo(Instant.parse("2020-12-30T15:00:00Z"))
-                        .setInterval(CandleInterval.MIN_10)
+            new GetCandlesRequest()
+                .setInstrumentUid(config.getInstrument().getUid())
+                .setFrom(Instant.parse("2020-12-30T07:00:00Z"))
+                .setTo(Instant.parse("2020-12-30T15:00:00Z"))
+                .setInterval(CandleInterval.MIN_10)
         );
         getCandlesTest(
-                new GetCandlesRequest()
-                        .setInstrumentUid(config.getInstrument().getUid())
-                        .setFrom(Instant.parse("2020-12-30T07:00:00Z"))
-                        .setTo(Instant.parse("2020-12-30T15:00:00Z"))
-                        .setInterval(CandleInterval.MIN_15)
+            new GetCandlesRequest()
+                .setInstrumentUid(config.getInstrument().getUid())
+                .setFrom(Instant.parse("2020-12-30T07:00:00Z"))
+                .setTo(Instant.parse("2020-12-30T15:00:00Z"))
+                .setInterval(CandleInterval.MIN_15)
         );
         getCandlesTest(
-                new GetCandlesRequest()
-                        .setInstrumentUid(config.getInstrument().getUid())
-                        .setFrom(Instant.parse("2020-12-30T07:00:00Z"))
-                        .setTo(Instant.parse("2020-12-30T15:00:00Z"))
-                        .setInterval(CandleInterval.MIN_30)
+            new GetCandlesRequest()
+                .setInstrumentUid(config.getInstrument().getUid())
+                .setFrom(Instant.parse("2020-12-30T07:00:00Z"))
+                .setTo(Instant.parse("2020-12-30T15:00:00Z"))
+                .setInterval(CandleInterval.MIN_30)
         );
         getCandlesTest(
-                new GetCandlesRequest()
-                        .setInstrumentUid(config.getInstrument().getUid())
-                        .setFrom(Instant.parse("2020-10-15T00:00:00Z"))
-                        .setTo(Instant.parse("2020-10-20T00:00:00Z"))
-                        .setInterval(CandleInterval.HOUR)
+            new GetCandlesRequest()
+                .setInstrumentUid(config.getInstrument().getUid())
+                .setFrom(Instant.parse("2020-10-15T00:00:00Z"))
+                .setTo(Instant.parse("2020-10-20T00:00:00Z"))
+                .setInterval(CandleInterval.HOUR)
         );
         getCandlesTest(
-                new GetCandlesRequest()
-                        .setInstrumentUid(config.getInstrument().getUid())
-                        .setFrom(Instant.parse("2021-12-15T00:00:00Z"))
-                        .setTo(Instant.parse("2021-12-20T00:00:00Z"))
-                        .setInterval(CandleInterval.HOUR_2)
+            new GetCandlesRequest()
+                .setInstrumentUid(config.getInstrument().getUid())
+                .setFrom(Instant.parse("2021-12-15T00:00:00Z"))
+                .setTo(Instant.parse("2021-12-20T00:00:00Z"))
+                .setInterval(CandleInterval.HOUR_2),
+            0.7
         );
         getCandlesTest(
-                new GetCandlesRequest()
-                        .setInstrumentUid(config.getInstrument().getUid())
-                        .setFrom(Instant.parse("2021-12-15T00:00:00Z"))
-                        .setTo(Instant.parse("2021-12-20T00:00:00Z"))
-                        .setInterval(CandleInterval.HOUR_4),
-                0.6
+            new GetCandlesRequest()
+                .setInstrumentUid(config.getInstrument().getUid())
+                .setFrom(Instant.parse("2021-12-15T00:00:00Z"))
+                .setTo(Instant.parse("2021-12-20T00:00:00Z"))
+                .setInterval(CandleInterval.HOUR_4),
+            0.6
         );
         getCandlesTest(
-                new GetCandlesRequest()
-                        .setInstrumentUid(config.getInstrument().getUid())
-                        .setFrom(Instant.parse("2021-12-01T00:00:00Z"))
-                        .setTo(Instant.parse("2021-12-30T00:00:00Z"))
-                        .setInterval(CandleInterval.DAY),
-                0.7
+            new GetCandlesRequest()
+                .setInstrumentUid(config.getInstrument().getUid())
+                .setFrom(Instant.parse("2021-12-01T00:00:00Z"))
+                .setTo(Instant.parse("2021-12-30T00:00:00Z"))
+                .setInterval(CandleInterval.DAY),
+            0.7
         );
         getCandlesTest(
-                new GetCandlesRequest()
-                        .setInstrumentUid(config.getInstrument().getUid())
-                        .setFrom(Instant.parse("2021-10-30T00:00:00Z"))
-                        .setTo(Instant.parse("2021-12-30T00:00:00Z"))
-                        .setInterval(CandleInterval.WEEK)
+            new GetCandlesRequest()
+                .setInstrumentUid(config.getInstrument().getUid())
+                .setFrom(Instant.parse("2021-10-30T00:00:00Z"))
+                .setTo(Instant.parse("2021-12-30T00:00:00Z"))
+                .setInterval(CandleInterval.WEEK)
         );
         getCandlesTest(
-                new GetCandlesRequest()
-                        .setInstrumentUid(config.getInstrument().getUid())
-                        .setFrom(Instant.parse("2021-01-01T00:00:00Z"))
-                        .setTo(Instant.parse("2021-05-30T00:00:00Z"))
-                        .setInterval(CandleInterval.MONTH),
-                0
+            new GetCandlesRequest()
+                .setInstrumentUid(config.getInstrument().getUid())
+                .setFrom(Instant.parse("2021-01-01T00:00:00Z"))
+                .setTo(Instant.parse("2021-05-30T00:00:00Z"))
+                .setInterval(CandleInterval.MONTH),
+            0
         );
     }
 
@@ -179,8 +179,8 @@ class MockMarketDataServiceIT {
           9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-30T15:22:00Z;5.558;5.56;5.56;5.558;10963;
          */
         GetLastPricesRequest request = new GetLastPricesRequest()
-                .setInstrumentUid(config.getInstrument().getUid())
-                .setPeriod(Duration.ofMinutes(10));
+            .setInstrumentUid(config.getInstrument().getUid())
+            .setPeriod(Duration.ofMinutes(10));
         clock.syncCurrentTime(Instant.parse("2020-12-30T15:22:00Z"));
 
         GetLastPricesResponse response = marketDataService.getLastPrices(request);
@@ -210,13 +210,13 @@ class MockMarketDataServiceIT {
     }
 
     @Test
-    void getCandleAtTest() {
+    void getFindClosestBeforeTest() {
         /*
           Tested file content:
           9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-30T15:15:00Z;5.558;5.56;5.56;5.556;35532;
          */
         Instant time = Instant.parse("2020-12-30T15:15:00Z");
-        Candle candle = marketDataService.getCandleAt(config.getInstrument().getUid(), time).orElseThrow();
+        Candle candle = marketDataService.findClosestBefore(config.getInstrument().getUid(), time).orElseThrow();
 
         assertEquals(Instant.parse("2020-12-30T15:15:00Z"), candle.getTime());
         assertEquals(Quotation.of(5.558), candle.getOpenPrice());
@@ -252,13 +252,14 @@ class MockMarketDataServiceIT {
         9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-30T14:45:00Z;5.556;5.556;5.556;5.556;611;
          */
         clock.syncCurrentTime(Instant.parse("2020-12-30T14:25:00Z"));
-        FindPriceParams params = new FindPriceParams()
-                .setInstrumentUid(config.getInstrument().getUid())
-                .setMaxCount(4)
-                .setFrom(Instant.parse("2020-12-30T14:25:00Z"))
-                .setTo(Instant.parse("2020-12-30T14:45:00Z"))
-                .setPrice(Quotation.of(5.554))
-                .setComparisonOperator(ComparisonOperator.MORE);
+        FindPriceParams params = new FindPriceParams(
+            config.getInstrument().getUid(),
+            Instant.parse("2020-12-30T14:25:00Z"),
+            Instant.parse("2020-12-30T14:45:00Z"),
+            Quotation.of(5.554),
+            ComparisonOperator.MORE,
+            4
+        );
         List<Candle> result = marketDataService.findCandlesByOpenPrice(CandleInterval.MIN_1, params);
 
         assertNotNull(result);
@@ -328,11 +329,11 @@ class MockMarketDataServiceIT {
 
             // Assert candle values are correct
             assertCandle(
-                    previousCandle,
-                    request.getInterval(),
-                    request.getInstrumentUid(),
-                    previousCandle.getTime(),
-                    candle.getTime()
+                previousCandle,
+                request.getInterval(),
+                request.getInstrumentUid(),
+                previousCandle.getTime(),
+                candle.getTime()
             );
 
             previousCandle = candle;
@@ -342,21 +343,13 @@ class MockMarketDataServiceIT {
     }
 
     protected void assertCandle(
-            HistoricCandle candle,
-            CandleInterval assertInterval,
-            String instrumentUid,
-            Instant from,
-            Instant to
+        HistoricCandle candle,
+        CandleInterval assertInterval,
+        String instrumentUid,
+        Instant from,
+        Instant to
     ) {
-        var uniteCandles = StreamSupport
-                .stream(
-                        marketDataService
-                                .candleRepository
-                                .getPeriod(instrumentUid, from, to)
-                                .spliterator(),
-                        false
-                )
-                .collect(Collectors.toList());
+        var uniteCandles = new ArrayList<>(marketDataService.candleRepository.getPeriod(instrumentUid, from, to));
 
         uniteCandles.remove(uniteCandles.size() - 1);
         assertTrue(uniteCandles.size() <= assertInterval.getDuration().toMinutes());

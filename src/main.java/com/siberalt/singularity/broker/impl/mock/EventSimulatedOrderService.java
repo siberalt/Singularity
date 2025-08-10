@@ -199,7 +199,7 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
             );
             futureOrder.setInstrumentPrice(instrumentPrice);
         } else {
-            var lastCandle = mockBroker.marketDataService.getCandleAt(
+            var lastCandle = mockBroker.marketDataService.findClosestBefore(
                 instrument.getUid(),
                 endOrderLifeTime
             ).orElse(null);
@@ -247,13 +247,14 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
 
         return mockBroker.marketDataService.findCandlesByOpenPrice(
                 CandleInterval.MIN_1,
-                new FindPriceParams()
-                    .setFrom(from)
-                    .setTo(to)
-                    .setComparisonOperator(comparisonOperator)
-                    .setMaxCount(1)
-                    .setPrice(requestedPrice)
-                    .setInstrumentUid(instrumentUid)
+                new FindPriceParams(
+                    instrumentUid,
+                    from,
+                    to,
+                    requestedPrice,
+                    comparisonOperator,
+                    1
+                )
             )
             .stream()
             .findFirst()

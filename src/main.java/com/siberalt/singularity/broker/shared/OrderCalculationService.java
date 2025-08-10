@@ -73,7 +73,7 @@ public class OrderCalculationService {
             throw new ArithmeticException("Price per unit cannot be negative or zero.");
         }
 
-        if (limit.isZero() || limit.isLess(instrumentPrice)) {
+        if (limit.isZero() || limit.isLessThan(instrumentPrice)) {
             // If the price or limit is zero, return zero quantity
             return 0;
         }

@@ -55,7 +55,7 @@ public class EventSimulatedOrderServiceTest extends MockOrderServiceTest {
         Candle expirationCandle = createCandle(
             Instant.parse("2021-12-15T15:10:00Z"), 10, 15, 6, 10, 100
         );
-        when(candleStorage.getAt(any(), any()))
+        when(candleStorage.findClosestBefore(any(), any()))
             .thenReturn(Optional.of(expirationCandle));
 
         addMoney(Quotation.of(20000D));

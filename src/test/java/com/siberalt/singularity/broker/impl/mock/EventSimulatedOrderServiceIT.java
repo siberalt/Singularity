@@ -101,9 +101,9 @@ public class EventSimulatedOrderServiceIT {
         String instrumentUid = config.getInstrument().getUid();
 
         SandboxBrokerFacade brokerFacade = SandboxBrokerFacade.of(broker);
-        when(candleStorage.getAt(instrumentUid, buyingTime))
+        when(candleStorage.findClosestBefore(instrumentUid, buyingTime))
             .thenReturn(Optional.of(Candle.of(buyingTime, 1000, 7.1)));
-        when(candleStorage.getAt(instrumentUid, sellingTime))
+        when(candleStorage.findClosestBefore(instrumentUid, sellingTime))
             .thenReturn(Optional.of(Candle.of(sellingTime, 1000, 7.2)));
 
         userActionSimulator.planAction(openingTime, (userContext) -> {
@@ -148,12 +148,12 @@ public class EventSimulatedOrderServiceIT {
         Instant postSellOrderTime = Instant.parse("1997-05-04T08:20:00.00Z");
         Instant executeSellOrderTime = Instant.parse("1997-05-04T14:25:00.00Z");
 
-        when(candleStorage.getAt(instrumentUid, postBuyOrderTime))
+        when(candleStorage.findClosestBefore(instrumentUid, postBuyOrderTime))
             .thenReturn(Optional.of(Candle.of(postBuyOrderTime, 1000, 7.3)));
         when(candleStorage.findByOpenPrice(any()))
             .thenReturn(List.of(Candle.of(executeBuyOrderTime, 1000, 7)))
             .thenReturn(List.of(Candle.of(executeSellOrderTime, 1000, 8)));
-        when(candleStorage.getAt(instrumentUid, postSellOrderTime))
+        when(candleStorage.findClosestBefore(instrumentUid, postSellOrderTime))
             .thenReturn(Optional.of(Candle.of(postSellOrderTime, 1000, 6)));
 
         userActionSimulator.planAction(openingTime, (userContext) -> {
@@ -177,9 +177,9 @@ public class EventSimulatedOrderServiceIT {
         );
 
         // Verify that the mocks were called at least once
-        verify(candleStorage, times(1)).getAt(instrumentUid, postBuyOrderTime);
+        verify(candleStorage, times(1)).findClosestBefore(instrumentUid, postBuyOrderTime);
         verify(candleStorage, times(2)).findByOpenPrice(any());
-        verify(candleStorage, times(1)).getAt(instrumentUid, postSellOrderTime);
+        verify(candleStorage, times(1)).findClosestBefore(instrumentUid, postSellOrderTime);
 
         // Assert balance after simulation
         var money = operationsService.getAvailableMoney((String) userContext.get("accountId"), "RUB");
@@ -202,14 +202,14 @@ public class EventSimulatedOrderServiceIT {
         Instant endTime = startTime.plus(60, java.time.temporal.ChronoUnit.MINUTES);
 
         String instrumentUid = config.getInstrument().getUid();
-        when(candleStorage.getAt(instrumentUid, postBuyLimitTime))
+        when(candleStorage.findClosestBefore(instrumentUid, postBuyLimitTime))
             .thenReturn(Optional.of(Candle.of(postBuyLimitTime, 1000, 6)));
-        when(candleStorage.getAt(instrumentUid, postSellLimitTime))
+        when(candleStorage.findClosestBefore(instrumentUid, postSellLimitTime))
             .thenReturn(Optional.of(Candle.of(postSellLimitTime, 1000, 6)));
         when(candleStorage.findByOpenPrice(any()))
             .thenReturn(List.of(Candle.of(executeBuyLimitTime, 1000, 4)))
             .thenReturn(List.of(Candle.of(executeSellLimitTime, 1000, 8)));
-        when(candleStorage.getAt(instrumentUid, postBuyMarketTime))
+        when(candleStorage.findClosestBefore(instrumentUid, postBuyMarketTime))
             .thenReturn(Optional.of(Candle.of(postBuyMarketTime, 1000, 5)));
 
         Money initialMoney = Money.of("RUB", Quotation.of(1000000));

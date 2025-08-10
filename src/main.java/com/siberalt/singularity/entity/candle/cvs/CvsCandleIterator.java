@@ -60,13 +60,13 @@ class CvsCandleIterator implements Iterator<Candle> {
 
         do {
             if (!scanner.hasNext()) {
-                // TODO: throw exception
+                throw new RuntimeException("No more lines in the input stream");
             }
 
             var matcher = Pattern.compile("^.+?;(.+?);").matcher(initFromLastLine = scanner.nextLine());
 
             if (!matcher.find()) {
-                // TODO: throw exception
+                throw new RuntimeException("Invalid line format: " + initFromLastLine);
             }
 
             currentTime = Instant.parse(matcher.group(1));
