@@ -7,6 +7,8 @@ import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.EventMockBroker;
 import com.siberalt.singularity.broker.shared.BrokerFacade;
+import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.entity.candle.cvs.CvsCandleRepository;
 import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory;
 import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
@@ -15,7 +17,8 @@ import com.siberalt.singularity.entity.instrument.InstrumentRepository;
 import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
 import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.entity.order.OrderRepository;
-import com.siberalt.singularity.presenter.MarketOrdersPresenter;
+import com.siberalt.singularity.presenter.google.PriceChart;
+import com.siberalt.singularity.presenter.google.series.OrderSeriesProvider;
 import com.siberalt.singularity.simulation.EventSimulator;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
@@ -125,13 +128,27 @@ public class ProfitTakerStrategySimulation {
 
         System.out.printf("APY: %.2f%%", apy);
 
-        MarketOrdersPresenter marketOrdersPresenter = new MarketOrdersPresenter(
-            candleRepository,
-            "TMOS",
-            account.getId(),
-            orderRepository
-        );
+        drawOrdersChart(orders, candleRepository, "TMOS", startTime, endTime);
+    }
 
-        marketOrdersPresenter.show(startTime, endTime);
+    private static void drawOrdersChart(
+        List<Order> orders,
+        ReadCandleRepository candleRepository,
+        String instrumentUid,
+        Instant startTime,
+        Instant endTime
+    ) {
+        List<Candle> candles = candleRepository.getPeriod(instrumentUid, startTime, endTime);
+        OrderSeriesProvider orderSeriesProvider = new OrderSeriesProvider(orders, candles)
+            .setIncludeOutOfRangeOrders(true);
+
+        PriceChart priceChart = new PriceChart(
+            candleRepository,
+            instrumentUid,
+            c -> c.getClosePrice().toBigDecimal().doubleValue()
+        );
+        priceChart.setStepInterval(10);
+        priceChart.addSeriesProvider(orderSeriesProvider);
+        priceChart.render(candles);
     }
 }

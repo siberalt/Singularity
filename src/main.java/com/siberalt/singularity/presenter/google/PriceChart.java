@@ -1,62 +1,54 @@
 package com.siberalt.singularity.presenter.google;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
-import com.siberalt.singularity.math.LinearFunction2D;
+import com.siberalt.singularity.presenter.google.render.DataRenderer;
+import com.siberalt.singularity.presenter.google.render.FasterXmlRenderer;
+import com.siberalt.singularity.presenter.google.series.CandlePriceSeriesProvider;
+import com.siberalt.singularity.presenter.google.series.SeriesChunk;
+import com.siberalt.singularity.presenter.google.series.SeriesDataAggregator;
+import com.siberalt.singularity.presenter.google.series.SeriesProvider;
 
-import java.io.File;
-import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.function.Function;
 
 public class PriceChart {
-    private static final String DEFAULT_HTML_FILE = "src/main/resources/presenter/google/PriceChart.html";
-    private static final String DEFAULT_OUTPUT_FILE_PATH = "src/main/resources/presenter/google/PriceChart.json";
-
-    public record Line(long x1, long x2, LinearFunction2D<Double> function) {
-        public double y1() {
-            return function.calculate((double) x1);
-        }
-
-        public double y2() {
-            return function.calculate((double) x2);
-        }
-    }
-
-    private final String instrumentUid;
-    private final ReadCandleRepository candleRepository;
+    private String instrumentUid;
+    private ReadCandleRepository candleRepository;
     private Function<Candle, Double> priceExtractor = c -> c.getClosePrice().toBigDecimal().doubleValue();
-    private String htmlFile = DEFAULT_HTML_FILE;
-    private String outputFilePath = DEFAULT_OUTPUT_FILE_PATH;
-    private final List<Line> lines = new ArrayList<>();
     private int stepInterval = 30; // Default step interval for rendering
+    private DataRenderer dataRenderer = new FasterXmlRenderer();
+    private final List<SeriesProvider> seriesProviders = new ArrayList<>();
 
     public PriceChart(ReadCandleRepository candleRepository, String instrumentUid) {
         this.candleRepository = candleRepository;
         this.instrumentUid = instrumentUid;
     }
 
-    public PriceChart(ReadCandleRepository candleRepository, String instrumentUid, String htmlFile) {
-        this.candleRepository = candleRepository;
-        this.instrumentUid = instrumentUid;
-        this.htmlFile = htmlFile;
-    }
-
     public PriceChart(
         ReadCandleRepository candleRepository,
         String instrumentUid,
-        String htmlFile,
         Function<Candle, Double> priceExtractor
     ) {
         this.candleRepository = candleRepository;
         this.instrumentUid = instrumentUid;
-        this.htmlFile = htmlFile;
         this.priceExtractor = priceExtractor;
+    }
+
+    public PriceChart(Function<Candle, Double> priceExtractor) {
+        this.priceExtractor = priceExtractor;
+    }
+
+    public PriceChart setDataRenderer(DataRenderer dataRenderer) {
+        this.dataRenderer = dataRenderer;
+        return this;
+    }
+
+    public PriceChart addSeriesProvider(SeriesProvider seriesProvider) {
+        this.seriesProviders.add(seriesProvider);
+        return this;
     }
 
     public PriceChart setStepInterval(int stepInterval) {
@@ -64,55 +56,38 @@ public class PriceChart {
         return this;
     }
 
-    public void addLine(long x1, long x2, LinearFunction2D<Double> function) {
-        long remainderX1 = x1 % stepInterval;
-        long remainderX2 = x2 % stepInterval;
+    public void render(Instant startTime, Instant endTime) {
+        if (candleRepository == null) {
+            throw new IllegalStateException("Candle repository is not set");
+        }
 
-        x1 = remainderX1 < (stepInterval / 2) ? x1 - remainderX1 : x1 - remainderX1 + stepInterval;
-        x2 = remainderX2 < (stepInterval / 2) ? x2 - remainderX2 : x2 - remainderX2 + stepInterval;
-        Line line = new Line(x1, x2, function);
-        lines.add(line);
-    }
-
-    public void render(Instant startTime, Instant endTime) throws IOException {
         List<Candle> candles = candleRepository.getPeriod(instrumentUid, startTime, endTime);
 
-        ObjectMapper objectMapper = new ObjectMapper();
-        ArrayNode jsonArray = objectMapper.createArrayNode();
-        long index = 0;
-        Iterator<Line> linesIterator = lines.iterator();
-        Line currentLine = linesIterator.hasNext() ? linesIterator.next() : null;
+        long start = 0, end = candles.size() - 1;
 
-        for (Candle candle : candles) {
+        SeriesDataAggregator aggregator = new SeriesDataAggregator()
+            .addSeriesProvider(new CandlePriceSeriesProvider(candles).setPriceExtractor(priceExtractor));
+        seriesProviders.forEach(aggregator::addSeriesProvider);
 
-            if (index % stepInterval == 0) {
-                ArrayNode arrayNode = objectMapper.createArrayNode();
-                arrayNode.add(candle.getTime().toString());
-                arrayNode.add(priceExtractor.apply(candle));
+        SeriesChunk chunk = aggregator.provide(start, end, stepInterval).orElseThrow();
 
-                // Add lines to the JSON array
-                if (currentLine != null && currentLine.x1() <= index && currentLine.x2() >= index) {
-                    arrayNode.add(currentLine.function.calculate((double) index));
+        dataRenderer.render(chunk);
+    }
 
-                    if (linesIterator.hasNext() && index >= currentLine.x2()) {
-                        currentLine = linesIterator.next();
-                    }
-                }
+    public void render(List<Candle> candles) {
+        long start = 0, end = candles.size() - 1;
 
-                jsonArray.add(arrayNode);
-            }
+        SeriesDataAggregator aggregator = new SeriesDataAggregator()
+            .addSeriesProvider(new CandlePriceSeriesProvider(candles).setPriceExtractor(priceExtractor));
+        seriesProviders.forEach(aggregator::addSeriesProvider);
 
-            index++;
-        }
+        SeriesChunk chunk = aggregator.provide(start, end, stepInterval).orElseThrow();
 
-        objectMapper.writeValue(new File(outputFilePath), jsonArray);
-        System.out.println("Serve the JSON file using an HTTP server, e.g., Python's `http.server` or Node.js.");
+        dataRenderer.render(chunk);
+    }
 
-        // Open the HTML file by field htmlFile in the default browser
-        if (java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
-            java.awt.Desktop.getDesktop().browse(new File(htmlFile).toURI());
-        } else {
-            System.out.println("Desktop is not supported or browse action is unavailable. Please open the HTML file manually: " + htmlFile);
-        }
+    public static long adjustToStepInterval(long value, long stepInterval) {
+        long remainder = value % stepInterval;
+        return remainder <= (stepInterval / 2) ? value - remainder : value - remainder + stepInterval;
     }
 }

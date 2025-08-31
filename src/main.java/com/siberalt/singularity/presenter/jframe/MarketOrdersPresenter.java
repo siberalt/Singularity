@@ -1,4 +1,4 @@
-package com.siberalt.singularity.presenter;
+package com.siberalt.singularity.presenter.jframe;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
