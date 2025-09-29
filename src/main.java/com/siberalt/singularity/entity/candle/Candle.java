@@ -9,14 +9,23 @@ import java.util.Objects;
 import java.util.stream.Stream;
 
 public class Candle {
-    String instrumentUid;
-    Instant time;
-    Quotation openPrice;
-    Quotation closePrice;
-    Quotation highPrice;
-    Quotation lowPrice;
+    private String instrumentUid;
+    private Instant time;
+    private Quotation openPrice;
+    private Quotation closePrice;
+    private Quotation highPrice;
+    private Quotation lowPrice;
+    private long index = -1;
+    private long volume;
 
-    long volume;
+    public long getIndex() {
+        return index;
+    }
+
+    public Candle setIndex(long index) {
+        this.index = index;
+        return this;
+    }
 
     public String getInstrumentUid() {
         return instrumentUid;
@@ -84,13 +93,13 @@ public class Candle {
     @Override
     public Candle clone() {
         return new Candle()
-                .setInstrumentUid(instrumentUid)
-                .setTime(time)
-                .setOpenPrice(openPrice)
-                .setClosePrice(closePrice)
-                .setHighPrice(highPrice)
-                .setLowPrice(lowPrice)
-                .setVolume(volume);
+            .setInstrumentUid(instrumentUid)
+            .setTime(time)
+            .setOpenPrice(openPrice)
+            .setClosePrice(closePrice)
+            .setHighPrice(highPrice)
+            .setLowPrice(lowPrice)
+            .setVolume(volume);
     }
 
     public boolean isEmpty() {
@@ -102,13 +111,13 @@ public class Candle {
             return this;
         }
         return new Candle()
-                .setInstrumentUid(instrumentUid)
-                .setTime(time)
-                .setOpenPrice(openPrice != null ? openPrice : other.openPrice)
-                .setClosePrice(closePrice != null ? closePrice : other.closePrice)
-                .setHighPrice(highPrice != null ? highPrice : other.highPrice)
-                .setLowPrice(lowPrice != null ? lowPrice : other.lowPrice)
-                .setVolume(volume + other.volume);
+            .setInstrumentUid(instrumentUid)
+            .setTime(time)
+            .setOpenPrice(openPrice != null ? openPrice : other.openPrice)
+            .setClosePrice(closePrice != null ? closePrice : other.closePrice)
+            .setHighPrice(highPrice != null ? highPrice : other.highPrice)
+            .setLowPrice(lowPrice != null ? lowPrice : other.lowPrice)
+            .setVolume(volume + other.volume);
     }
 
     public Candle add(Candle other) {
@@ -116,13 +125,13 @@ public class Candle {
             return this;
         }
         return new Candle()
-                .setInstrumentUid(instrumentUid)
-                .setTime(time)
-                .setOpenPrice(openPrice.add(other.openPrice))
-                .setClosePrice(closePrice.add(other.closePrice))
-                .setHighPrice(highPrice.add(other.highPrice))
-                .setLowPrice(lowPrice.add(other.lowPrice))
-                .setVolume(volume + other.volume);
+            .setInstrumentUid(instrumentUid)
+            .setTime(time)
+            .setOpenPrice(openPrice.add(other.openPrice))
+            .setClosePrice(closePrice.add(other.closePrice))
+            .setHighPrice(highPrice.add(other.highPrice))
+            .setLowPrice(lowPrice.add(other.lowPrice))
+            .setVolume(volume + other.volume);
     }
 
     public Candle divide(int divisor) {
@@ -130,13 +139,13 @@ public class Candle {
             throw new IllegalArgumentException("Divisor must be greater than zero");
         }
         return new Candle()
-                .setInstrumentUid(instrumentUid)
-                .setTime(time)
-                .setOpenPrice(openPrice.divide(divisor))
-                .setClosePrice(closePrice.divide(divisor))
-                .setHighPrice(highPrice.divide(divisor))
-                .setLowPrice(lowPrice.divide(divisor))
-                .setVolume(volume / divisor);
+            .setInstrumentUid(instrumentUid)
+            .setTime(time)
+            .setOpenPrice(openPrice.divide(divisor))
+            .setClosePrice(closePrice.divide(divisor))
+            .setHighPrice(highPrice.divide(divisor))
+            .setLowPrice(lowPrice.divide(divisor))
+            .setVolume(volume / divisor);
     }
 
     /**
@@ -151,20 +160,20 @@ public class Candle {
 
     public Quotation getAveragePrice(RoundingMode roundingMode) {
         var sum = Stream.of(lowPrice, highPrice, closePrice, openPrice)
-                .map(Objects::requireNonNull)
-                .map(Quotation::toBigDecimal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            .map(Objects::requireNonNull)
+            .map(Quotation::toBigDecimal)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
         return Quotation.of(sum.divide(BigDecimal.valueOf(4), roundingMode));
     }
 
     public static Candle of(Instant time, long volume, Quotation open, Quotation high, Quotation low, Quotation close) {
         return new Candle()
-                .setTime(time)
-                .setVolume(volume)
-                .setOpenPrice(open)
-                .setHighPrice(high)
-                .setLowPrice(low)
-                .setClosePrice(close);
+            .setTime(time)
+            .setVolume(volume)
+            .setOpenPrice(open)
+            .setHighPrice(high)
+            .setLowPrice(low)
+            .setClosePrice(close);
     }
 
     public static Candle of(Instant time, String instrumentUid, long volume, double repeatedValue) {
@@ -199,11 +208,11 @@ public class Candle {
 
     public static Candle of(Instant time, long volume, double open, double high, double low, double close) {
         return new Candle()
-                .setTime(time)
-                .setVolume(volume)
-                .setOpenPrice(Quotation.of(open))
-                .setHighPrice(Quotation.of(high))
-                .setLowPrice(Quotation.of(low))
-                .setClosePrice(Quotation.of(close));
+            .setTime(time)
+            .setVolume(volume)
+            .setOpenPrice(Quotation.of(open))
+            .setHighPrice(Quotation.of(high))
+            .setLowPrice(Quotation.of(low))
+            .setClosePrice(Quotation.of(close));
     }
 }

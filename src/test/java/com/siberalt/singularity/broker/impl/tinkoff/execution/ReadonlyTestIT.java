@@ -11,7 +11,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
-public class ReadonlyTest {
+public class ReadonlyTestIT {
     @Test
     public void test() throws IOException, AbstractException {
         ConfigInterface configuration = new YamlConfig(

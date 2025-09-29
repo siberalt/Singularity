@@ -1,4 +1,4 @@
-package com.siberalt.singularity.strategy.level;
+package com.siberalt.singularity.strategy.level.linear;
 
 import com.siberalt.singularity.math.LinearFunction2D;
 

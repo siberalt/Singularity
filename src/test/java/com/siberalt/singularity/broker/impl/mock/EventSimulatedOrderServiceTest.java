@@ -11,22 +11,21 @@ import com.siberalt.singularity.broker.contract.service.order.response.Execution
 import com.siberalt.singularity.broker.contract.service.order.response.OrderState;
 import com.siberalt.singularity.broker.contract.service.order.response.PostOrderResponse;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
-import com.siberalt.singularity.entity.order.OrderRepository;
-import com.siberalt.singularity.simulation.EventObserver;
-import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
+import com.siberalt.singularity.entity.order.OrderRepository;
+import com.siberalt.singularity.simulation.EventObserver;
 import com.siberalt.singularity.strategy.context.Clock;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 
 public class EventSimulatedOrderServiceTest extends MockOrderServiceTest {
@@ -55,8 +54,8 @@ public class EventSimulatedOrderServiceTest extends MockOrderServiceTest {
         Candle expirationCandle = createCandle(
             Instant.parse("2021-12-15T15:10:00Z"), 10, 15, 6, 10, 100
         );
-        when(candleStorage.findClosestBefore(any(), any()))
-            .thenReturn(Optional.of(expirationCandle));
+        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1L)))
+            .thenReturn(List.of(expirationCandle));
 
         addMoney(Quotation.of(20000D));
 

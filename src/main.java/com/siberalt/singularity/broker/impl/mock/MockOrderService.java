@@ -352,7 +352,7 @@ public class MockOrderService implements OrderService {
     protected void checkEnoughOfMoneyToBuy(Order order) throws AbstractException {
         boolean isEnoughOfMoney = this.mockBroker.operationsService.isEnoughOfMoney(
             order.getAccountId(),
-            Money.of(order.getInstrument().getCurrency(), order.getBalanceChange())
+            Money.of(order.getInstrument().getCurrency(), order.getBalanceChange().multiply(-1))
         );
 
         if (!isEnoughOfMoney) {

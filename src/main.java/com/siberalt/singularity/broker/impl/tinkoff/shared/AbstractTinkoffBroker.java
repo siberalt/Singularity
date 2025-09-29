@@ -8,7 +8,9 @@ import com.siberalt.singularity.broker.contract.service.user.UserService;
 import ru.tinkoff.piapi.contract.v1.OperationsServiceGrpc;
 import ru.tinkoff.piapi.core.InvestApi;
 
-public abstract class AbstractTinkoffBroker implements EventSubscriptionBroker {
+import java.io.Closeable;
+
+public abstract class AbstractTinkoffBroker implements EventSubscriptionBroker, Closeable {
     protected InvestApi api;
     protected com.siberalt.singularity.broker.impl.tinkoff.shared.OrderService orderService;
     protected com.siberalt.singularity.broker.impl.tinkoff.shared.MarketDataService marketDataService;
@@ -30,6 +32,13 @@ public abstract class AbstractTinkoffBroker implements EventSubscriptionBroker {
         userService = new com.siberalt.singularity.broker.impl.tinkoff.shared.UserService(api.getUserService());
         instrumentService = new InstrumentService(api.getInstrumentsService());
         subscriptionManager = new SubscriptionManager(api);
+    }
+
+    public void close() {
+        if (null != api) {
+            api.destroy(10);
+            api = null;
+        }
     }
 
     protected InvestApi createApi(String token) {

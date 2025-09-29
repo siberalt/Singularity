@@ -13,9 +13,8 @@ import java.util.*;
 public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable {
     protected static final int READ_LIMIT = 1024 * 1024 * 1024;
 
-    protected InputStream inputStream;
-
-    protected String instrumentUid;
+    private final InputStream inputStream;
+    private final String instrumentUid;
 
     public CvsCandleRepository(String instrumentUid, InputStream inputStream) {
         this.inputStream = inputStream;
@@ -32,23 +31,23 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
         resetInputStream(inputStream);
 
         var candle = new CvsCandleIterator(inputStream)
-                .initInstrumentUid(instrumentUid)
-                .initFrom(at)
-                .next();
+            .initInstrumentUid(instrumentUid)
+            .initFrom(at)
+            .next();
 
         return Optional.ofNullable(candle);
     }
 
     @Override
-    public Optional<Candle> findClosestBefore(String instrumentUid, Instant at) {
+    public List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore) {
         if (!Objects.equals(this.instrumentUid, instrumentUid)) {
-            return Optional.empty();
+            return Collections.emptyList();
         }
 
         resetInputStream(inputStream);
         CvsCandleIterator iterator = new CvsCandleIterator(inputStream).initInstrumentUid(instrumentUid);
 
-        Candle lastCandle = null;
+        ArrayDeque<Candle> candlesBuffer = new ArrayDeque<>();
 
         while (iterator.hasNext()) {
             Candle candle = iterator.next();
@@ -59,13 +58,20 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
             }
 
             if (candle.getTime().equals(at)) {
-                return Optional.of(candle);
+                candlesBuffer.removeFirst();
+                candlesBuffer.addLast(candle);
+
+                return candlesBuffer.stream().toList();
             }
 
-            lastCandle = candle;
+            candlesBuffer.addLast(candle);
+
+            if (candlesBuffer.size() > amountBefore) {
+                candlesBuffer.removeFirst();
+            }
         }
 
-        return Optional.ofNullable(lastCandle);
+        return candlesBuffer.stream().toList();
     }
 
     @Override
@@ -98,9 +104,9 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
         resetInputStream(inputStream);
 
         Iterable<Candle> iterator = () -> new CvsCandleIterator(inputStream)
-                .initInstrumentUid(instrumentUid)
-                .initFrom(params.from())
-                .initTo(params.to());
+            .initInstrumentUid(instrumentUid)
+            .initFrom(params.from())
+            .initTo(params.to());
 
         var resultCandles = new ArrayList<Candle>();
 

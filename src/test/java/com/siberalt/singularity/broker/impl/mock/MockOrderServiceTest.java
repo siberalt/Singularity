@@ -84,6 +84,42 @@ public abstract class MockOrderServiceTest {
     );
 
     @Test
+    public void testBuyWithInsufficientBalance() throws AbstractException {
+        // Arrange
+        Candle testCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+
+        when(candleStorage.findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1))
+            .thenReturn(List.of(testCandle));
+
+        // Ensure the account has no money
+        Money availableMoney = broker.getOperationsService()
+            .getAvailableMoney(testAccount.getId(), config.getInstrument().getCurrency());
+
+        if (availableMoney.isMoreThan(Money.of("RUB",Quotation.ZERO))) {
+            broker.getOperationsService().subtractMoney(
+                testAccount.getId(),
+                availableMoney
+            );
+        }
+
+        PostOrderRequest postOrderRequest = new PostOrderRequest()
+            .setInstrumentId(config.getInstrument().getUid())
+            .setQuantity(10)
+            .setAccountId(testAccount.getId())
+            .setDirection(OrderDirection.BUY)
+            .setOrderType(OrderType.MARKET);
+
+        // Act & Assert
+        assertThrowsWithErrorCode(
+            InvalidRequestException.class,
+            ErrorCode.INSUFFICIENT_BALANCE,
+            () -> orderService.post(postOrderRequest)
+        );
+    }
+
+    @Test
     public void calculateReturnsCorrectTransactionsForValidRequest() throws AbstractException {
         PostOrderRequest postOrderRequest = new PostOrderRequest()
             .setInstrumentId(config.getInstrument().getUid())
@@ -98,8 +134,8 @@ public abstract class MockOrderServiceTest {
             currentTime, 10, 15, 5, 10, 100
         );
 
-        when(candleStorage.findClosestBefore(config.getInstrument().getUid(), currentTime))
-            .thenReturn(Optional.of(testCandle));
+        when(candleStorage.findBeforeOrEqual(config.getInstrument().getUid(), currentTime,1))
+            .thenReturn(List.of(testCandle));
         when(clock.currentTime()).thenReturn(currentTime);
 
         CalculateResponse response = orderService.calculate(calculateRequest);
@@ -246,7 +282,7 @@ public abstract class MockOrderServiceTest {
             () -> assertBuyOrder(testCandle, OrderType.MARKET, 10, testCandle.getOpenPrice())
         );
 
-        verify(candleStorage, atLeastOnce()).findClosestBefore(config.getInstrument().getUid(), currentTime);
+        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1);
     }
 
     @Test
@@ -271,8 +307,8 @@ public abstract class MockOrderServiceTest {
             currentTime, 10, 15, 5, 12, 100
         );
 
-        when(candleStorage.findClosestBefore(any(), any()))
-            .thenReturn(Optional.of(expirationCandle));
+        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1)))
+            .thenReturn(List.of(expirationCandle));
         assertBuyOrder(validCandle, OrderType.LIMIT, 10, Quotation.of(9));
 
         assertThrowsWithErrorCode(
@@ -293,7 +329,7 @@ public abstract class MockOrderServiceTest {
             () -> assertBuyOrder(validCandle, OrderType.LIMIT, 10, null)
         );
 
-        verify(candleStorage, atLeastOnce()).findClosestBefore(config.getInstrument().getUid(), currentTime);
+        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1);
     }
 
     @Test
@@ -305,7 +341,7 @@ public abstract class MockOrderServiceTest {
         addMoney(validCandle.getOpenPrice().multiply(100));
 
         assertBuyOrder(validCandle, OrderType.BEST_PRICE, 10, Quotation.of(5));
-        verify(candleStorage, atLeastOnce()).findClosestBefore(config.getInstrument().getUid(), currentTime);
+        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1);
     }
 
     @Test
@@ -328,7 +364,7 @@ public abstract class MockOrderServiceTest {
         );
 
         assertSellOrder(validCandle, OrderType.MARKET, 20, openPrice);
-        verify(candleStorage, atLeastOnce()).findClosestBefore(instrumentConfig.getUid(), currentTime);
+        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(instrumentConfig.getUid(), currentTime, 1);
     }
 
     @Test
@@ -360,7 +396,7 @@ public abstract class MockOrderServiceTest {
             .thenReturn(Optional.of(expirationCandle));
         assertSellOrder(validCandle, OrderType.LIMIT, 10, Quotation.of(11));
 
-        verify(candleStorage, atLeastOnce()).findClosestBefore(config.getInstrument().getUid(), currentTime);
+        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1);
     }
 
     @Test
@@ -372,7 +408,7 @@ public abstract class MockOrderServiceTest {
         addInstruments(100);
 
         assertSellOrder(validCandle, OrderType.BEST_PRICE, 10, Quotation.of(11));
-        verify(candleStorage, atLeastOnce()).findClosestBefore(config.getInstrument().getUid(), currentTime);
+        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1);
     }
 
     @Test
@@ -513,8 +549,8 @@ public abstract class MockOrderServiceTest {
             && priceLimit != null
             && priceLimit.isGreaterThan(priceCandle.getOpenPrice());
 
-        when(candleStorage.findClosestBefore(instrumentConfig.getUid(), priceCandle.getTime()))
-            .thenReturn(Optional.of(priceCandle));
+        when(candleStorage.findBeforeOrEqual(instrumentConfig.getUid(), priceCandle.getTime(), 1))
+            .thenReturn(List.of(priceCandle));
         when(clock.currentTime()).thenReturn(priceCandle.getTime());
 
         PostOrderRequest request = new PostOrderRequest()
@@ -595,8 +631,8 @@ public abstract class MockOrderServiceTest {
             && priceLimit != null
             && priceLimit.isLessThan(priceCandle.getOpenPrice());
 
-        when(candleStorage.findClosestBefore(instrumentConfig.getUid(), priceCandle.getTime()))
-            .thenReturn(Optional.of(priceCandle));
+        when(candleStorage.findBeforeOrEqual(instrumentConfig.getUid(), priceCandle.getTime(), 1))
+            .thenReturn(List.of(priceCandle));
         when(clock.currentTime()).thenReturn(priceCandle.getTime());
 
         var request = new PostOrderRequest()

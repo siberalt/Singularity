@@ -94,7 +94,7 @@ public class BrokerFacade {
         );
     }
 
-    public PostOrderResponse sellBestPrice(String accountId, String instrumentId, int amount) throws AbstractException {
+    public PostOrderResponse sellBestPrice(String accountId, String instrumentId, long amount) throws AbstractException {
         return broker.getOrderService().post(
             new PostOrderRequest()
                 .setAccountId(accountId)
@@ -136,19 +136,33 @@ public class BrokerFacade {
             .setDirection(OrderDirection.BUY));
     }
 
-    public PostOrderResponse buyBestPriceFullBalance(String accountId, String instrumentId) throws AbstractException {
+    public long getPossibleBuyQuantity(String accountId, String instrumentId, OrderType orderType) throws AbstractException {
+        return orderCalculationService.calculatePossibleBuyQuantity(broker, new BuyRequest(
+            accountId,
+            instrumentId,
+            orderType
+        ));
+    }
+
+    public long buyBestPriceFullBalance(String accountId, String instrumentId) throws AbstractException {
         long possibleBuyQuantity = orderCalculationService.calculatePossibleBuyQuantity(broker, new BuyRequest(
             accountId,
             instrumentId,
             OrderType.BEST_PRICE
         ));
 
-        return broker.getOrderService().post(new PostOrderRequest()
+        if (possibleBuyQuantity <= 0) {
+            return possibleBuyQuantity;
+        }
+
+        broker.getOrderService().post(new PostOrderRequest()
             .setAccountId(accountId)
             .setInstrumentId(instrumentId)
             .setQuantity(possibleBuyQuantity)
             .setOrderType(OrderType.BEST_PRICE)
             .setDirection(OrderDirection.BUY));
+
+        return possibleBuyQuantity;
     }
 
     public PostOrderResponse buyMarket(String accountId, String instrumentId, int amount) throws AbstractException {
@@ -218,7 +232,7 @@ public class BrokerFacade {
         }
     }
 
-    public PostOrderResponse sellBestPriceUnchecked(String accountId, String instrumentId, int amount) {
+    public PostOrderResponse sellBestPriceUnchecked(String accountId, String instrumentId, long amount) {
         try {
             return sellBestPrice(accountId, instrumentId, amount);
         } catch (AbstractException e) {

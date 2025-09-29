@@ -1,6 +1,7 @@
 package com.siberalt.singularity.entity.candle;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,11 +25,14 @@ public class PeriodLimitedCandleRepository implements ReadCandleRepository {
     }
 
     @Override
-    public Optional<Candle> findClosestBefore(String instrumentUid, Instant at) {
+    public List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore) {
         if (at.isBefore(from)) {
-            return Optional.empty();
+            return Collections.emptyList();
         }
-        return delegate.findClosestBefore(instrumentUid, at).filter(candle -> !candle.getTime().isBefore(from));
+        return delegate.findBeforeOrEqual(instrumentUid, at, amountBefore)
+            .stream()
+            .filter(candle -> !candle.getTime().isBefore(from))
+            .toList();
     }
 
     @Override

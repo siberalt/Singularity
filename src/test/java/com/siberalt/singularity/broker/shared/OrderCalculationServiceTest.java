@@ -17,6 +17,7 @@ import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.shared.dto.BuyRequest;
 import com.siberalt.singularity.entity.instrument.Instrument;
+import com.siberalt.singularity.entity.order.Order;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
@@ -48,7 +49,7 @@ class OrderCalculationServiceTest {
         when(brokerMock.getMarketDataService()).thenReturn(marketDataServiceMock);
         when(brokerMock.getOrderService()).thenReturn(orderServiceMock);
 
-        orderCalculationService = new OrderCalculationService();
+        orderCalculationService = new OrderCalculationService(0);
     }
 
     @Test
@@ -228,6 +229,30 @@ class OrderCalculationServiceTest {
         long result = orderCalculationService.calculatePossibleBuyQuantity(brokerMock, limit, request);
 
         assertEquals(10, result);
+    }
+
+    @Test
+    void calculatePossibleBuyQuantityWithValidInputsAndExtraRatio() throws Exception {
+        Quotation limit = Quotation.of(1000);
+        Quotation instrumentPrice = Quotation.of(100);
+        BuyRequest request = new BuyRequest("accountId", "instrumentId", OrderType.MARKET);
+
+        when(marketDataServiceMock.getCurrentPrice(any()))
+            .thenReturn(new GetCurrentPriceResponse().setPrice(instrumentPrice));
+        when(orderServiceMock.calculate(any()))
+            .thenReturn(new CalculateResponse(
+                "instrumentId",
+                instrumentPrice.multiply(9).multiply(1.03), // Simulating commission of 3%
+                instrumentPrice,
+                9,
+                List.of() // Assuming no transactions for simplicity
+            ));
+
+        OrderCalculationService serviceWithExtraRatio = new OrderCalculationService(0.03); // 3% extra ratio
+
+        long result = serviceWithExtraRatio.calculatePossibleBuyQuantity(brokerMock, limit, request);
+
+        assertEquals(9, result); // Expecting 9 due to the extra ratio
     }
 
     private Object mockCalculateResponse(InvocationOnMock invocation, Quotation instrumentPrice) {

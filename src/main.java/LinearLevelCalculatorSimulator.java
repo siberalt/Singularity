@@ -3,10 +3,11 @@ import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory
 import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.render.FasterXmlRenderer;
 import com.siberalt.singularity.presenter.google.series.LineSeriesProvider;
-import com.siberalt.singularity.strategy.level.LinearLevelCalculator;
-import com.siberalt.singularity.strategy.level.Result;
+import com.siberalt.singularity.strategy.level.linear.LinearLevel;
+import com.siberalt.singularity.strategy.level.linear.LinearLevelDetector;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.function.Function;
 
 public class LinearLevelCalculatorSimulator {
@@ -14,20 +15,23 @@ public class LinearLevelCalculatorSimulator {
         var factory = new CvsFileCandleRepositoryFactory();
         var candleRepository = factory.create("TMOS", "src/test/resources/entity.candle.cvs/TMOS");
         var priceExtractor = (Function<Candle, Double>) c -> c.getClosePrice().toBigDecimal().doubleValue();
+        Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
+        Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
 
-        var supportCalculator = LinearLevelCalculator.createSupport(
-            candleRepository, 5, 0.003, priceExtractor, -0.001
+        List<Candle> candles = candleRepository.getPeriod(
+            "TMOS", Instant.parse("2021-01-01T00:00:00Z"), Instant.parse("2021-02-02T00:00:00Z")
         );
-        var resistanceCalculator = LinearLevelCalculator.createResistance(
-            candleRepository, 5, 0.003, priceExtractor, 0.001
+        int frameSize = 800;
+
+        var supportDetector = LinearLevelDetector.createSupport(
+            frameSize, 0.003, priceExtractor, -0.002
+        );
+        var resistanceDetector = LinearLevelDetector.createResistance(
+            frameSize, 0.003, priceExtractor, 0.002
         );
 
-        var resultSupport = supportCalculator.calculate(
-            "TMOS", Instant.parse("2021-03-12T00:00:00Z"), Instant.parse("2021-03-15T12:00:00Z")
-        );
-        var resultResistance = resistanceCalculator.calculate(
-            "TMOS", Instant.parse("2021-03-12T00:00:00Z"), Instant.parse("2021-03-15T12:00:00Z")
-        );
+        var resultSupport = supportDetector.detect(candles);
+        var resultResistance = resistanceDetector.detect(candles);
 
         var renderer = new FasterXmlRenderer(
             "src/main/resources/presenter/google/PriceChart.html",
@@ -37,15 +41,15 @@ public class LinearLevelCalculatorSimulator {
         priceChart.setDataRenderer(renderer);
         priceChart.setStepInterval(1);
 
-        addLevelsToChart(priceChart, "Support", resultSupport, "#000000");
-        addLevelsToChart(priceChart, "Resistance", resultResistance, "#DB4437");
+        addLevelsToChart(priceChart, "Support", resultSupport, "#00FF00");
+        addLevelsToChart(priceChart, "Resistance", resultResistance, "#FF0000");
 
-        priceChart.render(Instant.parse("2021-03-12T00:00:00Z"), Instant.parse("2021-03-15T12:00:00Z"));
+        priceChart.render(startTime, endTime);
     }
 
-    private static void addLevelsToChart(PriceChart chart, String name, Result<Double> result, String color) {
+    private static void addLevelsToChart(PriceChart chart, String name, List<LinearLevel<Double>> levels, String color) {
         var linesProvider = new LineSeriesProvider(name);
-        result.levels().forEach(level -> linesProvider.addLine(level.indexFrom(), level.indexTo(), level.function()));
+        levels.forEach(level -> linesProvider.addLine(level.getIndexFrom(), level.getIndexTo(), level.getFunction()));
         linesProvider.setColor(color);
         chart.addSeriesProvider(linesProvider);
     }

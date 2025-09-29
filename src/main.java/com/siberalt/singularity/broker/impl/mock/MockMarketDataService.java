@@ -10,9 +10,9 @@ import com.siberalt.singularity.broker.contract.service.market.request.GetCurren
 import com.siberalt.singularity.broker.contract.service.market.request.GetLastPricesRequest;
 import com.siberalt.singularity.broker.contract.service.market.response.*;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
-import com.siberalt.singularity.entity.candle.ReadCandleRepository;
-import com.siberalt.singularity.entity.candle.FindPriceParams;
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.FindPriceParams;
+import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -76,13 +76,13 @@ public class MockMarketDataService implements MarketDataService {
         String instrumentUid = request.getInstrumentUid();
         Instant at = virtualBroker.clock.currentTime();
 
-        Optional<Candle> candleOpt = candleRepository.findClosestBefore(instrumentUid, at);
+        List<Candle> candleList = candleRepository.findBeforeOrEqual(instrumentUid, at, 1);
 
-        if (candleOpt.isEmpty()) {
+        if (candleList.isEmpty()) {
             throw ExceptionBuilder.create(ErrorCode.INSTRUMENT_NOT_FOUND);
         }
 
-        Candle candle = candleOpt.get();
+        Candle candle = candleList.get(0);
         Quotation price = candle.getOpenPrice();
 
         return new GetCurrentPriceResponse()
@@ -91,7 +91,8 @@ public class MockMarketDataService implements MarketDataService {
     }
 
     protected Optional<Candle> findClosestBefore(String instrumentUid, Instant at) {
-        return candleRepository.findClosestBefore(instrumentUid, at);
+        List<Candle> candles = candleRepository.findBeforeOrEqual(instrumentUid, at, 1);
+        return candles.isEmpty() ? Optional.empty() : Optional.ofNullable(candles.get(0));
     }
 
     protected List<Candle> findCandlesByOpenPrice(CandleInterval interval, FindPriceParams findParams) {
@@ -163,6 +164,11 @@ public class MockMarketDataService implements MarketDataService {
     }
 
     protected Candle getInstrumentCurrentCandle(String instrumentUid) {
-        return candleRepository.findClosestBefore(instrumentUid, virtualBroker.clock.currentTime()).orElse(null);
+        List<Candle> candles = candleRepository.findBeforeOrEqual(
+            instrumentUid,
+            virtualBroker.clock.currentTime(),
+            1
+        );
+        return candles.isEmpty() ? null : candles.get(0);
     }
 }

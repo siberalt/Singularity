@@ -15,6 +15,15 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.shared.dto.BuyRequest;
 
 public class OrderCalculationService {
+    private double extraRatio = 0.06;
+
+    public OrderCalculationService(double extraRatio) {
+        this.extraRatio = extraRatio;
+    }
+
+    public OrderCalculationService() {
+    }
+
     public long calculatePossibleBuyQuantity(Broker broker, Quotation limit, BuyRequest request) throws AbstractException {
         // Retrieve the current price of the instrument
         Quotation instrumentPrice = broker.getMarketDataService()
@@ -73,6 +82,9 @@ public class OrderCalculationService {
             throw new ArithmeticException("Price per unit cannot be negative or zero.");
         }
 
+        // Adjust the limit to account for extra costs (e.g., fees)
+        limit = limit.subtract(limit.multiply(Quotation.of(extraRatio)));
+
         if (limit.isZero() || limit.isLessThan(instrumentPrice)) {
             // If the price or limit is zero, return zero quantity
             return 0;
@@ -82,6 +94,11 @@ public class OrderCalculationService {
         do {
             // Calculate the maximum quantity that can be bought
             amount = limit.divide(instrumentPrice).toBigDecimal().longValue();
+
+            if (amount <= 0) {
+                // If the calculated amount is zero or negative, break the loop
+                break;
+            }
 
             // Get the response for the calculated order
             response = orderService.calculate(CalculateRequest.of(
@@ -93,13 +110,14 @@ public class OrderCalculationService {
                     .setOrderType(request.orderType()))
             );
 
-            if (amount <= 0) {
-                // If the calculated amount is zero or negative, break the loop
+            // Update the price per unit based on the response
+            Quotation previousPrice = instrumentPrice;
+            instrumentPrice = response.totalBalanceChange().divide(amount);
+
+            if (instrumentPrice.equals(previousPrice)) {
+                // Prevent infinite loop if the price does not change
                 break;
             }
-
-            // Update the price per unit based on the response
-            instrumentPrice = response.totalBalanceChange().divide(amount);
         } while (response.totalBalanceChange().isGreaterThan(limit));
 
         return amount;

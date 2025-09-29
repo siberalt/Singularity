@@ -77,7 +77,7 @@ public class PointSeriesProviderTest {
         Map<String, Object> options = optionsList.get(0);
 
         assertEquals("#FF0000", options.get("color"));
-        assertEquals(10, options.get("size"));
-        assertEquals("square", options.get("shape"));
+        assertEquals(10, options.get("pointSize"));
+        assertEquals("square", options.get("pointShape"));
     }
 }

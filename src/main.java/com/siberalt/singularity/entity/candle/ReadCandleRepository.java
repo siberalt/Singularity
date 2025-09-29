@@ -7,7 +7,7 @@ import java.util.Optional;
 public interface ReadCandleRepository {
     Optional<Candle> getAt(String instrumentUid, Instant at);
 
-    Optional<Candle> findClosestBefore(String instrumentUid, Instant at);
+    List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore);
 
     List<Candle> getPeriod(String instrumentUid, Instant from, Instant to);
 

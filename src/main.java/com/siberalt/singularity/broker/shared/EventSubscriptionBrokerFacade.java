@@ -13,6 +13,10 @@ public class EventSubscriptionBrokerFacade extends BrokerFacade{
         this.broker = broker;
     }
 
+    public static EventSubscriptionBrokerFacade of(EventSubscriptionBroker broker) {
+        return new EventSubscriptionBrokerFacade(broker);
+    }
+
     public <T extends Event> void subscribe(SubscriptionSpec<T> subscriptionSpec, EventHandler<T> handler) {
         broker.getSubscriptionManager().subscribe(subscriptionSpec, handler);
     }

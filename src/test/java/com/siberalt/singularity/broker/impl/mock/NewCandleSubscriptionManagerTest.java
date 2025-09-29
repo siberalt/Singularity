@@ -173,6 +173,8 @@ public class NewCandleSubscriptionManagerTest {
         when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(List.of(candle));
         when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(Collections.emptyList());
 
+        subscriptionManager.setInterruptOnError(false);
+
         Subscription subscription = subscriptionManager.subscribe(validSpec, handler);
 
         assertTrue(subscription.isActive());

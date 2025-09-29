@@ -1,4 +1,4 @@
-package com.siberalt.singularity.strategy.level;
+package com.siberalt.singularity.strategy.level.linear;
 
 import com.siberalt.singularity.math.LinearFunction2D;
 import org.junit.jupiter.api.DisplayName;
@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class DoubleStrengthCalculatorTest {
+class BasicStrengthCalculatorTest {
 
     @Test
     @DisplayName("calculate returns 0.0 when touchesCount is less than or equal to 0")
@@ -18,7 +18,7 @@ class DoubleStrengthCalculatorTest {
             mock(LinearFunction2D.class), 0L, 10L, 0, 100L
         );
 
-        DoubleStrengthCalculator calculator = new DoubleStrengthCalculator();
+        BasicStrengthCalculator calculator = new BasicStrengthCalculator();
         double result = calculator.calculate(context);
 
         assertEquals(0.0, result);
@@ -31,7 +31,7 @@ class DoubleStrengthCalculatorTest {
             null, 0L, 10L, 10, 100L
         );
 
-        DoubleStrengthCalculator calculator = new DoubleStrengthCalculator();
+        BasicStrengthCalculator calculator = new BasicStrengthCalculator();
         double result = calculator.calculate(context);
 
         assertEquals(0.0, result);
@@ -44,7 +44,7 @@ class DoubleStrengthCalculatorTest {
             mock(LinearFunction2D.class), -1L, 10L, 10, 100L
         );
 
-        DoubleStrengthCalculator calculator = new DoubleStrengthCalculator();
+        BasicStrengthCalculator calculator = new BasicStrengthCalculator();
         double result = calculator.calculate(context);
 
         assertEquals(0.0, result);
@@ -57,7 +57,7 @@ class DoubleStrengthCalculatorTest {
             mock(LinearFunction2D.class), 5L, 4L, 10, 100L
         );
 
-        DoubleStrengthCalculator calculator = new DoubleStrengthCalculator();
+        BasicStrengthCalculator calculator = new BasicStrengthCalculator();
         double result = calculator.calculate(context);
 
         assertEquals(0.0, result);
@@ -73,10 +73,10 @@ class DoubleStrengthCalculatorTest {
             linearFunction, 0L, 10L, 10, 100L
         );
 
-        DoubleStrengthCalculator calculator = new DoubleStrengthCalculator();
+        BasicStrengthCalculator calculator = new BasicStrengthCalculator();
         double result = calculator.calculate(context);
 
-        assertEquals(1999.9996, result, 10);
+        assertEquals(0.61, result, 10);
     }
 
     @Test
@@ -96,7 +96,7 @@ class DoubleStrengthCalculatorTest {
             linearFunctionSlope0, 0L, 10L, 10, 100L
         );
 
-        DoubleStrengthCalculator calculator = new DoubleStrengthCalculator();
+        BasicStrengthCalculator calculator = new BasicStrengthCalculator();
 
         double resultSlope50 = calculator.calculate(contextSlope50);
         double resultSlope0 = calculator.calculate(contextSlope0);

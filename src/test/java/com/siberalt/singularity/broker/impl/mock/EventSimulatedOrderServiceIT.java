@@ -27,7 +27,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Handler;
 import java.util.logging.LogRecord;
@@ -101,10 +100,10 @@ public class EventSimulatedOrderServiceIT {
         String instrumentUid = config.getInstrument().getUid();
 
         SandboxBrokerFacade brokerFacade = SandboxBrokerFacade.of(broker);
-        when(candleStorage.findClosestBefore(instrumentUid, buyingTime))
-            .thenReturn(Optional.of(Candle.of(buyingTime, 1000, 7.1)));
-        when(candleStorage.findClosestBefore(instrumentUid, sellingTime))
-            .thenReturn(Optional.of(Candle.of(sellingTime, 1000, 7.2)));
+        when(candleStorage.findBeforeOrEqual(instrumentUid, buyingTime, 1))
+            .thenReturn(List.of(Candle.of(buyingTime, 1000, 7.1)));
+        when(candleStorage.findBeforeOrEqual(instrumentUid, sellingTime,1))
+            .thenReturn(List.of(Candle.of(sellingTime, 1000, 7.2)));
 
         userActionSimulator.planAction(openingTime, (userContext) -> {
             System.out.printf("[%s]: Opening account\n", clock.currentTime());
@@ -148,13 +147,13 @@ public class EventSimulatedOrderServiceIT {
         Instant postSellOrderTime = Instant.parse("1997-05-04T08:20:00.00Z");
         Instant executeSellOrderTime = Instant.parse("1997-05-04T14:25:00.00Z");
 
-        when(candleStorage.findClosestBefore(instrumentUid, postBuyOrderTime))
-            .thenReturn(Optional.of(Candle.of(postBuyOrderTime, 1000, 7.3)));
+        when(candleStorage.findBeforeOrEqual(instrumentUid, postBuyOrderTime, 1))
+            .thenReturn(List.of(Candle.of(postBuyOrderTime, 1000, 7.3)));
         when(candleStorage.findByOpenPrice(any()))
             .thenReturn(List.of(Candle.of(executeBuyOrderTime, 1000, 7)))
             .thenReturn(List.of(Candle.of(executeSellOrderTime, 1000, 8)));
-        when(candleStorage.findClosestBefore(instrumentUid, postSellOrderTime))
-            .thenReturn(Optional.of(Candle.of(postSellOrderTime, 1000, 6)));
+        when(candleStorage.findBeforeOrEqual(instrumentUid, postSellOrderTime, 1))
+            .thenReturn(List.of(Candle.of(postSellOrderTime, 1000, 6)));
 
         userActionSimulator.planAction(openingTime, (userContext) -> {
             System.out.printf("[%s]: Opening account\n", clock.currentTime());
@@ -177,9 +176,9 @@ public class EventSimulatedOrderServiceIT {
         );
 
         // Verify that the mocks were called at least once
-        verify(candleStorage, times(1)).findClosestBefore(instrumentUid, postBuyOrderTime);
+        verify(candleStorage, times(1)).findBeforeOrEqual(instrumentUid, postBuyOrderTime, 1);
         verify(candleStorage, times(2)).findByOpenPrice(any());
-        verify(candleStorage, times(1)).findClosestBefore(instrumentUid, postSellOrderTime);
+        verify(candleStorage, times(1)).findBeforeOrEqual(instrumentUid, postSellOrderTime, 1);
 
         // Assert balance after simulation
         var money = operationsService.getAvailableMoney((String) userContext.get("accountId"), "RUB");
@@ -202,15 +201,15 @@ public class EventSimulatedOrderServiceIT {
         Instant endTime = startTime.plus(60, java.time.temporal.ChronoUnit.MINUTES);
 
         String instrumentUid = config.getInstrument().getUid();
-        when(candleStorage.findClosestBefore(instrumentUid, postBuyLimitTime))
-            .thenReturn(Optional.of(Candle.of(postBuyLimitTime, 1000, 6)));
-        when(candleStorage.findClosestBefore(instrumentUid, postSellLimitTime))
-            .thenReturn(Optional.of(Candle.of(postSellLimitTime, 1000, 6)));
+        when(candleStorage.findBeforeOrEqual(instrumentUid, postBuyLimitTime, 1))
+            .thenReturn(List.of(Candle.of(postBuyLimitTime, 1000, 6)));
+        when(candleStorage.findBeforeOrEqual(instrumentUid, postSellLimitTime, 1))
+            .thenReturn(List.of(Candle.of(postSellLimitTime, 1000, 6)));
         when(candleStorage.findByOpenPrice(any()))
             .thenReturn(List.of(Candle.of(executeBuyLimitTime, 1000, 4)))
             .thenReturn(List.of(Candle.of(executeSellLimitTime, 1000, 8)));
-        when(candleStorage.findClosestBefore(instrumentUid, postBuyMarketTime))
-            .thenReturn(Optional.of(Candle.of(postBuyMarketTime, 1000, 5)));
+        when(candleStorage.findBeforeOrEqual(instrumentUid, postBuyMarketTime, 1))
+            .thenReturn(List.of(Candle.of(postBuyMarketTime, 1000, 5)));
 
         Money initialMoney = Money.of("RUB", Quotation.of(1000000));
         SandboxBrokerFacade brokerFacade = SandboxBrokerFacade.of(broker);

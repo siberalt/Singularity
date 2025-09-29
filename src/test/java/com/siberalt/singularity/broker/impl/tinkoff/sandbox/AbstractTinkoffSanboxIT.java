@@ -9,7 +9,9 @@ import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.MoneyValu
 import com.siberalt.singularity.configuration.ConfigInterface;
 import com.siberalt.singularity.configuration.YamlConfig;
 import com.siberalt.singularity.entity.instrument.Instrument;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import ru.tinkoff.piapi.contract.v1.MoneyValue;
 
 import java.io.IOException;
@@ -22,6 +24,17 @@ public abstract class AbstractTinkoffSanboxIT {
     protected ConfigInterface configuration;
     protected String testAccountId;
     protected Instrument testShare;
+
+    @BeforeEach
+    protected void setUp() throws IOException, AbstractException {
+        configuration = getConfiguration();
+        tinkoffBroker = new TinkoffSandboxBroker((String) configuration.get("sandboxToken"));
+    }
+
+    @AfterEach
+    protected void clearUp() {
+        tinkoffBroker.close();
+    }
 
     protected Instrument getTestShare() throws IOException, AbstractException {
         if (null == testShare) {
@@ -56,12 +69,7 @@ public abstract class AbstractTinkoffSanboxIT {
         return testAccountId;
     }
 
-    protected TinkoffSandboxBroker getTinkoffSandbox() throws IOException {
-        if (null == tinkoffBroker) {
-            configuration = getConfiguration();
-            tinkoffBroker = new TinkoffSandboxBroker((String) configuration.get("sandboxToken"));
-        }
-
+    protected TinkoffSandboxBroker getTinkoffSandbox() {
         return tinkoffBroker;
     }
 

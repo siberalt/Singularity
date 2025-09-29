@@ -15,11 +15,14 @@ import com.siberalt.singularity.simulation.EventObserver;
 import com.siberalt.singularity.simulation.Initializable;
 import com.siberalt.singularity.simulation.TimeDependentUnit;
 import com.siberalt.singularity.strategy.context.Clock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.*;
 
 public class NewCandleSubscriptionManager implements SubscriptionManager, EventInvoker, Initializable, TimeDependentUnit {
+    private static final Logger logger = LoggerFactory.getLogger(NewCandleSubscriptionManager.class);
     private final ReadCandleRepository candleRepository;
     private HashMap<String, Iterator<Candle>> candleIterator;
     private final Set<String> instrumentIds;
@@ -28,10 +31,20 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
     private final HashMap<Instant, List<Candle>> eventCandles = new HashMap<>();
     private final HashMap<SubscriptionSpec<?>, List<EventHandler<?>>> eventHandlers = new HashMap<>();
     private final HashMap<EventHandler<?>, DefaultSubscription> handlerSubscriptions = new HashMap<>();
+    private boolean interruptOnError = true;
 
     public NewCandleSubscriptionManager(ReadCandleRepository candleRepository, Set<String> instrumentIds) {
         this.candleRepository = candleRepository;
         this.instrumentIds = instrumentIds;
+    }
+
+    public boolean isInterruptOnError() {
+        return interruptOnError;
+    }
+
+    public NewCandleSubscriptionManager setInterruptOnError(boolean interruptOnError) {
+        this.interruptOnError = interruptOnError;
+        return this;
     }
 
     @Override
@@ -102,7 +115,12 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
                             try {
                                 specificHandler.handle(newCandleEvent, subscription);
                             } catch (Throwable throwable) {
+                                logger.error("Error occurred while handling event", throwable);
                                 subscription.setErrors(List.of(throwable));
+
+                                if (interruptOnError) {
+                                    throw throwable;
+                                }
                             }
                         }
                     }
