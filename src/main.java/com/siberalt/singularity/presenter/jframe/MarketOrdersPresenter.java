@@ -87,14 +87,14 @@ public class MarketOrdersPresenter extends JFrame {
         XYSeries sellOrders = new XYSeries("Sell Orders");
 
         for (Candle candle : candleRepository.getPeriod(instrumentUid, from, to)) {
-            double price = candle.getClosePrice().toBigDecimal().doubleValue();
+            double price = candle.getClosePrice().toDouble();
             stockPrices.add((double) candle.getTime().getEpochSecond() * 1000, price);
         }
 
         Iterable<Order> orders = orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid);
 
         for (Order order : orders) {
-            double price = order.getInstrumentPrice().toBigDecimal().doubleValue();
+            double price = order.getInstrumentPrice().toDouble();
             if (order.getDirection().isBuy()) {
                 buyOrders.add((double) order.getCreatedTime().getEpochSecond() * 1000, price);
             } else if (order.getDirection().isSell()) {

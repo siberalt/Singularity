@@ -8,6 +8,7 @@ import com.siberalt.singularity.presenter.google.series.CandlePriceSeriesProvide
 import com.siberalt.singularity.presenter.google.series.SeriesChunk;
 import com.siberalt.singularity.presenter.google.series.SeriesDataAggregator;
 import com.siberalt.singularity.presenter.google.series.SeriesProvider;
+import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -17,14 +18,20 @@ import java.util.function.Function;
 public class PriceChart {
     private String instrumentUid;
     private ReadCandleRepository candleRepository;
-    private Function<Candle, Double> priceExtractor = c -> c.getClosePrice().toBigDecimal().doubleValue();
+    private Function<Candle, Double> priceExtractor = c -> c.getClosePrice().toDouble();
     private int stepInterval = 30; // Default step interval for rendering
     private DataRenderer dataRenderer = new FasterXmlRenderer();
     private final List<SeriesProvider> seriesProviders = new ArrayList<>();
+    private CandleIndexProvider candleIndexProvider;
 
     public PriceChart(ReadCandleRepository candleRepository, String instrumentUid) {
         this.candleRepository = candleRepository;
         this.instrumentUid = instrumentUid;
+    }
+
+    public PriceChart setCandleIndexProvider(CandleIndexProvider candleIndexProvider) {
+        this.candleIndexProvider = candleIndexProvider;
+        return this;
     }
 
     public PriceChart(
@@ -76,6 +83,11 @@ public class PriceChart {
 
     public void render(List<Candle> candles) {
         long start = 0, end = candles.size() - 1;
+
+        if (candleIndexProvider != null) {
+            start = candleIndexProvider.provideIndex(candles.get(0));
+            end = candleIndexProvider.provideIndex(candles.get(candles.size() - 1));
+        }
 
         SeriesDataAggregator aggregator = new SeriesDataAggregator()
             .addSeriesProvider(new CandlePriceSeriesProvider(candles).setPriceExtractor(priceExtractor));

@@ -46,8 +46,8 @@ public class PointSeriesProvider implements SeriesProvider {
 
         // Filter points within the specified range
         Map<Long, Double> filteredPoints = points.entrySet().stream()
-            .map(entry -> adjustToStepInterval(entry, stepInterval))
             .filter(entry -> entry.getKey() >= start && entry.getKey() <= end)
+            .map(entry -> adjustToStepInterval(entry, stepInterval, start))
             .collect(
                 Collectors.toMap(
                     Map.Entry::getKey, // Adjust to step interval
@@ -80,8 +80,12 @@ public class PointSeriesProvider implements SeriesProvider {
         return Optional.of(new SeriesChunk(columns, data, List.of(options)));
     }
 
-    private Map.Entry<Long, Double> adjustToStepInterval(Map.Entry<Long, Double> entry, long stepInterval) {
-        long adjustedKey = PriceChart.adjustToStepInterval(entry.getKey(), stepInterval) / stepInterval;
+    private Map.Entry<Long, Double> adjustToStepInterval(
+        Map.Entry<Long, Double> entry,
+        long stepInterval,
+        long start
+    ) {
+        long adjustedKey = (PriceChart.adjustToStepInterval(entry.getKey() - start, stepInterval) / stepInterval);
 
         return Map.entry(adjustedKey, entry.getValue());
     }

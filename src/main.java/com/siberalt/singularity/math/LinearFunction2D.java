@@ -1,8 +1,6 @@
 package com.siberalt.singularity.math;
 
-import java.util.function.Function;
-
-public class LinearFunction2D<T extends Number> implements Function<T, T> {
+public class LinearFunction2D<T extends Number> implements LinearFunction<T> {
     private final T slope; // The slope of the line (m)
     private final T intercept; // The y-intercept of the line (b)
 

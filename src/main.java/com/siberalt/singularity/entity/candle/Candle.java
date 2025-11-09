@@ -15,16 +15,33 @@ public class Candle {
     private Quotation closePrice;
     private Quotation highPrice;
     private Quotation lowPrice;
-    private long index = -1;
     private long volume;
 
-    public long getIndex() {
-        return index;
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Candle candle = (Candle) o;
+        return volume == candle.volume &&
+            Objects.equals(instrumentUid, candle.instrumentUid) &&
+            Objects.equals(time, candle.time) &&
+            Objects.equals(openPrice, candle.openPrice) &&
+            Objects.equals(closePrice, candle.closePrice) &&
+            Objects.equals(highPrice, candle.highPrice) &&
+            Objects.equals(lowPrice, candle.lowPrice);
     }
 
-    public Candle setIndex(long index) {
-        this.index = index;
-        return this;
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+            instrumentUid,
+            time.toString(),
+            openPrice.toString(),
+            closePrice.toString(),
+            highPrice.toString(),
+            lowPrice.toString(),
+            volume
+        );
     }
 
     public String getInstrumentUid() {
@@ -61,6 +78,23 @@ public class Candle {
     public Candle setClosePrice(Quotation closePrice) {
         this.closePrice = closePrice;
         return this;
+    }
+
+    public double getTypicalPriceAsDouble() {
+        Quotation typicalPrice = getTypicalPrice();
+        return typicalPrice != null ? typicalPrice.toDouble() : Double.NaN;
+    }
+
+    public Quotation getTypicalPrice() {
+        if (closePrice == null || highPrice == null || lowPrice == null) {
+            return null;
+        }
+        return Quotation.of(
+            closePrice
+                .add(highPrice.toBigDecimal())
+                .add(lowPrice.toBigDecimal())
+                .divide(BigDecimal.valueOf(3), RoundingMode.HALF_EVEN)
+        );
     }
 
     public Quotation getHighPrice() {

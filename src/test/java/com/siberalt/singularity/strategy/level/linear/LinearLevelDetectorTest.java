@@ -3,16 +3,19 @@ package com.siberalt.singularity.strategy.level.linear;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.math.ArithmeticOperations;
 import com.siberalt.singularity.math.LinearFunction2D;
+import com.siberalt.singularity.strategy.level.Level;
+import com.siberalt.singularity.strategy.market.DefaultCandleIndexProvider;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class LinearLevelDetectorTest {
-    private final StrengthCalculator<Double> strengthCalculator = mock(StrengthCalculator.class);
+    private final StrengthCalculator strengthCalculator = mock(StrengthCalculator.class);
 
     @Test
     void calculatesSupportLevelsCorrectly() {
@@ -37,10 +40,12 @@ class LinearLevelDetectorTest {
         // This is a simplification; in a real scenario, the strengthCalculator would have more complex logic
         double expectedStrength = 3 * 3; // Example strength value
         when(strengthCalculator.calculate(any())).thenReturn(expectedStrength);
-        List<LinearLevel<Double>> levels = calculator.detect(candles);
+        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
+        candleIndexProvider.accumulate(candles);
+        List<Level<Double>> levels = calculator.detect(candles, candleIndexProvider);
 
         assertEquals(1, levels.size());
-        LinearLevel<Double> level = levels.get(0);
+        Level<Double> level = levels.get(0);
         LinearFunction2D<Double> expectedFunction = new LinearFunction2D<>(0., 10.2, ArithmeticOperations.DOUBLE);
 
         assertLevel(
@@ -76,12 +81,14 @@ class LinearLevelDetectorTest {
         double expectedStrength1 = 3 * 3; // Example strength value
         double expectedStrength2 = 2 * 3; // Example strength value for the second level
         when(strengthCalculator.calculate(any())).thenReturn(expectedStrength1, expectedStrength2);
+        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
+        candleIndexProvider.accumulate(candles);
 
-        List<LinearLevel<Double>> levels = calculator.detect(candles);
+        List<Level<Double>> levels = calculator.detect(candles, candleIndexProvider);
 
         assertEquals(2, levels.size());
-        LinearLevel<Double> level1 = levels.get(0);
-        LinearLevel<Double> level2 = levels.get(1);
+        Level<Double> level1 = levels.get(0);
+        Level<Double> level2 = levels.get(1);
 
         LinearFunction2D<Double> expectedFunction1 = new LinearFunction2D<>(
             1., 4., ArithmeticOperations.DOUBLE
@@ -111,8 +118,10 @@ class LinearLevelDetectorTest {
         // Mock the strength calculation
         verify(strengthCalculator, never()).calculate(any());
 
+        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
+        candleIndexProvider.accumulate(candles);
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-            calculator.detect(candles)
+            calculator.detect(candles, candleIndexProvider)
         );
 
         assertEquals("Not enough data to calculate support levels", exception.getMessage());
@@ -140,17 +149,19 @@ class LinearLevelDetectorTest {
         double expectedStrength = 3 * 3; // Example strength value
         when(strengthCalculator.calculate(any())).thenReturn(expectedStrength);
 
-        List<LinearLevel<Double>> result = calculator.detect(candles);
+        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
+        candleIndexProvider.accumulate(candles);
+        List<Level<Double>> result = calculator.detect(candles, candleIndexProvider);
 
-        LinearLevel<Double> level = result.get(0);
+        Level<Double> level = result.get(0);
         LinearFunction2D<Double> expectedFunction = new LinearFunction2D<>(0., 13.1, ArithmeticOperations.DOUBLE);
 
         assertLevel(
             level,
             Instant.parse("2023-01-01T00:00:00Z"),
-            Instant.parse("2023-01-01T00:08:00Z"),
+            Instant.parse("2023-01-01T00:07:00Z"),
             0,
-            8,
+            7,
             expectedStrength
         );
         assertFunction(level.function(), expectedFunction, 0.5, 0., 3.);
@@ -166,8 +177,10 @@ class LinearLevelDetectorTest {
         calculator.setStrengthCalculator(strengthCalculator);
         verify(strengthCalculator, never()).calculate(any());
 
+        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
+        candleIndexProvider.accumulate(candles);
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-            calculator.detect(candles)
+            calculator.detect(candles, candleIndexProvider)
         );
 
         assertEquals("Not enough data to calculate support levels", exception.getMessage());
@@ -193,33 +206,36 @@ class LinearLevelDetectorTest {
         LinearLevelDetector detector = LinearLevelDetector.createSupport(
             2, 0.1, this::getClosePrice
         );
-        StrengthCalculator<Double> strengthCalculator = mock(StrengthCalculator.class);
+        StrengthCalculator strengthCalculator = mock(StrengthCalculator.class);
         detector.setStrengthCalculator(strengthCalculator);
         when(strengthCalculator.calculate(any()))
             .thenReturn(25.0)
             .thenReturn(45.0);
 
+        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
+        candleIndexProvider.accumulate(candles1);
+        candleIndexProvider.accumulate(candles2);
         // First call to detect
-        List<LinearLevel<Double>> levelsFirstCall = detector.detect(candles1);
+        List<Level<Double>> levelsFirstCall = detector.detect(candles1, candleIndexProvider);
         assertEquals(1, levelsFirstCall.size());
 
         assertLevel(
             levelsFirstCall.get(0),
-            Instant.parse("2023-01-01T00:00:00Z"), // from
-            Instant.parse("2023-01-01T00:03:00Z"), // to
+            Instant.parse("2023-01-01T00:00:00Z"), // timeFrom
+            Instant.parse("2023-01-01T00:02:00Z"), // timeTo
             0, // indexFrom
-            3, // indexTo
+            2, // indexTo
             25.0 // strength
         );
 
         // Second call to detect with the same data
-        List<LinearLevel<Double>> levelsSecondCall = detector.detect(candles2);
+        List<Level<Double>> levelsSecondCall = detector.detect(candles2, candleIndexProvider);
         assertEquals(1, levelsSecondCall.size());
 
         assertLevel(
             levelsSecondCall.get(0),
-            Instant.parse("2023-01-01T00:04:00Z"), // from
-            Instant.parse("2023-01-01T00:09:00Z"), // to
+            Instant.parse("2023-01-01T00:04:00Z"), // timeFrom
+            Instant.parse("2023-01-01T00:09:00Z"), // timeTo
             4, // indexFrom
             9, // indexTo
             45.0 // strength
@@ -246,33 +262,36 @@ class LinearLevelDetectorTest {
         LinearLevelDetector detector = LinearLevelDetector.createSupport(
             2, 0.1, this::getClosePrice
         );
-        StrengthCalculator<Double> strengthCalculator = mock(StrengthCalculator.class);
+        StrengthCalculator strengthCalculator = mock(StrengthCalculator.class);
         detector.setStrengthCalculator(strengthCalculator);
         when(strengthCalculator.calculate(any()))
             .thenReturn(25.0)
             .thenReturn(45.0);
 
+        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
+        candleIndexProvider.accumulate(candles1);
+        candleIndexProvider.accumulate(candles2);
         // First call to detect
-        List<LinearLevel<Double>> levelsFirstCall = detector.detect(candles1);
+        List<Level<Double>> levelsFirstCall = detector.detect(candles1, candleIndexProvider);
         assertEquals(1, levelsFirstCall.size());
 
         assertLevel(
             levelsFirstCall.get(0),
-            Instant.parse("2023-01-01T00:00:00Z"), // from
-            Instant.parse("2023-01-01T00:04:00Z"), // to
+            Instant.parse("2023-01-01T00:00:00Z"), // timeFrom
+            Instant.parse("2023-01-01T00:04:00Z"), // timeTo
             0, // indexFrom
             4, // indexTo
             25.0 // strength
         );
 
         // Second call to detect with continuous data
-        List<LinearLevel<Double>> levelsSecondCall = detector.detect(candles2);
+        List<Level<Double>> levelsSecondCall = detector.detect(candles2, candleIndexProvider);
         assertEquals(1, levelsSecondCall.size());
 
         assertLevel(
             levelsSecondCall.get(0),
-            Instant.parse("2023-01-01T00:00:00Z"), // from
-            Instant.parse("2023-01-01T00:09:00Z"), // to
+            Instant.parse("2023-01-01T00:00:00Z"), // timeFrom
+            Instant.parse("2023-01-01T00:09:00Z"), // timeTo
             0, // indexFrom
             9, // indexTo
             45.0 // strength
@@ -280,7 +299,7 @@ class LinearLevelDetectorTest {
     }
 
     private double getClosePrice(Candle candle) {
-        return candle.getClosePrice().toBigDecimal().doubleValue();
+        return candle.getClosePrice().toDouble();
     }
 
     private Candle createCandle(String time, double close) {
@@ -288,29 +307,29 @@ class LinearLevelDetectorTest {
     }
 
     private void assertLevel(
-        LinearLevel<Double> level,
+        Level<Double> level,
         Instant from,
         Instant to,
         int indexFrom,
         int indexTo,
         double strength
     ) {
-        assertEquals(from, level.getTimeFrom());
-        assertEquals(to, level.getTimeTo());
-        assertEquals(indexFrom, level.getIndexFrom());
-        assertEquals(indexTo, level.getIndexTo());
+        assertEquals(from, level.timeFrom());
+        assertEquals(to, level.timeTo());
+        assertEquals(indexFrom, level.indexFrom());
+        assertEquals(indexTo, level.indexTo());
         assertEquals(strength, level.strength());
     }
 
     private void assertFunction(
-        LinearFunction2D<Double> function,
-        LinearFunction2D<Double> expectedFunction,
+        Function<Double, Double> function,
+        Function<Double, Double> expectedFunction,
         double delta,
         double... xValues
     ) {
         assertNotNull(function);
         for (double x : xValues) {
-            assertEquals(expectedFunction.calculate(x), function.calculate(x), delta);
+            assertEquals(expectedFunction.apply(x), function.apply(x), delta);
         }
     }
 }

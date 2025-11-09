@@ -103,7 +103,7 @@ public class BasicTradeStrategy implements StrategyInterface {
         }
 
         if (!lastCandles.isEmpty() && lastCandles.size() % tradePeriodCandles == 0) {
-            var upside = upsideCalculator.calculate(instrumentId, event.getCandle().getTime(), lastCandles);
+            var upside = upsideCalculator.calculate(lastCandles);
             lastCandles.clear();
 
             try {

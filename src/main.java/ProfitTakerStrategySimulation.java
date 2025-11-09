@@ -118,7 +118,7 @@ public class ProfitTakerStrategySimulation {
 
         System.out.println("Period days: " + Duration.between(startTime, endTime).toDays());
         System.out.println("Total profit: " + profit);
-        System.out.printf("Total profit percent: %.2f%%\n", profitPercent.toBigDecimal().doubleValue());
+        System.out.printf("Total profit percent: %.2f%%\n", profitPercent.toDouble());
         System.out.println("Total orders: " + orders.size());
         System.out.println("Initial investment: " + initialInvestment);
         System.out.println("Final profit: " + profit.add(initialInvestment));
@@ -145,7 +145,7 @@ public class ProfitTakerStrategySimulation {
         PriceChart priceChart = new PriceChart(
             candleRepository,
             instrumentUid,
-            c -> c.getClosePrice().toBigDecimal().doubleValue()
+            c -> c.getClosePrice().toDouble()
         );
         priceChart.setStepInterval(10);
         priceChart.addSeriesProvider(orderSeriesProvider);

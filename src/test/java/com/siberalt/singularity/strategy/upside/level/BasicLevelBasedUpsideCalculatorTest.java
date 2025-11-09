@@ -1,22 +1,29 @@
 package com.siberalt.singularity.strategy.upside.level;
 
+import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.Level;
+import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 import com.siberalt.singularity.strategy.upside.Upside;
 import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class BasicLevelBasedUpsideCalculatorTest {
+    private final CandleIndexProvider candleIndexProvider = mock(CandleIndexProvider.class);
+
     @Test
     void calculatesUpsideWhenCurrentPriceIsBetweenSupportAndResistance() {
-        Level<Double> resistance = createLevelMock(10.0, 5.0, 100);
-        Level<Double> support = createLevelMock(5.0, 3.0, 50);
+        Level<Double> resistance = createLevel(10.0, 5.0, 100);
+        Level<Double> support = createLevel(5.0, 3.0, 50);
         double currentPrice = 7.5;
 
         BasicLevelBasedUpsideCalculator calculator = new BasicLevelBasedUpsideCalculator();
-        Upside result = calculator.calculate(currentPrice, resistance, support);
+        Upside result = calculator.calculate(resistance, support, List.of(createCandle(currentPrice)), candleIndexProvider);
 
         assertNotNull(result);
         assertTrue(result.signal() >= -1);
@@ -25,12 +32,12 @@ public class BasicLevelBasedUpsideCalculatorTest {
 
     @Test
     void calculatesUpsideWhenCurrentPriceIsEqualToWeightedPrice() {
-        Level<Double> resistance = createLevelMock(10.0, 5.0, 100);
-        Level<Double> support = createLevelMock(5.0, 3.0, 50);
+        Level<Double> resistance = createLevel(10.0, 5.0, 100);
+        Level<Double> support = createLevel(5.0, 3.0, 50);
         double currentPrice = 7.0; // Weighted price for these levels
 
         BasicLevelBasedUpsideCalculator calculator = new BasicLevelBasedUpsideCalculator();
-        Upside result = calculator.calculate(currentPrice, resistance, support);
+        Upside result = calculator.calculate(resistance, support, List.of(createCandle(currentPrice)), candleIndexProvider);
 
         assertNotNull(result);
         assertEquals(0, result.signal(), 0.1);
@@ -38,12 +45,11 @@ public class BasicLevelBasedUpsideCalculatorTest {
 
     @Test
     void calculatesUpsideWhenCurrentPriceIsFarAboveResistance() {
-        Level<Double> resistance = createLevelMock(10.0, 5.0, 100);
-        Level<Double> support = createLevelMock(5.0, 3.0, 50);
-        double currentPrice = 15.0;
+        Level<Double> resistance = createLevel(10.0, 5.0, 100);
+        Level<Double> support = createLevel(5.0, 3.0, 50);
 
         BasicLevelBasedUpsideCalculator calculator = new BasicLevelBasedUpsideCalculator();
-        Upside result = calculator.calculate(currentPrice, resistance, support);
+        Upside result = calculator.calculate(resistance, support, List.of(createCandle(15.0)), candleIndexProvider);
 
         assertNotNull(result);
         assertEquals(1.0, result.signal(), 1e-9);
@@ -51,12 +57,11 @@ public class BasicLevelBasedUpsideCalculatorTest {
 
     @Test
     void calculatesUpsideWhenCurrentPriceIsFarBelowSupport() {
-        Level<Double> resistance = createLevelMock(10.0, 5.0, 100);
-        Level<Double> support = createLevelMock(5.0, 3.0, 50);
-        double currentPrice = 1.0;
+        Level<Double> resistance = createLevel(10.0, 5.0, 100);
+        Level<Double> support = createLevel(5.0, 3.0, 50);
 
         BasicLevelBasedUpsideCalculator calculator = new BasicLevelBasedUpsideCalculator();
-        Upside result = calculator.calculate(currentPrice, resistance, support);
+        Upside result = calculator.calculate(resistance, support, List.of(createCandle(1.0)), candleIndexProvider);
 
         assertNotNull(result);
         assertEquals(-1.0, result.signal(), 1e-9);
@@ -64,12 +69,11 @@ public class BasicLevelBasedUpsideCalculatorTest {
 
     @Test
     void calculatesUpsideWhenCurrentPriceIsJustBelowResistance() {
-        Level<Double> resistance = createLevelMock(10.0, 5.0, 100);
-        Level<Double> support = createLevelMock(5.0, 3.0, 50);
-        double currentPrice = 9.9;
+        Level<Double> resistance = createLevel(10.0, 5.0, 100);
+        Level<Double> support = createLevel(5.0, 3.0, 50);
 
         BasicLevelBasedUpsideCalculator calculator = new BasicLevelBasedUpsideCalculator();
-        Upside result = calculator.calculate(currentPrice, resistance, support);
+        Upside result = calculator.calculate(resistance, support, List.of(createCandle(9.9)), candleIndexProvider);
 
         assertNotNull(result);
         assertTrue(result.signal() < 0);
@@ -78,26 +82,25 @@ public class BasicLevelBasedUpsideCalculatorTest {
 
     @Test
     void calculatesUpsideWhenCurrentPriceIsJustAboveSupport() {
-        Level<Double> resistance = createLevelMock(10.0, 5.0, 100);
-        Level<Double> support = createLevelMock(5.0, 3.0, 50);
-        double currentPrice = 5.1;
+        Level<Double> resistance = createLevel(10.0, 5.0, 100);
+        Level<Double> support = createLevel(5.0, 3.0, 50);
 
         BasicLevelBasedUpsideCalculator calculator = new BasicLevelBasedUpsideCalculator();
-        Upside result = calculator.calculate(currentPrice, resistance, support);
+        Upside result = calculator.calculate(resistance, support, List.of(createCandle(5.1)), candleIndexProvider);
 
         assertNotNull(result);
         assertTrue(result.signal() > 0);
         assertTrue(result.signal() < 1);
     }
 
-    private Level<Double> createLevelMock(double price, double strength, long indexTo) {
-        Level<Double> level = mock(Level.class);
-        when(level.getStrength()).thenReturn(strength);
-        when(level.getFunction()).thenReturn(x -> price);
-        when(level.getTimeFrom()).thenReturn(null);
-        when(level.getTimeTo()).thenReturn(null);
-        when(level.getIndexFrom()).thenReturn(0L);
-        when(level.getIndexTo()).thenReturn(indexTo);
-        return level;
+    private Candle createCandle(double price) {
+        Candle candle = Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 0, price);
+        when(candleIndexProvider.provideIndex(candle)).thenReturn(0L);
+
+        return candle;
+    }
+
+    private Level<Double> createLevel(double price, double strength, long indexTo) {
+        return new Level<>(null, null, 0L, indexTo, x -> price, strength);
     }
 }

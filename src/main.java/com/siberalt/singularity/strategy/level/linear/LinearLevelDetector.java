@@ -3,45 +3,36 @@ package com.siberalt.singularity.strategy.level.linear;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.math.IncrementalLinearRegression;
 import com.siberalt.singularity.math.Point2D;
+import com.siberalt.singularity.strategy.extremum.BaseExtremumLocator;
+import com.siberalt.singularity.strategy.extremum.ExtremumLocator;
+import com.siberalt.singularity.strategy.extremum.FrameExtremumLocator;
+import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
+import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.function.Function;
 
 public class LinearLevelDetector implements LevelDetector<Double> {
-    record Frame(
-        Instant from,
-        Instant to,
-        long indexFrom,
-        long indexTo,
-        Point2D<Double> keyPoint
-    ) {
-    }
-
-    private long currentCandleIndex = 0;
     private long startLevelIndex;
     private Instant startLevelTime = null;
     private IncrementalLinearRegression linearModel;
-    private final long frameSize;
     private final double neighbourhoodRatio; // Default neighborhood percentage for support level calculation
-    private final Function<List<Candle>, Point2D<Double>> frameAggregator;
-    private StrengthCalculator<Double> strengthCalculator = new BasicStrengthCalculator();
+    private StrengthCalculator strengthCalculator = new BasicStrengthCalculator();
+    private final ExtremumLocator extremumLocator;
 
     public LinearLevelDetector(
-        long frameSize,
         double neighbourhoodRatio,
-        Function<List<Candle>, Point2D<Double>> frameAggregator
+        ExtremumLocator extremumLocator
     ) {
-        this.frameSize = frameSize;
         this.neighbourhoodRatio = neighbourhoodRatio;
-        this.frameAggregator = frameAggregator;
+        this.extremumLocator = extremumLocator;
     }
 
-    public List<LinearLevel<Double>> detect(List<Candle> candles) {
+    public List<Level<Double>> detect(List<Candle> candles, CandleIndexProvider candleIndexProvider) {
         if (linearModel == null) {
             // Check if there are enough candles to calculate support levels
             if (candles.size() < 2) {
@@ -53,24 +44,26 @@ public class LinearLevelDetector implements LevelDetector<Double> {
         }
 
         // Initialize variables to track the lowest price and its timestamp
-        ArrayList<LinearLevel<Double>> levels = new ArrayList<>();
+        ArrayList<Level<Double>> levels = new ArrayList<>();
         Point2D<Double> lastPoint = null;
         Instant lastTime = null;
-        startLevelTime = null == startLevelTime
-            ? candles.get(0).getTime()
-            : startLevelTime;
 
-        List<Frame> frames = extractFrames(startLevelTime, candles, frameSize, frameAggregator);
+        if (startLevelTime == null) {
+            startLevelTime = candles.get(0).getTime();
+        }
+
+        List<Candle> extremums = extremumLocator.locate(candles);
 
         long lastIndex = -1;
 
-        for (Frame frame : frames) {
-            Point2D<Double> point = frame.keyPoint;
+        for (Candle extremum : extremums) {
+            long extremumIndex = candleIndexProvider.provideIndex(extremum);
+            Point2D<Double> point = new Point2D<>((double) extremumIndex, extremum.getTypicalPrice().toDouble());
 
             if (linearModel.addPoint(point)) {
                 lastPoint = point;
-                lastIndex = frame.indexTo;
-                lastTime = frame.to;
+                lastTime = extremum.getTime();
+                lastIndex = extremumIndex;
             } else {
                 if (lastPoint != null) {
                     levels.add(
@@ -79,152 +72,80 @@ public class LinearLevelDetector implements LevelDetector<Double> {
                             lastTime,
                             startLevelIndex,
                             lastIndex,
-                            frameSize
+                            linearModel.getInliers().size()
                         )
                     );
                 }
 
-                startLevelTime = frame.from;
-                startLevelIndex = frame.indexFrom;
+                startLevelTime = extremum.getTime();
+                startLevelIndex = (int) extremumIndex;
                 linearModel.reset();
                 linearModel.addPoint(point);
             }
         }
 
         if (linearModel.getInliers().size() > 1) {
-            lastIndex = frames.get(frames.size() - 1).indexTo;
+            lastIndex = candleIndexProvider.provideIndex(extremums.get(extremums.size() - 1));
+            lastTime = extremums.get(extremums.size() - 1).getTime();
             levels.add(
                 createLinearLevel(
                     startLevelTime,
-                    frames.get(frames.size() - 1).to,
+                    lastTime,
                     startLevelIndex,
                     lastIndex,
-                    frameSize
+                    linearModel.getInliers().size()
                 )
             );
         } else if (linearModel.getInliers().size() == 0) {
-            startLevelIndex = lastIndex + 1;
+            startLevelIndex = (int) (lastIndex + 1);
             startLevelTime = lastTime;
         }
 
         return Collections.unmodifiableList(levels);
     }
 
-    private LinearLevel<Double> createLinearLevel(
+    private Level<Double> createLinearLevel(
         Instant startLevelTime,
-        Instant lastTime,
+        Instant endLevelTime,
         long startLevelIndex,
-        long lastIndex,
-        long frameSize
+        long endLevelIndex,
+        int touchesCount
     ) {
-        StrengthCalculator.LevelContext<Double> context = new StrengthCalculator.LevelContext<>(
-            linearModel.getLinearFunction(),
+        StrengthCalculator.LevelContext context = new StrengthCalculator.LevelContext(
+            startLevelTime,
+            endLevelTime,
             startLevelIndex,
-            lastIndex,
-            linearModel.getInliers().size(),
-            frameSize
+            endLevelIndex,
+            linearModel.getLinearFunction(),
+            0,
+            touchesCount
         );
 
-        return new LinearLevel<>(
+        double strength = strengthCalculator.calculate(context);
+
+        return new Level<>(
             startLevelTime,
-            lastTime,
+            endLevelTime,
             startLevelIndex,
-            lastIndex,
+            endLevelIndex,
             linearModel.getLinearFunction(),
-            strengthCalculator.calculate(context)
+            strength
         );
     }
 
-    public LinearLevelDetector setStrengthCalculator(StrengthCalculator<Double> strengthCalculator) {
+    public LinearLevelDetector setStrengthCalculator(StrengthCalculator strengthCalculator) {
         this.strengthCalculator = strengthCalculator;
         return this;
     }
 
-    private List<Frame> extractFrames(
-        Instant startTime,
-        List<Candle> candles,
-        long frameSize,
-        Function<List<Candle>, Point2D<Double>> frameAggregator
-    ) {
-        List<Frame> frames = new ArrayList<>();
-        ArrayList<Candle> currentFrameCandles = new ArrayList<>();
-        Instant startFrameTime = startTime;
-        long startFrameIndex = currentCandleIndex;
-
-        for (var candle : candles) {
-            if (null == startFrameTime) {
-                startFrameTime = candle.getTime();
-            }
-
-            currentFrameCandles.add(candle);
-
-            if (currentFrameCandles.size() == frameSize) {
-                Point2D<Double> keyPoint = frameAggregator.apply(currentFrameCandles);
-
-                frames.add(
-                    new Frame(
-                        startFrameTime,
-                        candle.getTime(),
-                        startFrameIndex,
-                        currentCandleIndex,
-                        new Point2D<>((double) startFrameIndex + keyPoint.x(), keyPoint.y())
-                    )
-                );
-                startFrameIndex = currentCandleIndex + 1;
-                startFrameTime = null;
-                currentFrameCandles.clear();
-            }
-
-            currentCandleIndex++;
-        }
-
-        if (!currentFrameCandles.isEmpty()) {
-            Point2D<Double> keyPoint = frameAggregator.apply(currentFrameCandles);
-
-            frames.add(
-                new Frame(
-                    startFrameTime,
-                    candles.get(candles.size() - 1).getTime(),
-                    startFrameIndex,
-                    currentCandleIndex - 1,
-                    new Point2D<>((double) startFrameIndex + keyPoint.x(), keyPoint.y())
-                )
-            );
-        }
-
-        return frames;
-    }
-
     public static LinearLevelDetector createSupport(
         long frameSize,
-        double neighbourhoodRatio,
-        Function<Candle, Double> priceExtractor,
-        double priceMarginPercentage
+        double neighbourhoodRatio
     ) {
         return new LinearLevelDetector(
-            frameSize,
             neighbourhoodRatio,
-            getFrameAggregator(
-                priceExtractor,
-                Comparator.naturalOrder(),
-                priceMarginPercentage
-            )
-        );
-    }
-
-    public static LinearLevelDetector createResistance(
-        long frameSize,
-        double neighbourhoodRatio,
-        Function<Candle, Double> priceExtractor,
-        double priceMarginPercentage
-    ) {
-        return new LinearLevelDetector(
-            frameSize,
-            neighbourhoodRatio,
-            getFrameAggregator(
-                priceExtractor,
-                Comparator.reverseOrder(),
-                priceMarginPercentage
+            new FrameExtremumLocator(
+                frameSize, BaseExtremumLocator.createMinLocator(candle -> candle.getTypicalPrice().toDouble())
             )
         );
     }
@@ -234,11 +155,23 @@ public class LinearLevelDetector implements LevelDetector<Double> {
         double neighbourhoodRatio,
         Function<Candle, Double> priceExtractor
     ) {
-        return createSupport(
-            frameSize,
+        return new LinearLevelDetector(
             neighbourhoodRatio,
-            priceExtractor,
-            0.0 // Default price margin percentage
+            new FrameExtremumLocator(
+                frameSize, BaseExtremumLocator.createMinLocator(priceExtractor)
+            )
+        );
+    }
+
+    public static LinearLevelDetector createResistance(
+        long frameSize,
+        double neighbourhoodRatio
+    ) {
+        return new LinearLevelDetector(
+            neighbourhoodRatio,
+            new FrameExtremumLocator(
+                frameSize, BaseExtremumLocator.createMaxLocator(candle -> candle.getTypicalPrice().toDouble())
+            )
         );
     }
 
@@ -247,38 +180,11 @@ public class LinearLevelDetector implements LevelDetector<Double> {
         double neighbourhoodRatio,
         Function<Candle, Double> priceExtractor
     ) {
-        return createResistance(
-            frameSize,
+        return new LinearLevelDetector(
             neighbourhoodRatio,
-            priceExtractor,
-            0.0 // Default price margin percentage
+            new FrameExtremumLocator(
+                frameSize, BaseExtremumLocator.createMaxLocator(priceExtractor)
+            )
         );
-    }
-
-    private static Function<List<Candle>, Point2D<Double>> getFrameAggregator(
-        Function<Candle, Double> priceExtractor,
-        Comparator<Double> comparator,
-        double priceMarginPercentage
-    ) {
-        return candles -> {
-            int targetIndex = 0;
-            double targetPrice = priceExtractor.apply(candles.get(0));
-
-            for (int i = 1; i < candles.size(); i++) {
-                double price = priceExtractor.apply(candles.get(i));
-                if (comparator.compare(price, targetPrice) < 0) {
-                    targetPrice = price;
-                    targetIndex = i;
-                }
-            }
-
-            // Adjust the target price based on the margin percentage
-            if (Math.abs(priceMarginPercentage) > 1e-6) {
-                double margin = targetPrice * priceMarginPercentage;
-                targetPrice += margin;
-            }
-
-            return new Point2D<>((double) targetIndex, targetPrice);
-        };
     }
 }

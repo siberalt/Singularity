@@ -1,3 +1,4 @@
+import com.siberalt.singularity.broker.contract.execution.EventSubscriptionBroker;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.instrument.common.InstrumentType;
 import com.siberalt.singularity.broker.contract.service.market.request.GetCurrentPriceRequest;
@@ -20,18 +21,29 @@ import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
 import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.presenter.google.PriceChart;
-import com.siberalt.singularity.presenter.google.series.LineSeriesProvider;
+import com.siberalt.singularity.presenter.google.series.FunctionGroupSeriesProvider;
 import com.siberalt.singularity.presenter.google.series.OrderSeriesProvider;
 import com.siberalt.singularity.simulation.EventSimulator;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
+import com.siberalt.singularity.strategy.StrategyInterface;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
-import com.siberalt.singularity.strategy.level.linear.LinearLevel;
-import com.siberalt.singularity.strategy.level.linear.LinearLevelDetector;
+import com.siberalt.singularity.strategy.level.Level;
+import com.siberalt.singularity.strategy.level.LevelDetector;
+import com.siberalt.singularity.strategy.level.linear.ClusterLevelDetector;
+import com.siberalt.singularity.strategy.level.track.LevelDetectorTracker;
+import com.siberalt.singularity.strategy.level.track.LevelsSnapshot;
+import com.siberalt.singularity.strategy.market.CumulativeCandleIndexProvider;
+import com.siberalt.singularity.strategy.market.DefaultCandleIndexProvider;
 import com.siberalt.singularity.strategy.observer.Observer;
+import com.siberalt.singularity.strategy.upside.CompositeFactorUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
+import com.siberalt.singularity.strategy.upside.level.AdaptiveUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.level.BasicLevelBasedUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.ImportantLevelsUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.level.KeyLevelsUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.level.LevelBasedUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.volume.MFIUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.volume.VPTUpsideCalculator;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -39,10 +51,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
-import java.util.function.Function;
 
 public class BasicTradeStrategySimulation {
     public static void main(String[] args) throws AbstractException {
+        Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
+        Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
         CvsFileCandleRepositoryFactory factory = new CvsFileCandleRepositoryFactory();
         OrderRepository orderRepository = new InMemoryOrderRepository();
 
@@ -77,46 +90,24 @@ public class BasicTradeStrategySimulation {
         Quotation initialInvestment = Quotation.of(1000000.00);
         broker.getOperationsService().addMoney(account.getId(), Money.of("RUB", initialInvestment));
 
-        Function<Candle, Double> priceExtractor = c -> c.getClosePrice().toBigDecimal().doubleValue();
-        int tradePeriodCandles = 30;
-
-        LinearLevelDetector supportDetector = createSupportDetector(
-            tradePeriodCandles, priceExtractor
-        );
-        LinearLevelDetector resistanceDetector = createResistanceDetector(
-            tradePeriodCandles, priceExtractor
-        );
-
-        UpsideCalculator upsideCalculator = new ImportantLevelsUpsideCalculator(
-            supportDetector,
-            resistanceDetector,
-            new BasicLevelBasedUpsideCalculator()
-        );
-        BasicTradeStrategy strategy = new BasicTradeStrategy(
+        int tradePeriodCandles = 120;
+        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
+        LevelDetectorTracker supportTracker = createSupportDetector(tradePeriodCandles);
+        LevelDetectorTracker resistanceTracker = createResistanceDetector(tradePeriodCandles);
+        StrategyInterface strategy = createStrategy(
+            candleRepository,
             broker,
-            "TMOS",
-            account.getId(),
-            upsideCalculator,
-            candleRepository
+            account,
+            supportTracker,
+            resistanceTracker,
+            candleIndexProvider
         );
-
-        strategy.setTradePeriodCandles(tradePeriodCandles);
 
         Observer observer = new Observer();
         simulator.addSimulationUnit(broker.getOrderService());
         simulator.addSimulationUnit(broker.getSubscriptionManager());
-        simulator.addInitializableUnit((from, to) -> {
-            try {
-                BrokerFacade.of(broker).buyBestPriceFullBalance(account.getId(), "TMOS");
-            } catch (AbstractException e) {
-                throw new RuntimeException(e);
-            }
+        simulator.addInitializableUnit((from, to) -> strategy.run(observer));
 
-            strategy.run(observer);
-        });
-
-        Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
-        Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
         simulator.run(startTime, endTime);
         System.out.println("Simulation completed.");
         Quotation profit = Quotation.ZERO;
@@ -152,11 +143,11 @@ public class BasicTradeStrategySimulation {
         Quotation profitPercent = profit.divide(initialInvestment).multiply(100);
 
         System.out.println("Period days: " + Duration.between(startTime, endTime).toDays());
-        System.out.printf("Absolute profit: %.2f\n", profit.toBigDecimal().doubleValue());
-        System.out.printf("Total profit percent: %.2f%%\n", profitPercent.toBigDecimal().doubleValue());
+        System.out.printf("Absolute profit: %.2f\n", profit.toDouble());
+        System.out.printf("Total profit percent: %.2f%%\n", profitPercent.toDouble());
         System.out.println("Total orders: " + orders.size());
-        System.out.printf("Initial investment: %.2f\n", initialInvestment.toBigDecimal().doubleValue());
-        System.out.printf("Result balance: %.2f\n", profit.add(initialInvestment).toBigDecimal().doubleValue());
+        System.out.printf("Initial investment: %.2f\n", initialInvestment.toDouble());
+        System.out.printf("Result balance: %.2f\n", profit.add(initialInvestment).toDouble());
         System.out.println("Instrument position size: " + instrumentCount + " (price: " + instrumentPrice + ")");
         BigDecimal apy = profitPercent
             .divide(BigDecimal.valueOf(Duration.between(startTime, endTime).toDays()), RoundingMode.HALF_UP)
@@ -165,70 +156,121 @@ public class BasicTradeStrategySimulation {
         System.out.printf("APY: %.2f%%", apy);
 
         drawOrdersChart(
-            createSupportDetector(
-                tradePeriodCandles, priceExtractor
-            ),
-            createResistanceDetector(
-                tradePeriodCandles, priceExtractor
-            ),
+            supportTracker.getSnapshots(),
+            resistanceTracker.getSnapshots(),
             orders,
             candleRepository,
             "TMOS",
             startTime,
-            endTime
+            endTime,
+            candleIndexProvider
         );
     }
 
+    private static StrategyInterface createStrategy(
+        ReadCandleRepository candleRepository,
+        EventSubscriptionBroker broker,
+        Account account,
+        LevelDetector<Double> supportDetector,
+        LevelDetector<Double> resistanceDetector,
+        CumulativeCandleIndexProvider candleIndexProvider
+    ) {
+        UpsideCalculator mfi = new MFIUpsideCalculator();
+        UpsideCalculator vpt = new VPTUpsideCalculator();
+        UpsideCalculator compositeUpsideCalculator = new CompositeFactorUpsideCalculator(
+            List.of(
+                new CompositeFactorUpsideCalculator.WeightedCalculator(mfi, 0.6),
+                new CompositeFactorUpsideCalculator.WeightedCalculator(vpt, 0.4)
+            )
+        );
+
+        int tradePeriodCandles = 80;
+
+        LevelBasedUpsideCalculator adaptiveUpsideCalculator = new AdaptiveUpsideCalculator(
+            new BasicLevelBasedUpsideCalculator(-0.3, 0.3),
+            compositeUpsideCalculator
+        );
+
+        KeyLevelsUpsideCalculator upsideCalculator = new KeyLevelsUpsideCalculator(
+            supportDetector,
+            resistanceDetector,
+            adaptiveUpsideCalculator
+        );
+        upsideCalculator.setCandleIndexProvider(candleIndexProvider);
+
+        BasicTradeStrategy strategy = new BasicTradeStrategy(
+            broker,
+            "TMOS",
+            account.getId(),
+            upsideCalculator,
+            candleRepository
+        );
+        strategy.setBuyThreshold(0.6);
+        strategy.setSellThreshold(-0.4);
+        strategy.setTradePeriodCandles(tradePeriodCandles);
+
+        return strategy;
+    }
+
     private static void drawOrdersChart(
-        LinearLevelDetector supportDetector,
-        LinearLevelDetector resistanceDetector,
+        List<LevelsSnapshot> supportLevelsSnapshots,
+        List<LevelsSnapshot> resistanceLevelsSnapshots,
         List<Order> orders,
         ReadCandleRepository candleRepository,
         String instrumentUid,
         Instant startTime,
-        Instant endTime
+        Instant endTime,
+        CumulativeCandleIndexProvider candleIndexProvider
     ) {
         List<Candle> candles = candleRepository.getPeriod(instrumentUid, startTime, endTime);
         OrderSeriesProvider orderSeriesProvider = new OrderSeriesProvider(orders, candles)
+            .setBuyPointsSize(4)
+            .setSellPointsSize(4)
             .setIncludeOutOfRangeOrders(true);
-
-        List<LinearLevel<Double>> resultSupport = supportDetector.detect(candles);
-        List<LinearLevel<Double>> resultResistance = resistanceDetector.detect(candles);
 
         PriceChart priceChart = new PriceChart(
             candleRepository,
             instrumentUid,
-            c -> c.getClosePrice().toBigDecimal().doubleValue()
+            Candle::getTypicalPriceAsDouble
         );
-        addLevelsToChart(priceChart, "Support", resultSupport, "#00FFFA");
-        addLevelsToChart(priceChart, "Resistance", resultResistance, "#FFBB00");
-        priceChart.setStepInterval(10);
         priceChart.addSeriesProvider(orderSeriesProvider);
+        candleIndexProvider.accumulate(candles);
+        addLevelsToChart(priceChart, "Support", supportLevelsSnapshots, "#00FFFA");
+        addLevelsToChart(priceChart, "Resistance", resistanceLevelsSnapshots, "#FFBB00");
+        priceChart.setStepInterval(10);
+        priceChart.setCandleIndexProvider(candleIndexProvider);
         priceChart.render(candles);
     }
 
-    private static LinearLevelDetector createSupportDetector(
-        long tradePeriodCandles,
-        Function<Candle, Double> priceExtractor
-    ) {
-        return LinearLevelDetector.createSupport(
-            tradePeriodCandles, 0.003, priceExtractor, -0.001
+    private static LevelDetectorTracker createSupportDetector(long tradePeriodCandles) {
+        return new LevelDetectorTracker(
+//            LinearLevelDetector.createSupport(
+//                tradePeriodCandles, 0.003
+//            )
+            ClusterLevelDetector.createSupport((int) tradePeriodCandles, 0.005)
         );
     }
 
-    private static LinearLevelDetector createResistanceDetector(
-        long tradePeriodCandles,
-        Function<Candle, Double> priceExtractor
-    ) {
-        return LinearLevelDetector.createResistance(
-            tradePeriodCandles, 0.003, priceExtractor, 0.001
+    private static LevelDetectorTracker createResistanceDetector(long tradePeriodCandles) {
+        return new LevelDetectorTracker(
+//            LinearLevelDetector.createResistance(
+//                tradePeriodCandles, 0.003
+//            )
+            ClusterLevelDetector.createResistance((int) tradePeriodCandles, 0.005)
         );
     }
 
-    private static void addLevelsToChart(PriceChart chart, String name, List<LinearLevel<Double>> levels, String color) {
-        var linesProvider = new LineSeriesProvider(name);
-        levels.forEach(level -> linesProvider.addLine(level.getIndexFrom(), level.getIndexTo(), level.getFunction()));
-        linesProvider.setColor(color);
-        chart.addSeriesProvider(linesProvider);
+    private static void addLevelsToChart(PriceChart chart, String name, List<LevelsSnapshot> levelsSnapshots, String color) {
+        var functionsProvider = new FunctionGroupSeriesProvider(name);
+        for(LevelsSnapshot snapshot : levelsSnapshots) {
+            long indexFrom = snapshot.fromIndex();
+            long indexTo = snapshot.toIndex();
+
+            for (Level<Double> level : snapshot.levels()) {
+                functionsProvider.addFunction(indexFrom, indexTo, level.function());
+            }
+        }
+        functionsProvider.setColor(color);
+        chart.addSeriesProvider(functionsProvider);
     }
 }

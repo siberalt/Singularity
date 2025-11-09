@@ -23,7 +23,7 @@ import com.siberalt.singularity.strategy.StrategyInterface;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.observer.Observer;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.ImportantLevelsUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.level.KeyLevelsUpsideCalculator;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -78,7 +78,7 @@ public class StrategySimulator {
         Quotation initialInvestment = Quotation.of(1000000.00);
         broker.getOperationsService().addMoney(account.getId(), Money.of("RUB", initialInvestment));
 
-        UpsideCalculator upsideCalculator = ImportantLevelsUpsideCalculator.createLinear(
+        UpsideCalculator upsideCalculator = KeyLevelsUpsideCalculator.createLinear(
             5, 0.003
         );
 
@@ -130,7 +130,7 @@ public class StrategySimulator {
 
         System.out.println("Period days: " + Duration.between(startTime, endTime).toDays());
         System.out.println("Total profit: " + profit);
-        System.out.printf("Total profit percent: %.2f%%\n", profitPercent.toBigDecimal().doubleValue());
+        System.out.printf("Total profit percent: %.2f%%\n", profitPercent.toDouble());
         System.out.println("Total orders: " + orders.size());
         System.out.println("Initial investment: " + initialInvestment);
         System.out.println("Final profit: " + profit.add(initialInvestment));
@@ -157,7 +157,7 @@ public class StrategySimulator {
         PriceChart priceChart = new PriceChart(
             candleRepository,
             instrumentUid,
-            c -> c.getClosePrice().toBigDecimal().doubleValue()
+            c -> c.getClosePrice().toDouble()
         );
         priceChart.setStepInterval(10);
         priceChart.addSeriesProvider(orderSeriesProvider);

@@ -1,6 +1,8 @@
 package com.siberalt.singularity.strategy.level.linear;
 
-public class BasicStrengthCalculator implements StrengthCalculator<Double> {
+import com.siberalt.singularity.math.LinearFunction;
+
+public class BasicStrengthCalculator implements StrengthCalculator {
     private double touchWeight = 0.4;
     private double angleWeight = 0.3;
     private double timeframeWeight = 0.3;
@@ -15,20 +17,28 @@ public class BasicStrengthCalculator implements StrengthCalculator<Double> {
     }
 
     @Override
-    public double calculate(LevelContext<Double> context) {
+    public double calculate(LevelContext context) {
         if (
             context.touchesCount() <= 0
-                || context.linearFunction() == null
-                || context.fromIndex() < 0
-                || context.toIndex() < context.fromIndex()
+                || context.indexFrom() < 0
+                || context.indexTo() < context.indexFrom()
         ) {
             return 0.0;
         }
 
-        double slope = Math.abs(context.linearFunction().getSlope());
-        double angleFactor = calculateAngleFactor(slope);
+        double angleFactor;
+
+        if (context.function() instanceof LinearFunction<Double>) {
+            double slope = Math.abs(((LinearFunction<Double>) context.function()).getSlope());
+            angleFactor = calculateAngleFactor(slope);
+        } else if (context.function() == null) {
+            return 0.0;
+        } else {
+            angleFactor = 0; // Default factor if function type is unknown
+        }
+
         double touchFactor = calculateTouchFactor(context.touchesCount());
-        double timeframeFactor = calculateTimeframeFactor(context.toIndex() - context.fromIndex());
+        double timeframeFactor = calculateTimeframeFactor(context.indexTo() - context.indexFrom());
 
         // Пример простой формулы для расчета силы уровня
         return touchWeight * touchFactor +

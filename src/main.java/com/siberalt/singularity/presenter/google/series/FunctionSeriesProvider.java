@@ -5,7 +5,7 @@ import com.siberalt.singularity.presenter.google.PriceChart;
 import java.util.*;
 import java.util.function.Function;
 
-public class LineSeriesProvider implements SeriesProvider {
+public class FunctionSeriesProvider implements SeriesProvider {
     record Segment(long x1, long x2) implements Comparable<Segment> {
         @Override
         public int compareTo(Segment o) {
@@ -27,21 +27,21 @@ public class LineSeriesProvider implements SeriesProvider {
     private final HashMap<Long, Annotation> annotations = new HashMap<>();
     private final TreeMap<Segment, Function<Double, Double>> lines = new TreeMap<>();
 
-    public LineSeriesProvider(String title) {
+    public FunctionSeriesProvider(String title) {
         this.title = title;
     }
 
-    public LineSeriesProvider setColor(String color) {
+    public FunctionSeriesProvider setColor(String color) {
         this.color = color;
         return this;
     }
 
-    public LineSeriesProvider setLineWidth(int lineWidth) {
+    public FunctionSeriesProvider setLineWidth(int lineWidth) {
         this.lineWidth = lineWidth;
         return this;
     }
 
-    public void addLine(long x1, long x2, Function<Double, Double> function) {
+    public void addFunction(long x1, long x2, Function<Double, Double> function) {
         if (x1 >= x2) {
             throw new IllegalArgumentException("x1 must be less than x2");
         }

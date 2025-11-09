@@ -2,9 +2,10 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory;
 import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.render.FasterXmlRenderer;
-import com.siberalt.singularity.presenter.google.series.LineSeriesProvider;
-import com.siberalt.singularity.strategy.level.linear.LinearLevel;
+import com.siberalt.singularity.presenter.google.series.FunctionSeriesProvider;
+import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.linear.LinearLevelDetector;
+import com.siberalt.singularity.strategy.market.DefaultCandleIndexProvider;
 
 import java.time.Instant;
 import java.util.List;
@@ -14,24 +15,26 @@ public class LinearLevelCalculatorSimulator {
     public static void main(String[] args) {
         var factory = new CvsFileCandleRepositoryFactory();
         var candleRepository = factory.create("TMOS", "src/test/resources/entity.candle.cvs/TMOS");
-        var priceExtractor = (Function<Candle, Double>) c -> c.getClosePrice().toBigDecimal().doubleValue();
+        var priceExtractor = (Function<Candle, Double>) c -> c.getClosePrice().toDouble();
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
 
         List<Candle> candles = candleRepository.getPeriod(
             "TMOS", Instant.parse("2021-01-01T00:00:00Z"), Instant.parse("2021-02-02T00:00:00Z")
         );
-        int frameSize = 800;
+        int frameSize = 400;
 
         var supportDetector = LinearLevelDetector.createSupport(
-            frameSize, 0.003, priceExtractor, -0.002
+            frameSize, 0.003, priceExtractor
         );
         var resistanceDetector = LinearLevelDetector.createResistance(
-            frameSize, 0.003, priceExtractor, 0.002
+            frameSize, 0.003, priceExtractor
         );
+        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
+        candleIndexProvider.accumulate(candles);
 
-        var resultSupport = supportDetector.detect(candles);
-        var resultResistance = resistanceDetector.detect(candles);
+        var resultSupport = supportDetector.detect(candles, candleIndexProvider);
+        var resultResistance = resistanceDetector.detect(candles, candleIndexProvider);
 
         var renderer = new FasterXmlRenderer(
             "src/main/resources/presenter/google/PriceChart.html",
@@ -47,9 +50,9 @@ public class LinearLevelCalculatorSimulator {
         priceChart.render(startTime, endTime);
     }
 
-    private static void addLevelsToChart(PriceChart chart, String name, List<LinearLevel<Double>> levels, String color) {
-        var linesProvider = new LineSeriesProvider(name);
-        levels.forEach(level -> linesProvider.addLine(level.getIndexFrom(), level.getIndexTo(), level.getFunction()));
+    private static void addLevelsToChart(PriceChart chart, String name, List<Level<Double>> levels, String color) {
+        var linesProvider = new FunctionSeriesProvider(name);
+        levels.forEach(level -> linesProvider.addFunction(level.indexFrom(), level.indexTo(), level.function()));
         linesProvider.setColor(color);
         chart.addSeriesProvider(linesProvider);
     }

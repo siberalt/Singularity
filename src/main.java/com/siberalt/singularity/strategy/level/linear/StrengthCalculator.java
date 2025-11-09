@@ -1,14 +1,17 @@
 package com.siberalt.singularity.strategy.level.linear;
 
-import com.siberalt.singularity.math.LinearFunction2D;
+import java.time.Instant;
+import java.util.function.Function;
 
-public interface StrengthCalculator<T extends Number> {
-    record LevelContext<T extends Number>(
-        LinearFunction2D<T> linearFunction,
-        long fromIndex,
-        long toIndex,
-        int touchesCount,
-        long frameSize
+public interface StrengthCalculator {
+    record LevelContext(
+        Instant timeFrom,
+        Instant timeTo,
+        long indexFrom,
+        long indexTo,
+        Function<Double, Double> function,
+        double strength,
+        int touchesCount
     ) {
     }
 
@@ -18,5 +21,5 @@ public interface StrengthCalculator<T extends Number> {
      * @param context The context containing the linear function, index range, touches count, and frame size.
      * @return The calculated strength of the level.
      */
-    double calculate(LevelContext<T> context);
+    double calculate(LevelContext context);
 }

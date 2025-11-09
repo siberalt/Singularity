@@ -66,7 +66,7 @@ class BasicTradeStrategyTest {
         );
         when(event.getCandle()).thenReturn(candle1);
         when(candleRepository.findBeforeOrEqual(anyString(), any(), anyLong())).thenReturn(List.of(candle1));
-        when(upsideCalculator.calculate(anyString(), any(), anyList())).thenReturn(new Upside(0.7, 1.0));
+        when(upsideCalculator.calculate(anyList())).thenReturn(new Upside(0.7, 1.0));
 
         strategy.setBuyThreshold(0.6);
         strategy.setTradePeriodCandles(1);
@@ -82,7 +82,7 @@ class BasicTradeStrategyTest {
         );
         when(event.getCandle()).thenReturn(candle1);
         when(candleRepository.findBeforeOrEqual(anyString(), any(), anyLong())).thenReturn(List.of(candle1));
-        when(upsideCalculator.calculate(anyString(), any(), anyList())).thenReturn(new Upside(-0.6, 1.0));
+        when(upsideCalculator.calculate(anyList())).thenReturn(new Upside(-0.6, 1.0));
         when(broker.getPositionSize("accountId", "instrumentId")).thenReturn(100L);
 
         strategy.setSellThreshold(-0.5);
@@ -100,7 +100,7 @@ class BasicTradeStrategyTest {
         NewCandleEvent event2 = new NewCandleEvent(
             Candle.of(Instant.parse("2023-01-01T00:01:00Z"), "instrumentId", 100L, 26)
         );
-        when(upsideCalculator.calculate(anyString(), any(), anyList())).thenReturn(new Upside(0.0, 1.0));
+        when(upsideCalculator.calculate(anyList())).thenReturn(new Upside(0.0, 1.0));
 
         strategy.setBuyThreshold(0.6);
         strategy.setSellThreshold(-0.5);

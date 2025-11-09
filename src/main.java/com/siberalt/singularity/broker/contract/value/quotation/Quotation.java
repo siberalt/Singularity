@@ -23,6 +23,10 @@ public class Quotation {
         return this;
     }
 
+    public double toDouble() {
+        return toBigDecimal().doubleValue();
+    }
+
     public int getNano() {
         return nano;
     }

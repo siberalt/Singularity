@@ -9,7 +9,7 @@ import java.util.Optional;
 import java.util.function.Function;
 
 public class CandlePriceSeriesProvider implements SeriesProvider {
-    private Function<Candle, Double> priceExtractor = c -> c.getClosePrice().toBigDecimal().doubleValue();
+    private Function<Candle, Double> priceExtractor = c -> c.getClosePrice().toDouble();
     private final List<Candle> candles;
     private String xAxisTitle = "Time";
     private String yAxisTitle = "Price";

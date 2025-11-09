@@ -80,7 +80,7 @@ public class StockPriceChart extends JFrame {
                 Instant.parse("2023-05-01T00:00:00Z")
             );
             for (Candle candle : candles) {
-                double price = candle.getClosePrice().toBigDecimal().doubleValue();
+                double price = candle.getClosePrice().toDouble();
                 stockPrices.add((double) candle.getTime().getEpochSecond() * 1000, price);
 
                 // Example buy/sell orders based on some conditions

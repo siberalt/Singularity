@@ -17,6 +17,8 @@ public class OrderSeriesProvider implements SeriesProvider {
     private Shape sellOrderShape = Shape.CIRCLE;
     private String buyOrdersColor = "#00FF00";
     private String sellOrdersColor = "#FF0000";
+    private int buyPointsSize = 5;
+    private int sellPointsSize = 5;
     private final TreeMap<Instant, Long> indexesByTime = new TreeMap<>();
     private boolean includeOutOfRangeOrders = false;
 
@@ -26,6 +28,24 @@ public class OrderSeriesProvider implements SeriesProvider {
         for (int i = 0; i < candles.size(); i++) {
             indexesByTime.put(candles.get(i).getTime(), (long) i);
         }
+    }
+
+    public int getBuyPointsSize() {
+        return buyPointsSize;
+    }
+
+    public OrderSeriesProvider setBuyPointsSize(int buyPointsSize) {
+        this.buyPointsSize = buyPointsSize;
+        return this;
+    }
+
+    public int getSellPointsSize() {
+        return sellPointsSize;
+    }
+
+    public OrderSeriesProvider setSellPointsSize(int sellPointsSize) {
+        this.sellPointsSize = sellPointsSize;
+        return this;
     }
 
     public OrderSeriesProvider setIncludeOutOfRangeOrders(boolean includeOutOfRangeOrders) {
@@ -70,16 +90,18 @@ public class OrderSeriesProvider implements SeriesProvider {
         }
 
         PointSeriesProvider buyPoints = new PointSeriesProvider(buyOrdersTitle)
+            .setSize(buyPointsSize)
             .setColor(buyOrdersColor)
             .setShape(buyOrderShape);
 
         PointSeriesProvider sellPoints = new PointSeriesProvider(sellOrdersTitle)
+            .setSize(sellPointsSize)
             .setColor(sellOrdersColor)
             .setShape(sellOrderShape);
 
         for (Order order : orders) {
             Instant orderTime = order.getCreatedTime();
-            double orderPrice = order.getInstrumentPrice().toBigDecimal().doubleValue();
+            double orderPrice = order.getInstrumentPrice().toDouble();
 
             Map.Entry<Instant, Long> floorEntry = indexesByTime.floorEntry(orderTime);
             Map.Entry<Instant, Long> ceilingEntry = indexesByTime.ceilingEntry(orderTime);
@@ -91,9 +113,9 @@ public class OrderSeriesProvider implements SeriesProvider {
                         : indexesByTime.lastEntry().getValue();
 
                     if (order.getDirection().isBuy()) {
-                        buyPoints.addPoint(edgeIndex, orderPrice);
+                        buyPoints.addPoint(edgeIndex + start, orderPrice);
                     } else {
-                        sellPoints.addPoint(edgeIndex, orderPrice);
+                        sellPoints.addPoint(edgeIndex + start, orderPrice);
                     }
                 }
                 continue; // Skip orders outside the range if the flag is not set
@@ -106,9 +128,9 @@ public class OrderSeriesProvider implements SeriesProvider {
             long timeOrderIndex = closestEntry.getValue();
 
             if (order.getDirection().isBuy()) {
-                buyPoints.addPoint(timeOrderIndex, orderPrice);
+                buyPoints.addPoint(timeOrderIndex + start, orderPrice);
             } else {
-                sellPoints.addPoint(timeOrderIndex, orderPrice);
+                sellPoints.addPoint(timeOrderIndex + start, orderPrice);
             }
         }
 

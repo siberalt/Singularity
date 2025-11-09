@@ -6,10 +6,10 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class LineSeriesProviderTest {
+class FunctionSeriesProviderTest {
     @Test
     void provideHandlesEmptyLinesAndAnnotations() {
-        LineSeriesProvider provider = new LineSeriesProvider("Empty Test");
+        FunctionSeriesProvider provider = new FunctionSeriesProvider("Empty Test");
 
         Optional<SeriesChunk> series = provider.provide(0, 10, 1);
 
@@ -18,8 +18,8 @@ class LineSeriesProviderTest {
 
     @Test
     void provideHandlesSinglePointRange() {
-        LineSeriesProvider provider = new LineSeriesProvider("Single Point Test");
-        provider.addLine(5, 15, x -> x * 2);
+        FunctionSeriesProvider provider = new FunctionSeriesProvider("Single Point Test");
+        provider.addFunction(5, 15, x -> x * 2);
 
         Optional<SeriesChunk> series = provider.provide(10, 10, 1);
 
@@ -30,8 +30,8 @@ class LineSeriesProviderTest {
 
     @Test
     void provideHandlesStepIntervalLargerThanRange() {
-        LineSeriesProvider provider = new LineSeriesProvider("Large Step Interval Test");
-        provider.addLine(0, 20, x -> x + 1);
+        FunctionSeriesProvider provider = new FunctionSeriesProvider("Large Step Interval Test");
+        provider.addFunction(0, 20, x -> x + 1);
 
         Optional<SeriesChunk> series = provider.provide(0, 10, 15);
 
@@ -42,7 +42,7 @@ class LineSeriesProviderTest {
 
     @Test
     void provideHandlesAnnotationsWithoutLines() {
-        LineSeriesProvider provider = new LineSeriesProvider("Annotations Only Test");
+        FunctionSeriesProvider provider = new FunctionSeriesProvider("Annotations Only Test");
         provider.addAnnotation(5, new Annotation("Label", "Text"));
 
         Optional<SeriesChunk> series = provider.provide(0, 10, 1);
@@ -52,9 +52,9 @@ class LineSeriesProviderTest {
 
     @Test
     void provideHandlesNoAnnotationsInRange() {
-        LineSeriesProvider provider = new LineSeriesProvider("No Annotations in Range Test");
+        FunctionSeriesProvider provider = new FunctionSeriesProvider("No Annotations in Range Test");
         provider.addAnnotation(15, new Annotation("Out of Range"));
-        provider.addLine(0, 10, x -> x); // Line: y = x
+        provider.addFunction(0, 10, x -> x); // Line: y = x
 
         Optional<SeriesChunk> series = provider.provide(0, 10, 1);
 
@@ -68,8 +68,8 @@ class LineSeriesProviderTest {
 
     @Test
     void provideHandlesStandardCase() {
-        LineSeriesProvider provider = new LineSeriesProvider("Standard Case Test");
-        provider.addLine(0, 10, x -> x * 2); // Line: y = 2x
+        FunctionSeriesProvider provider = new FunctionSeriesProvider("Standard Case Test");
+        provider.addFunction(0, 10, x -> x * 2); // Line: y = 2x
         provider.addAnnotation(5, new Annotation("Midpoint", "This is the midpoint"));
 
         Optional<SeriesChunk> series = provider.provide(0, 10, 1);
@@ -92,8 +92,8 @@ class LineSeriesProviderTest {
 
     @Test
     void provideHandlesStepIntervalOfFive() {
-        LineSeriesProvider provider = new LineSeriesProvider("Step Interval Test");
-        provider.addLine(0, 20, x -> x + 1); // Line: y = x + 1
+        FunctionSeriesProvider provider = new FunctionSeriesProvider("Step Interval Test");
+        provider.addFunction(0, 20, x -> x + 1); // Line: y = x + 1
         provider.addAnnotation(10, new Annotation("Annotation", "At x = 10"));
 
         Optional<SeriesChunk> series = provider.provide(0, 20, 5);
@@ -122,9 +122,9 @@ class LineSeriesProviderTest {
 
     @Test
     void provideHandlesMultipleLines() {
-        LineSeriesProvider provider = new LineSeriesProvider("Multiple Lines Test");
-        provider.addLine(0, 10, x -> x * 2); // Line 1: y = 2x
-        provider.addLine(15, 25, x -> x + 5); // Line 2: y = x + 5
+        FunctionSeriesProvider provider = new FunctionSeriesProvider("Multiple Lines Test");
+        provider.addFunction(0, 10, x -> x * 2); // Line 1: y = 2x
+        provider.addFunction(15, 25, x -> x + 5); // Line 2: y = x + 5
 
         Optional<SeriesChunk> series = provider.provide(0, 25, 5);
 
@@ -147,12 +147,12 @@ class LineSeriesProviderTest {
 
     @Test
     void addLineThrowsExceptionForOverlappingSegments() {
-        LineSeriesProvider provider = new LineSeriesProvider("Overlapping Lines Test");
-        provider.addLine(0, 10, x -> x * 2); // First line: y = 2x
+        FunctionSeriesProvider provider = new FunctionSeriesProvider("Overlapping Lines Test");
+        provider.addFunction(0, 10, x -> x * 2); // First line: y = 2x
 
         // Attempt to add an overlapping line
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            provider.addLine(5, 15, x -> x + 1); // Overlaps with the first line
+            provider.addFunction(5, 15, x -> x + 1); // Overlaps with the first line
         });
 
         assertEquals("Line segment already exists or overlaps with another segment", exception.getMessage());

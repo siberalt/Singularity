@@ -1,15 +1,39 @@
 package com.siberalt.singularity.strategy.upside.level;
 
+import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.Level;
+import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 import com.siberalt.singularity.strategy.upside.Upside;
 
+import java.util.List;
+
 public class BasicLevelBasedUpsideCalculator implements LevelBasedUpsideCalculator {
+    private final double bullishBreakoutSensitivity;
+    private final double bearishBreakoutSensitivity;
+
+    public BasicLevelBasedUpsideCalculator() {
+        this.bullishBreakoutSensitivity = 5;
+        this.bearishBreakoutSensitivity = -5;
+    }
+
+    public BasicLevelBasedUpsideCalculator(double bullishBreakoutSensitivity, double bearishBreakoutSensitivity) {
+        this.bullishBreakoutSensitivity = bullishBreakoutSensitivity;
+        this.bearishBreakoutSensitivity = bearishBreakoutSensitivity;
+    }
+
     @Override
-    public Upside calculate(double currentPrice, Level<Double> resistance, Level<Double> support) {
-        double resistancePrice = resistance.getFunction().apply((double) resistance.getIndexTo());
-        double supportPrice = support.getFunction().apply((double) support.getIndexTo());
-        double resistanceStrength = resistance.getStrength();
-        double supportStrength = support.getStrength();
+    public Upside calculate(
+        Level<Double> resistance,
+        Level<Double> support,
+        List<Candle> recentCandles,
+        CandleIndexProvider candleIndexProvider
+    ) {
+        long currentIndex = candleIndexProvider.provideIndex(recentCandles.get(recentCandles.size() - 1));
+        double resistancePrice = resistance.function().apply((double) currentIndex);
+        double supportPrice = support.function().apply((double) currentIndex);
+        double resistanceStrength = resistance.strength();
+        double supportStrength = support.strength();
+        double currentPrice = recentCandles.get(recentCandles.size() - 1).getTypicalPrice().toDouble();
 
         if (resistancePrice <= supportPrice) {
             // Log a warning and return a neutral Upside
@@ -28,12 +52,12 @@ public class BasicLevelBasedUpsideCalculator implements LevelBasedUpsideCalculat
             // Пробой поддержки вниз - медвежий сигнал
             double distanceBelowSupport = supportPrice - currentPrice;
             double breakoutStrength = distanceBelowSupport / channelWidth * supportStrength;
-            upside = -1 - breakoutStrength;
+            upside = bearishBreakoutSensitivity * breakoutStrength;
         } else if (currentPrice > resistancePrice) {
             // Пробой сопротивления вверх - бычий сигнал
             double distanceAboveResistance = currentPrice - resistancePrice;
             double breakoutStrength = distanceAboveResistance / channelWidth * resistanceStrength;
-            upside = 1 + breakoutStrength;
+            upside = bullishBreakoutSensitivity * breakoutStrength;
         } else {
             // Внутри канала - используем линейную интерполяцию
             if (currentPrice <= weightedNeutralPoint) {
