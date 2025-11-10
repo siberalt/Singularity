@@ -69,7 +69,7 @@ class BasicTradeStrategyTest {
         when(upsideCalculator.calculate(anyList())).thenReturn(new Upside(0.7, 1.0));
 
         strategy.setBuyThreshold(0.6);
-        strategy.setTradePeriodCandles(1);
+        strategy.setStep(1);
         strategy.handleNewCandle(event, subscription);
 
         verify(broker).buyBestPriceFullBalance("accountId", "instrumentId");
@@ -86,7 +86,7 @@ class BasicTradeStrategyTest {
         when(broker.getPositionSize("accountId", "instrumentId")).thenReturn(100L);
 
         strategy.setSellThreshold(-0.5);
-        strategy.setTradePeriodCandles(1);
+        strategy.setStep(1);
         strategy.handleNewCandle(event, subscription);
 
         verify(broker).sellBestPrice("accountId", "instrumentId", 100L);
@@ -104,7 +104,7 @@ class BasicTradeStrategyTest {
 
         strategy.setBuyThreshold(0.6);
         strategy.setSellThreshold(-0.5);
-        strategy.setTradePeriodCandles(1);
+        strategy.setStep(1);
         strategy.handleNewCandle(event1, subscription);
         strategy.handleNewCandle(event2, subscription);
 

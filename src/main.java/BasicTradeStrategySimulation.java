@@ -31,6 +31,10 @@ import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.ClusterLevelDetector;
+import com.siberalt.singularity.strategy.level.selector.BasicLevelSelector;
+import com.siberalt.singularity.strategy.level.selector.LevelPair;
+import com.siberalt.singularity.strategy.level.selector.LevelPairsSnapshot;
+import com.siberalt.singularity.strategy.level.selector.LevelSelectorTracker;
 import com.siberalt.singularity.strategy.level.track.LevelDetectorTracker;
 import com.siberalt.singularity.strategy.level.track.LevelsSnapshot;
 import com.siberalt.singularity.strategy.market.CumulativeCandleIndexProvider;
@@ -49,8 +53,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class BasicTradeStrategySimulation {
     public static void main(String[] args) throws AbstractException {
@@ -94,13 +98,15 @@ public class BasicTradeStrategySimulation {
         DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
         LevelDetectorTracker supportTracker = createSupportDetector(tradePeriodCandles);
         LevelDetectorTracker resistanceTracker = createResistanceDetector(tradePeriodCandles);
+        LevelSelectorTracker selectorTracker = new LevelSelectorTracker(new BasicLevelSelector());
         StrategyInterface strategy = createStrategy(
             candleRepository,
             broker,
             account,
             supportTracker,
             resistanceTracker,
-            candleIndexProvider
+            candleIndexProvider,
+            selectorTracker
         );
 
         Observer observer = new Observer();
@@ -163,7 +169,8 @@ public class BasicTradeStrategySimulation {
             "TMOS",
             startTime,
             endTime,
-            candleIndexProvider
+            candleIndexProvider,
+            selectorTracker.getTrackedLevelPairs()
         );
     }
 
@@ -173,7 +180,8 @@ public class BasicTradeStrategySimulation {
         Account account,
         LevelDetector<Double> supportDetector,
         LevelDetector<Double> resistanceDetector,
-        CumulativeCandleIndexProvider candleIndexProvider
+        CumulativeCandleIndexProvider candleIndexProvider,
+        LevelSelectorTracker selectorTracker
     ) {
         UpsideCalculator mfi = new MFIUpsideCalculator();
         UpsideCalculator vpt = new VPTUpsideCalculator();
@@ -196,6 +204,7 @@ public class BasicTradeStrategySimulation {
             resistanceDetector,
             adaptiveUpsideCalculator
         );
+        upsideCalculator.setLevelSelector(selectorTracker);
         upsideCalculator.setCandleIndexProvider(candleIndexProvider);
 
         BasicTradeStrategy strategy = new BasicTradeStrategy(
@@ -206,8 +215,8 @@ public class BasicTradeStrategySimulation {
             candleRepository
         );
         strategy.setBuyThreshold(0.6);
-        strategy.setSellThreshold(-0.4);
-        strategy.setTradePeriodCandles(tradePeriodCandles);
+        strategy.setSellThreshold(-0.5);
+        strategy.setStep(tradePeriodCandles);
 
         return strategy;
     }
@@ -220,7 +229,8 @@ public class BasicTradeStrategySimulation {
         String instrumentUid,
         Instant startTime,
         Instant endTime,
-        CumulativeCandleIndexProvider candleIndexProvider
+        CumulativeCandleIndexProvider candleIndexProvider,
+        List<LevelPairsSnapshot> levelPairsSnapshots
     ) {
         List<Candle> candles = candleRepository.getPeriod(instrumentUid, startTime, endTime);
         OrderSeriesProvider orderSeriesProvider = new OrderSeriesProvider(orders, candles)
@@ -235,8 +245,29 @@ public class BasicTradeStrategySimulation {
         );
         priceChart.addSeriesProvider(orderSeriesProvider);
         candleIndexProvider.accumulate(candles);
-        addLevelsToChart(priceChart, "Support", supportLevelsSnapshots, "#00FFFA");
-        addLevelsToChart(priceChart, "Resistance", resistanceLevelsSnapshots, "#FFBB00");
+        List<List<Level<Double>>> selectedSupportLevels = levelPairsSnapshots.stream()
+            .map(snapshot -> snapshot.levelPairs().stream().map(LevelPair::support).toList())
+            .toList();
+        List<List<Level<Double>>> selectedResistanceLevels = levelPairsSnapshots.stream()
+            .map(snapshot -> snapshot.levelPairs().stream().map(LevelPair::resistance).toList())
+            .toList();
+
+        addLevelsToChart(
+            priceChart,
+            "Support",
+            supportLevelsSnapshots,
+            "#00FFFA",
+            selectedSupportLevels,
+            "#008B8B"
+        );
+        addLevelsToChart(
+            priceChart,
+            "Resistance",
+            resistanceLevelsSnapshots,
+            "#FFBB00",
+            selectedResistanceLevels,
+            "#CC8400"
+        );
         priceChart.setStepInterval(10);
         priceChart.setCandleIndexProvider(candleIndexProvider);
         priceChart.render(candles);
@@ -260,17 +291,39 @@ public class BasicTradeStrategySimulation {
         );
     }
 
-    private static void addLevelsToChart(PriceChart chart, String name, List<LevelsSnapshot> levelsSnapshots, String color) {
-        var functionsProvider = new FunctionGroupSeriesProvider(name);
-        for(LevelsSnapshot snapshot : levelsSnapshots) {
+    private static void addLevelsToChart(
+        PriceChart chart,
+        String name,
+        List<LevelsSnapshot> levelsSnapshots,
+        String color,
+        List<List<Level<Double>>> selectedLevels,
+        String selectedColor
+    ) {
+        var levelsProvider = new FunctionGroupSeriesProvider(name);
+        var selectedLevelsProvider = new FunctionGroupSeriesProvider(name + " Selected");
+
+        Iterator<Map<String, Level<Double>>> iterator = selectedLevels.stream()
+            .map(levels -> levels.stream().collect(Collectors.toMap(Level::id, level -> level)))
+            .iterator();
+
+        for (LevelsSnapshot snapshot : levelsSnapshots) {
             long indexFrom = snapshot.fromIndex();
             long indexTo = snapshot.toIndex();
+            Map<String, Level<Double>> currentSelectedLevels = iterator.hasNext()
+                ? iterator.next()
+                : Collections.emptyMap();
 
             for (Level<Double> level : snapshot.levels()) {
-                functionsProvider.addFunction(indexFrom, indexTo, level.function());
+                if (currentSelectedLevels.containsKey(level.id())) {
+                    selectedLevelsProvider.addFunction(indexFrom, indexTo, level.function());
+                } else {
+                    levelsProvider.addFunction(indexFrom, indexTo, level.function());
+                }
             }
         }
-        functionsProvider.setColor(color);
-        chart.addSeriesProvider(functionsProvider);
+        levelsProvider.setColor(color);
+        selectedLevelsProvider.setColor(selectedColor);
+        chart.addSeriesProvider(levelsProvider);
+        chart.addSeriesProvider(selectedLevelsProvider);
     }
 }

@@ -27,7 +27,7 @@ public class BasicTradeStrategy implements StrategyInterface {
     private double buyThreshold = 0.7; // Example threshold for trading decision
     private double sellThreshold = -0.5; // Example threshold for trading decision
     private boolean isInitialized = false;
-    private int tradePeriodCandles = 5; // Number of candles to consider for trade period
+    private int step = 5; // Process every 'step' candles
     private List<Candle> lastCandles;
 
     public BasicTradeStrategy(
@@ -73,8 +73,8 @@ public class BasicTradeStrategy implements StrategyInterface {
         return this;
     }
 
-    public BasicTradeStrategy setTradePeriodCandles(int tradePeriodCandles) {
-        this.tradePeriodCandles = tradePeriodCandles;
+    public BasicTradeStrategy setStep(int step) {
+        this.step = step;
         return this;
     }
 
@@ -102,7 +102,7 @@ public class BasicTradeStrategy implements StrategyInterface {
             lastCandles.add(event.getCandle());
         }
 
-        if (!lastCandles.isEmpty() && lastCandles.size() % tradePeriodCandles == 0) {
+        if (!lastCandles.isEmpty() && lastCandles.size() % step == 0) {
             var upside = upsideCalculator.calculate(lastCandles);
             lastCandles.clear();
 
