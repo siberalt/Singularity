@@ -31,8 +31,8 @@ public class BasicLevelSelector implements LevelSelector {
         List<Level<Double>> closestResistanceLevels = resistanceLevels.stream()
             .filter(level -> level.function().apply((double) currentIndex) > currentPrice)
             .sorted(Comparator
-                .comparingDouble((Level<Double> l) -> Math.abs(l.function().apply((double) currentIndex) - currentPrice))
-                .thenComparingLong((Level<Double> l) -> -l.indexTo())
+                .comparingLong((Level<Double> l) -> -l.indexTo())
+                .thenComparingDouble((Level<Double> l) -> -l.strength())
             )
             .limit(limit)
             .toList();
@@ -40,8 +40,8 @@ public class BasicLevelSelector implements LevelSelector {
         List<Level<Double>> closestSupportLevels = supportLevels.stream()
             .filter(level -> level.function().apply((double) currentIndex) < currentPrice)
             .sorted(Comparator
-                .comparingDouble((Level<Double> l) -> Math.abs(l.function().apply((double) currentIndex) - currentPrice))
-                .thenComparingLong((Level<Double> l) -> -l.indexTo())
+                .comparingLong((Level<Double> l) -> -l.indexTo())
+                .thenComparingDouble((Level<Double> l) -> -l.strength())
             )
             .limit(limit)
             .toList();
@@ -55,7 +55,6 @@ public class BasicLevelSelector implements LevelSelector {
     ) {
         return supportLevels.stream()
             .flatMap(support -> resistanceLevels.stream()
-                .filter(resistance -> resistance.intersects(support))
                 .map(resistance -> new LevelPair(resistance, support)))
             .toList();
     }

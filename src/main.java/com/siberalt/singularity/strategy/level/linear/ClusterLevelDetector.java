@@ -65,7 +65,7 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         updateMarketStatistics(candles);
 
         // Обрабатываем только новые экстремумы
-        List<Candle> newExtremums = extremumLocator.locate(candles);
+        List<Candle> newExtremums = extremumLocator.locate(candles, candleIndexProvider);
         Map<Double, List<Candle>> levelsNewExtremums = new TreeMap<>();
 
         for (Candle extremum : newExtremums) {
@@ -259,7 +259,10 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         return new ClusterLevelDetector(
             sensitivity,
             new ConcurrentFrameExtremumLocator(
-                frameSize, BaseExtremumLocator.createMinLocator(Candle::getTypicalPriceAsDouble)
+                frameSize,
+                BaseExtremumLocator.createMinLocator(Candle::getTypicalPriceAsDouble),
+                Runtime.getRuntime().availableProcessors(),
+                15
             )
         );
     }
@@ -271,7 +274,10 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         return new ClusterLevelDetector(
             sensitivity,
             new ConcurrentFrameExtremumLocator(
-                frameSize, BaseExtremumLocator.createMaxLocator(Candle::getTypicalPriceAsDouble)
+                frameSize,
+                BaseExtremumLocator.createMaxLocator(Candle::getTypicalPriceAsDouble),
+                Runtime.getRuntime().availableProcessors(),
+                15
             )
         );
     }

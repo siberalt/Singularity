@@ -37,7 +37,7 @@ public class ClusterLevelDetectorSimulation {
         PointSeriesProvider minPoints = new PointSeriesProvider("Minima");
         minPoints.setColor("#00FF00");
         minPoints.setSize(5);
-        minExtremumLocator.locate(candles)
+        minExtremumLocator.locate(candles, candleIndexProvider)
             .forEach(
                 minPoint -> minPoints.addPoint(
                     candleIndexProvider.provideIndex(minPoint),
@@ -47,7 +47,7 @@ public class ClusterLevelDetectorSimulation {
         PointSeriesProvider maxPoints = new PointSeriesProvider("Maxima");
         maxPoints.setColor("#FF0000");
         maxPoints.setSize(5);
-        maxExtremumLocator.locate(candles)
+        maxExtremumLocator.locate(candles, candleIndexProvider)
             .forEach(
                 maxPoint -> maxPoints.addPoint(
                     candleIndexProvider.provideIndex(maxPoint),

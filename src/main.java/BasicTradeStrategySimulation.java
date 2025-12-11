@@ -42,10 +42,7 @@ import com.siberalt.singularity.strategy.market.DefaultCandleIndexProvider;
 import com.siberalt.singularity.strategy.observer.Observer;
 import com.siberalt.singularity.strategy.upside.CompositeFactorUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.AdaptiveUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.BasicLevelBasedUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.KeyLevelsUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.LevelBasedUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.level.*;
 import com.siberalt.singularity.strategy.upside.volume.MFIUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.volume.VPTUpsideCalculator;
 
@@ -94,12 +91,12 @@ public class BasicTradeStrategySimulation {
         Quotation initialInvestment = Quotation.of(1000000.00);
         broker.getOperationsService().addMoney(account.getId(), Money.of("RUB", initialInvestment));
 
-        int tradePeriodCandles = 120;
+        int tradePeriodCandles = 80;
         DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
         LevelDetectorTracker supportTracker = createSupportDetector(tradePeriodCandles);
         LevelDetectorTracker resistanceTracker = createResistanceDetector(tradePeriodCandles);
         LevelSelectorTracker selectorTracker = new LevelSelectorTracker(new BasicLevelSelector());
-        StrategyInterface strategy = createStrategy(
+        StrategyInterface strategy = createLevelsStrategy(
             candleRepository,
             broker,
             account,
@@ -174,6 +171,38 @@ public class BasicTradeStrategySimulation {
         );
     }
 
+    private static StrategyInterface createLevelsStrategy(
+        ReadCandleRepository candleRepository,
+        EventSubscriptionBroker broker,
+        Account account,
+        LevelDetector<Double> supportDetector,
+        LevelDetector<Double> resistanceDetector,
+        CumulativeCandleIndexProvider candleIndexProvider,
+        LevelSelectorTracker selectorTracker
+    ){
+        KeyLevelsUpsideCalculator upsideCalculator = new KeyLevelsUpsideCalculator(
+            supportDetector,
+            resistanceDetector,
+            //new ChannelLevelBasedUpsideCalculator()
+            new SimpleLevelBasedUpsideCalculator()
+        );
+
+        upsideCalculator.setLevelSelector(selectorTracker);
+        upsideCalculator.setCandleIndexProvider(candleIndexProvider);
+        BasicTradeStrategy strategy = new BasicTradeStrategy(
+            broker,
+            "TMOS",
+            account.getId(),
+            upsideCalculator,
+            candleRepository
+        );
+        strategy.setBuyThreshold(0.4);
+        strategy.setSellThreshold(-0.5);
+        strategy.setStep(40);
+
+        return strategy;
+    }
+
     private static StrategyInterface createStrategy(
         ReadCandleRepository candleRepository,
         EventSubscriptionBroker broker,
@@ -183,16 +212,12 @@ public class BasicTradeStrategySimulation {
         CumulativeCandleIndexProvider candleIndexProvider,
         LevelSelectorTracker selectorTracker
     ) {
-        UpsideCalculator mfi = new MFIUpsideCalculator();
-        UpsideCalculator vpt = new VPTUpsideCalculator();
         UpsideCalculator compositeUpsideCalculator = new CompositeFactorUpsideCalculator(
             List.of(
-                new CompositeFactorUpsideCalculator.WeightedCalculator(mfi, 0.6),
-                new CompositeFactorUpsideCalculator.WeightedCalculator(vpt, 0.4)
+                new CompositeFactorUpsideCalculator.WeightedCalculator(new MFIUpsideCalculator(), 0.6),
+                new CompositeFactorUpsideCalculator.WeightedCalculator(new VPTUpsideCalculator(), 0.4)
             )
         );
-
-        int tradePeriodCandles = 80;
 
         LevelBasedUpsideCalculator adaptiveUpsideCalculator = new AdaptiveUpsideCalculator(
             new BasicLevelBasedUpsideCalculator(-0.3, 0.3),
@@ -214,9 +239,9 @@ public class BasicTradeStrategySimulation {
             upsideCalculator,
             candleRepository
         );
-        strategy.setBuyThreshold(0.6);
+        strategy.setBuyThreshold(0.4);
         strategy.setSellThreshold(-0.5);
-        strategy.setStep(tradePeriodCandles);
+        strategy.setStep(80);
 
         return strategy;
     }
@@ -268,7 +293,7 @@ public class BasicTradeStrategySimulation {
             selectedResistanceLevels,
             "#CC8400"
         );
-        priceChart.setStepInterval(10);
+        priceChart.setStepInterval(3);
         priceChart.setCandleIndexProvider(candleIndexProvider);
         priceChart.render(candles);
     }

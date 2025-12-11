@@ -75,7 +75,7 @@ public class MFIUpsideCalculator implements UpsideCalculator {
 
         double moneyRatio = sumPositive / sumNegative;
         double mfi = 100 - (100 / (1 + moneyRatio));
-        double signal = (mfi - 50) / 50; // Преобразование [0,100] в [-1,1]
+        double signal = (mfi - 50) / -50; // Преобразование [0,100] в [-1,1]
 
         // Конвертация MFI [0,100] в сигнал [-1,1]
         return new Upside(signal, Math.abs(signal));

@@ -33,7 +33,7 @@ public class ConcurrentFrameExtremumLocatorSimulator {
         candleIndexProvider.accumulate(candles);
         PointSeriesProvider minPoints = new PointSeriesProvider("Minima");
         minPoints.setColor("#00FF00");
-        minExtremumLocator.locate(candles)
+        minExtremumLocator.locate(candles, candleIndexProvider)
             .forEach(
                 minPoint -> minPoints.addPoint(
                     candleIndexProvider.provideIndex(minPoint),
@@ -42,7 +42,7 @@ public class ConcurrentFrameExtremumLocatorSimulator {
             );
         PointSeriesProvider maxPoints = new PointSeriesProvider("Maxima");
         maxPoints.setColor("#FF0000");
-        maxExtremumLocator.locate(candles)
+        maxExtremumLocator.locate(candles, candleIndexProvider)
             .forEach(
                 maxPoint -> maxPoints.addPoint(
                     candleIndexProvider.provideIndex(maxPoint),

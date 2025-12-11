@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.extremum;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -16,7 +17,7 @@ public class FrameExtremumLocator implements ExtremumLocator {
     }
 
     @Override
-    public List<Candle> locate(List<Candle> candles) {
+    public List<Candle> locate(List<Candle> candles, CandleIndexProvider candleIndexProvider) {
         List<Candle> extremumList = new ArrayList<>();
         ArrayList<Candle> currentFrameCandles = new ArrayList<>();
         Instant startFrameTime = null;
@@ -29,14 +30,14 @@ public class FrameExtremumLocator implements ExtremumLocator {
             currentFrameCandles.add(candle);
 
             if (currentFrameCandles.size() == frameSize) {
-                extremumList.addAll(baseLocator.locate(currentFrameCandles));
+                extremumList.addAll(baseLocator.locate(currentFrameCandles, candleIndexProvider));
                 startFrameTime = null;
                 currentFrameCandles.clear();
             }
         }
 
         if (!currentFrameCandles.isEmpty()) {
-            extremumList.addAll(baseLocator.locate(currentFrameCandles));
+            extremumList.addAll(baseLocator.locate(currentFrameCandles, candleIndexProvider));
         }
 
         return extremumList;

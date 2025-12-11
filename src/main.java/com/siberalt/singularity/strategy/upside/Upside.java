@@ -9,4 +9,5 @@ package com.siberalt.singularity.strategy.upside;
  *                 or weight of the calculation.
  */
 public record Upside(double signal, double strength) {
+    public static final Upside NEUTRAL = new Upside(0, 0);
 }

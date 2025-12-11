@@ -15,10 +15,10 @@ public class BasicLevelSelectorTest {
 
     @Test
     void selectsClosestLevelsBasedOnCurrentPrice() {
-        Level<Double> resistance1 = new Level<>(5,10, price -> 110.0);
-        Level<Double> resistance2 = new Level<>(0,5,price -> 120.0);
-        Level<Double> support1 = new Level<>(5,10,price -> 90.0);
-        Level<Double> support2 = new Level<>(5,10,price -> 80.0);
+        Level<Double> resistance1 = new Level<>(5, 10, price -> 110.0);
+        Level<Double> resistance2 = new Level<>(0, 5, price -> 120.0);
+        Level<Double> support1 = new Level<>(5, 10, price -> 90.0);
+        Level<Double> support2 = new Level<>(5, 10, price -> 80.0);
         Candle recentCandle = Candle.of(null, 0L, 100.0);
         CandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
 
@@ -34,25 +34,6 @@ public class BasicLevelSelectorTest {
         assertEquals(1, result.size());
         assertEquals(resistance1, result.get(0).resistance());
         assertEquals(support1, result.get(0).support());
-    }
-
-    @Test
-    void returnsEmptyListWhenNoIntersectingLevels() {
-        Level<Double> resistance = new Level<>(0, 10, price -> 110.0);
-        Level<Double> support = new Level<>(11, 20, price -> 90.0);
-        Candle recentCandle = Candle.of(null, 0L, 100.0);
-        CandleIndexProvider candleIndexProvider = mock(CandleIndexProvider.class);
-
-        BasicLevelSelector selector = new BasicLevelSelector(1);
-
-        List<LevelPair> result = selector.select(
-            List.of(resistance),
-            List.of(support),
-            List.of(recentCandle),
-            candleIndexProvider
-        );
-
-        assertEquals(0, result.size());
     }
 
     @Test

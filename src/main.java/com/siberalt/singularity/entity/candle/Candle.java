@@ -218,6 +218,10 @@ public class Candle {
         return Candle.of(time, volume, repeatedValue, repeatedValue, repeatedValue, repeatedValue);
     }
 
+    public static Candle of(Instant time, double repeatedValue) {
+        return Candle.of(time, 0, repeatedValue, repeatedValue, repeatedValue, repeatedValue);
+    }
+
     public static Candle of(Instant time, String instrumentUid, long volume, double open, double high, double low, double close) {
         return new Candle()
             .setInstrumentUid(instrumentUid)

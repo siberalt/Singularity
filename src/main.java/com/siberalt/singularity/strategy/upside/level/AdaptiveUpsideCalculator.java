@@ -38,7 +38,7 @@ public class AdaptiveUpsideCalculator implements LevelBasedUpsideCalculator {
 
         // 3. Динамически адаптируем веса на основе контекста
         WeightFactors weightFactors = calculateAdaptiveWeights(
-            levelsUpside, volumeUpside, recentCandles,candleIndexProvider, resistance, support
+            levelsUpside, volumeUpside, recentCandles, candleIndexProvider, resistance, support
         );
 
         // 4. Комбинируем сигналы

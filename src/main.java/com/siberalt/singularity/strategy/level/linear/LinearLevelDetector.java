@@ -52,7 +52,7 @@ public class LinearLevelDetector implements LevelDetector<Double> {
             startLevelTime = candles.get(0).getTime();
         }
 
-        List<Candle> extremums = extremumLocator.locate(candles);
+        List<Candle> extremums = extremumLocator.locate(candles, candleIndexProvider);
 
         long lastIndex = -1;
 

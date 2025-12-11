@@ -1,12 +1,14 @@
 package com.siberalt.singularity.strategy.extremum;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class BaseExtremumLocatorTest {
 
@@ -14,7 +16,7 @@ class BaseExtremumLocatorTest {
     void locateReturnsEmptyListWhenCandlesIsEmpty() {
         BaseExtremumLocator locator = BaseExtremumLocator.createMaxLocator(x -> x.getClosePrice().toDouble());
 
-        List<Candle> result = locator.locate(List.of());
+        List<Candle> result = locator.locate(List.of(), mock(CandleIndexProvider.class));
 
         assertTrue(result.isEmpty());
     }
@@ -29,7 +31,8 @@ class BaseExtremumLocatorTest {
                 Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 12),
                 extremumCandle,
                 Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 18)
-            )
+            ),
+            mock(CandleIndexProvider.class)
         );
 
         assertEquals(1, result.size());
@@ -46,7 +49,8 @@ class BaseExtremumLocatorTest {
                 extremumCandle,
                 Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 20),
                 Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 18)
-            )
+            ),
+            mock(CandleIndexProvider.class)
         );
 
         assertEquals(1, result.size());
@@ -58,7 +62,7 @@ class BaseExtremumLocatorTest {
         Candle candle = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 10);
         BaseExtremumLocator locator = BaseExtremumLocator.createMaxLocator(x -> x.getClosePrice().toDouble());
 
-        List<Candle> result = locator.locate(List.of(candle));
+        List<Candle> result = locator.locate(List.of(candle), mock(CandleIndexProvider.class));
 
         assertEquals(1, result.size());
         assertSame(candle, result.get(0));
