@@ -27,14 +27,15 @@ import com.siberalt.singularity.simulation.EventSimulator;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
 import com.siberalt.singularity.strategy.StrategyInterface;
+import com.siberalt.singularity.strategy.extremum.BaseExtremumLocator;
+import com.siberalt.singularity.strategy.extremum.ConcurrentFrameExtremumLocator;
+import com.siberalt.singularity.strategy.extremum.ExtremumLocator;
+import com.siberalt.singularity.strategy.extremum.cache.CachingExtremeLocator;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.ClusterLevelDetector;
-import com.siberalt.singularity.strategy.level.selector.BasicLevelSelector;
-import com.siberalt.singularity.strategy.level.selector.LevelPair;
-import com.siberalt.singularity.strategy.level.selector.LevelPairsSnapshot;
-import com.siberalt.singularity.strategy.level.selector.LevelSelectorTracker;
+import com.siberalt.singularity.strategy.level.selector.*;
 import com.siberalt.singularity.strategy.level.track.LevelDetectorTracker;
 import com.siberalt.singularity.strategy.level.track.LevelsSnapshot;
 import com.siberalt.singularity.strategy.market.CumulativeCandleIndexProvider;
@@ -93,9 +94,13 @@ public class BasicTradeStrategySimulation {
 
         int tradePeriodCandles = 80;
         DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
-        LevelDetectorTracker supportTracker = createSupportDetector(tradePeriodCandles);
-        LevelDetectorTracker resistanceTracker = createResistanceDetector(tradePeriodCandles);
-        LevelSelectorTracker selectorTracker = new LevelSelectorTracker(new BasicLevelSelector());
+        ExtremumLocator maximumLocator = createExtremumLocator(tradePeriodCandles, BaseExtremumLocator.createMaxLocator());
+        ExtremumLocator minimumLocator = createExtremumLocator(tradePeriodCandles, BaseExtremumLocator.createMinLocator());
+        LevelDetectorTracker supportTracker = createLevelDetector(0.005, minimumLocator);
+        LevelDetectorTracker resistanceTracker = createLevelDetector(0.005, maximumLocator);
+        LevelSelectorTracker selectorTracker = new LevelSelectorTracker(
+            new ExtremeBasedLevelSelector(minimumLocator, maximumLocator)
+        );
         StrategyInterface strategy = createLevelsStrategy(
             candleRepository,
             broker,
@@ -203,6 +208,12 @@ public class BasicTradeStrategySimulation {
         return strategy;
     }
 
+    private static ExtremumLocator createExtremumLocator(int frameSize, ExtremumLocator baseLocator) {
+        return new CachingExtremeLocator(
+            new ConcurrentFrameExtremumLocator(frameSize, baseLocator, Runtime.getRuntime().availableProcessors(), 15)
+        );
+    }
+
     private static StrategyInterface createStrategy(
         ReadCandleRepository candleRepository,
         EventSubscriptionBroker broker,
@@ -298,21 +309,14 @@ public class BasicTradeStrategySimulation {
         priceChart.render(candles);
     }
 
-    private static LevelDetectorTracker createSupportDetector(long tradePeriodCandles) {
+    private static LevelDetectorTracker createLevelDetector(double sensitivity, ExtremumLocator baseLocator) {
+        ClusterLevelDetector levelDetector = new ClusterLevelDetector(sensitivity, baseLocator);
+
         return new LevelDetectorTracker(
 //            LinearLevelDetector.createSupport(
 //                tradePeriodCandles, 0.003
 //            )
-            ClusterLevelDetector.createSupport((int) tradePeriodCandles, 0.005)
-        );
-    }
-
-    private static LevelDetectorTracker createResistanceDetector(long tradePeriodCandles) {
-        return new LevelDetectorTracker(
-//            LinearLevelDetector.createResistance(
-//                tradePeriodCandles, 0.003
-//            )
-            ClusterLevelDetector.createResistance((int) tradePeriodCandles, 0.005)
+            levelDetector
         );
     }
 

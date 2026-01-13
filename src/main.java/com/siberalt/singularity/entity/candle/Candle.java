@@ -210,6 +210,10 @@ public class Candle {
             .setClosePrice(close);
     }
 
+    public static Candle of(Instant time, String instrumentUid, double repeatedValue) {
+        return Candle.of(time, instrumentUid, 0, repeatedValue, repeatedValue, repeatedValue, repeatedValue);
+    }
+
     public static Candle of(Instant time, String instrumentUid, long volume, double repeatedValue) {
         return Candle.of(time, instrumentUid, volume, repeatedValue, repeatedValue, repeatedValue, repeatedValue);
     }

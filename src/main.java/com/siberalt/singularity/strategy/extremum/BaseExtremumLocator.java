@@ -25,11 +25,19 @@ public class BaseExtremumLocator implements ExtremumLocator {
     }
 
     // Factory method for maximum
+    public static BaseExtremumLocator createMaxLocator() {
+        return new BaseExtremumLocator(Comparator.comparing(Candle::getTypicalPriceAsDouble));
+    }
+
     public static BaseExtremumLocator createMaxLocator(Function<Candle, Double> priceExtractor) {
         return new BaseExtremumLocator(Comparator.comparing(priceExtractor));
     }
 
     // Factory method for minimum
+    public static BaseExtremumLocator createMinLocator() {
+        return new BaseExtremumLocator(Comparator.comparing(Candle::getTypicalPriceAsDouble).reversed());
+    }
+
     public static BaseExtremumLocator createMinLocator(Function<Candle, Double> priceExtractor) {
         return new BaseExtremumLocator(Comparator.comparing(priceExtractor).reversed());
     }
