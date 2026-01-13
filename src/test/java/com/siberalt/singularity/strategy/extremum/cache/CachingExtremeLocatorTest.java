@@ -36,7 +36,7 @@ class CachingExtremeLocatorTest {
             Candle.of(Instant.parse("2024-01-01T00:07:00Z"), "instrument1", 100, 110)
         );
         candleIndexProvider.accumulate(candles);
-        Range outerRange = new Range(0, 10, "instrument1", "DEFAULT");
+        Range outerRange = createOuterRange(0, 10);
 
         when(rangeRepository.getIntersects(outerRange, RangeType.OUTER)).thenReturn(List.of());
         when(rangeRepository.getNeighbors(outerRange, RangeType.OUTER)).thenReturn(List.of());
@@ -101,12 +101,8 @@ class CachingExtremeLocatorTest {
         );
         candleIndexProvider.accumulate(candles);
 
-        Range outerRange = new Range(
-            0, 4, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range innerRange = new Range(
-            2, 4, "instrument1", "DEFAULT", RangeType.INNER
-        );
+        Range outerRange = createOuterRange(0, 4);
+        Range innerRange = createInnerRange(2, 4);
         List<Candle> expectedExtremes = List.of(
             Candle.of(Instant.parse("2024-01-01T00:02:00Z"), "instrument1", 120),
             Candle.of(Instant.parse("2024-01-01T00:04:00Z"), "instrument1", 130)
@@ -138,12 +134,8 @@ class CachingExtremeLocatorTest {
             Candle.of(Instant.parse("2024-01-01T00:04:00Z"), "instrument1", 130)
         );
 
-        Range cachedRange = new Range(
-            0, 10, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range outerRange = new Range(
-            0, 4, "instrument1", "DEFAULT", RangeType.OUTER
-        );
+        Range cachedRange = createOuterRange(0, 10);
+        Range outerRange = createOuterRange(0, 4);
         List<Candle> cachedExtremes = List.of(
             Candle.of(Instant.parse("2024-01-01T00:01:00Z"), "instrument1", 120),
             Candle.of(Instant.parse("2024-01-01T00:03:00Z"), "instrument1", 130)
@@ -177,21 +169,11 @@ class CachingExtremeLocatorTest {
             Candle.of(Instant.parse("2024-01-01T00:04:00Z"), "instrument1", 130)
         );
 
-        Range newOuterRange = new Range(
-            0, 4, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range neighborOuterRange = new Range(
-            5, 9, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range neighborInnerRange = new Range(
-            6, 7, "instrument1", "DEFAULT", RangeType.INNER
-        );
-        Range unitedOuterRange = new Range(
-            0, 9, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range unitedInnerRange = new Range(
-            2, 7, "instrument1", "DEFAULT", RangeType.INNER
-        );
+        Range newOuterRange = createOuterRange(0, 4);
+        Range neighborOuterRange = createOuterRange(5, 9);
+        Range neighborInnerRange = createInnerRange(6, 7);
+        Range unitedOuterRange = createOuterRange(0, 9);
+        Range unitedInnerRange = createInnerRange(2, 7);
 
         List<Candle> newExtremes = List.of(
             Candle.of(Instant.parse("2024-01-01T00:02:00Z"), "instrument1", 120),
@@ -233,27 +215,13 @@ class CachingExtremeLocatorTest {
             Candle.of(Instant.parse("2024-01-01T00:04:00Z"), "instrument1", 130)
         );
 
-        Range outerRange = new Range(
-            0, 4, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range cachedOuterRange = new Range(
-            0, 3, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range cachedInnerRange = new Range(
-            1, 2, "instrument1", "DEFAULT", RangeType.INNER
-        );
-        Range unitedInnerRange = new Range(
-            1, 4, "instrument1", "DEFAULT", RangeType.INNER
-        );
-        Range unitedOuterRange = new Range(
-            0, 4, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range newUnitedOuterRange = new Range(
-            1, 4, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range saveInnerRange = new Range(
-            3, 4, "instrument1", "DEFAULT", RangeType.OUTER
-        );
+        Range outerRange = createOuterRange(0, 4);
+        Range cachedOuterRange = createOuterRange(0, 3);
+        Range cachedInnerRange = createInnerRange(1, 2);
+        Range unitedInnerRange = createInnerRange(1, 4);
+        Range unitedOuterRange = createOuterRange(0, 4);
+        Range newUnitedOuterRange = createOuterRange(1, 4);
+        Range saveInnerRange = createOuterRange(3, 4);
 
         List<Candle> cachedExtremes = List.of(
             Candle.of(Instant.parse("2024-01-01T00:01:00Z"), "instrument1", 100),
@@ -319,21 +287,11 @@ class CachingExtremeLocatorTest {
             Candle.of(Instant.parse("2024-01-01T00:09:00Z"), "instrument1", 110)
         );
 
-        Range newOuterRange = new Range(
-            0, 9, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range intersectedOuterRange = new Range(
-            4, 12, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range intersectedInnerRange = new Range(
-            9, 11, "instrument1", "DEFAULT", RangeType.INNER
-        );
-        Range trimmedInnerRange = new Range(
-            2, 4, "instrument1", "DEFAULT", RangeType.INNER
-        );
-        Range trimmedOuterRange = new Range(
-            0, 7, "instrument1", "DEFAULT", RangeType.OUTER
-        );
+        Range newOuterRange = createOuterRange(0, 9);
+        Range intersectedOuterRange = createOuterRange(4, 12);
+        Range intersectedInnerRange = createInnerRange(9, 11);
+        Range trimmedInnerRange = createInnerRange(2, 4);
+        Range trimmedOuterRange = createOuterRange(0, 7);
 
         when(rangeRepository.getIntersects(newOuterRange, RangeType.OUTER)).thenReturn(List.of(intersectedOuterRange));
         when(rangeRepository.getIntersects(newOuterRange, RangeType.INNER)).thenReturn(List.of(intersectedInnerRange));
@@ -391,30 +349,14 @@ class CachingExtremeLocatorTest {
             Candle.of(Instant.parse("2024-01-01T00:04:00Z"), "instrument1", 130)
         );
 
-        Range newOuterRange = new Range(
-            2, 6, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range leftIntersectingOuterRange = new Range(
-            0, 2, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range leftIntersectingInnerRange = new Range(
-            1, 2, "instrument1", "DEFAULT", RangeType.INNER
-        );
-        Range rightNeighborOuterRange = new Range(
-            7, 9, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range rightNeighborInnerRange = new Range(
-            8, 8, "instrument1", "DEFAULT", RangeType.INNER
-        );
-        Range unitedOuterRange = new Range(
-            0, 9, "instrument1", "DEFAULT", RangeType.OUTER
-        );
-        Range unitedInnerRange = new Range(
-            1, 8, "instrument1", "DEFAULT", RangeType.INNER
-        );
-        Range saveExtremesRange = new Range(
-            3, 6, "instrument1", "DEFAULT", RangeType.OUTER
-        );
+        Range newOuterRange = createOuterRange(2, 6);
+        Range leftIntersectingOuterRange = createOuterRange(0, 2);
+        Range leftIntersectingInnerRange = createInnerRange(1, 2);
+        Range rightNeighborOuterRange = createOuterRange(7, 9);
+        Range rightNeighborInnerRange = createInnerRange(8, 8);
+        Range unitedOuterRange = createOuterRange(0, 9);
+        Range unitedInnerRange = createInnerRange(1, 8);
+        Range saveExtremesRange = createOuterRange(3, 6);
 
         when(rangeRepository.getIntersects(newOuterRange, RangeType.OUTER)).thenReturn(List.of(leftIntersectingOuterRange));
         when(rangeRepository.getIntersects(newOuterRange, RangeType.INNER)).thenReturn(List.of(leftIntersectingInnerRange));
@@ -435,5 +377,13 @@ class CachingExtremeLocatorTest {
         verify(rangeRepository, times(1)).saveBatch(List.of(unitedOuterRange, unitedInnerRange));
         verify(extremeRepository, times(1)).saveBatch(saveExtremesRange, newExtremes, candleIndexProvider);
         verify(rangeRepository, times(1)).deleteBatch(anyList());
+    }
+
+    private Range createOuterRange(int fromIndex, int toIndex) {
+        return new Range(fromIndex, toIndex, "instrument1", "DEFAULT", RangeType.OUTER);
+    }
+
+    private Range createInnerRange(int fromIndex, int toIndex) {
+        return new Range(fromIndex, toIndex, "instrument1", "DEFAULT", RangeType.INNER);
     }
 }
