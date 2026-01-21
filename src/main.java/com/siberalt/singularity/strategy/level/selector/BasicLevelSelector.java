@@ -2,7 +2,6 @@ package com.siberalt.singularity.strategy.level.selector;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.Level;
-import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 
 import java.util.Comparator;
 import java.util.List;
@@ -21,12 +20,11 @@ public class BasicLevelSelector implements LevelSelector {
     public List<LevelPair> select(
         List<Level<Double>> resistanceLevels,
         List<Level<Double>> supportLevels,
-        List<Candle> recentCandles,
-        CandleIndexProvider candleIndexProvider
+        List<Candle> recentCandles
     ) {
         Candle currentCandle = recentCandles.get(recentCandles.size() - 1);
         double currentPrice = currentCandle.getTypicalPrice().toDouble();
-        long currentIndex = candleIndexProvider.provideIndex(currentCandle);
+        long currentIndex = currentCandle.getIndex();
 
         List<Level<Double>> closestResistanceLevels = resistanceLevels.stream()
             .filter(level -> level.function().apply((double) currentIndex) > currentPrice)

@@ -2,11 +2,9 @@ package com.siberalt.singularity.strategy.level.selector;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.Level;
-import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 
 import java.time.Instant;
 import java.util.ArrayList;
-
 import java.util.List;
 
 public class LevelSelectorTracker implements LevelSelector {
@@ -22,18 +20,12 @@ public class LevelSelectorTracker implements LevelSelector {
     public List<LevelPair> select(
         List<Level<Double>> resistanceLevels,
         List<Level<Double>> supportLevels,
-        List<Candle> recentCandles,
-        CandleIndexProvider candleIndexProvider
+        List<Candle> recentCandles
     ) {
-        List<LevelPair> levelPairs = baseSelector.select(
-            resistanceLevels,
-            supportLevels,
-            recentCandles,
-            candleIndexProvider
-        );
+        List<LevelPair> levelPairs = baseSelector.select(resistanceLevels, supportLevels, recentCandles);
 
-        long fromIndex = candleIndexProvider.provideIndex(recentCandles.get(0));
-        long toIndex = candleIndexProvider.provideIndex(recentCandles.get(recentCandles.size() - 1));
+        long fromIndex = recentCandles.get(0).getIndex();
+        long toIndex = recentCandles.get(recentCandles.size() - 1).getIndex();
         Instant timeFrom = recentCandles.get(0).getTime();
         Instant timeTo = recentCandles.get(recentCandles.size() - 1).getTime();
 

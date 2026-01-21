@@ -2,7 +2,6 @@ package com.siberalt.singularity.strategy.upside.level;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.Level;
-import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 import com.siberalt.singularity.strategy.upside.Upside;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 
@@ -30,15 +29,14 @@ public class AdaptiveUpsideCalculator implements LevelBasedUpsideCalculator {
     public Upside calculate(
         Level<Double> resistance,
         Level<Double> support,
-        List<Candle> recentCandles,
-        CandleIndexProvider candleIndexProvider
+        List<Candle> recentCandles
     ) {
-        Upside levelsUpside = levelsCalculator.calculate(resistance, support, recentCandles, candleIndexProvider);
+        Upside levelsUpside = levelsCalculator.calculate(resistance, support, recentCandles);
         Upside volumeUpside = volumeCalculator.calculate(recentCandles);
 
         // 3. Динамически адаптируем веса на основе контекста
         WeightFactors weightFactors = calculateAdaptiveWeights(
-            levelsUpside, volumeUpside, recentCandles, candleIndexProvider, resistance, support
+            levelsUpside, volumeUpside, recentCandles, resistance, support
         );
 
         // 4. Комбинируем сигналы
@@ -66,7 +64,6 @@ public class AdaptiveUpsideCalculator implements LevelBasedUpsideCalculator {
         Upside levels,
         Upside volume,
         List<Candle> recentCandles,
-        CandleIndexProvider candleIndexProvider,
         Level<Double> resistance,
         Level<Double> support
     ) {
@@ -74,7 +71,7 @@ public class AdaptiveUpsideCalculator implements LevelBasedUpsideCalculator {
         double volumeWeight = BASE_VOLUME_WEIGHT;
 
         Candle currentCandle = recentCandles.get(recentCandles.size() - 1);
-        long currentCandleIndex = candleIndexProvider.provideIndex(currentCandle);
+        long currentCandleIndex = currentCandle.getIndex();
 
         // 🔄 Правила адаптации весов
 

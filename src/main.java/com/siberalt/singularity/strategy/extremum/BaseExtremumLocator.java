@@ -1,7 +1,6 @@
 package com.siberalt.singularity.strategy.extremum;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 
 import javax.annotation.concurrent.ThreadSafe;
 import java.util.Comparator;
@@ -17,7 +16,7 @@ public class BaseExtremumLocator implements ExtremumLocator {
     }
 
     @Override
-    public List<Candle> locate(List<Candle> candles, CandleIndexProvider candleIndexProvider) {
+    public List<Candle> locate(List<Candle> candles) {
         return candles.stream()
             .max(comparator)
             .stream()

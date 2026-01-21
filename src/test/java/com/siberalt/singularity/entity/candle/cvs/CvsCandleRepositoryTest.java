@@ -250,12 +250,19 @@ public class CvsCandleRepositoryTest {
     }
 
     void assertFindByOpenPrice(CvsCandleRepository candleStorage, FindPriceParams findPriceParams) {
-        var candles = candleStorage.findByOpenPrice(findPriceParams);
+        List<Candle> candles = candleStorage.findByOpenPrice(findPriceParams);
 
-        var totalCount = 0;
-        var timeOrderAsserter = new TimeOrderAsserter();
+        int totalCount = 0;
+        long prevIndex = -1;
+        TimeOrderAsserter timeOrderAsserter = new TimeOrderAsserter();
 
         for (var candle : candles) {
+            // Assert index increment
+            if (prevIndex >= 0) {
+                Assertions.assertEquals(1, candle.getIndex() - prevIndex, "Index disorder");
+            }
+
+            prevIndex = candle.getIndex();
             var candleTime = candle.getTime();
             Assertions.assertTrue(candleTime.compareTo(findPriceParams.from()) >= 0);
             Assertions.assertTrue(candleTime.compareTo(findPriceParams.to()) <= 0);
@@ -287,10 +294,18 @@ public class CvsCandleRepositoryTest {
         }
 
         var matchCandle = stack.pop();
+        long prevIndex = -1;
         TimeOrderAsserter timeOrderAsserter = new TimeOrderAsserter();
 
         for (var candle : candleStorage.getPeriod(instrumentUid, from, to)) {
             timeOrderAsserter.assertTime(candle.getTime());
+
+            // Assert index increment
+            if (prevIndex >= 0) {
+                Assertions.assertEquals(1, candle.getIndex() - prevIndex, "Index disorder");
+            }
+
+            prevIndex = candle.getIndex();
 
             if (candle.getTime().equals(matchCandle.getTime())) {
                 assertCandleEquals(candle, matchCandle);

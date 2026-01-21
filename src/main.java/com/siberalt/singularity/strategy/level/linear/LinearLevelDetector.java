@@ -8,7 +8,6 @@ import com.siberalt.singularity.strategy.extremum.ExtremumLocator;
 import com.siberalt.singularity.strategy.extremum.FrameExtremumLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
-import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -16,7 +15,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 
-public class LinearLevelDetector implements LevelDetector<Double> {
+public class LinearLevelDetector implements LevelDetector {
     private long startLevelIndex;
     private Instant startLevelTime = null;
     private IncrementalLinearRegression linearModel;
@@ -32,7 +31,7 @@ public class LinearLevelDetector implements LevelDetector<Double> {
         this.extremumLocator = extremumLocator;
     }
 
-    public List<Level<Double>> detect(List<Candle> candles, CandleIndexProvider candleIndexProvider) {
+    public List<Level<Double>> detect(List<Candle> candles) {
         if (linearModel == null) {
             // Check if there are enough candles to calculate support levels
             if (candles.size() < 2) {
@@ -52,12 +51,12 @@ public class LinearLevelDetector implements LevelDetector<Double> {
             startLevelTime = candles.get(0).getTime();
         }
 
-        List<Candle> extremums = extremumLocator.locate(candles, candleIndexProvider);
+        List<Candle> extremums = extremumLocator.locate(candles);
 
         long lastIndex = -1;
 
         for (Candle extremum : extremums) {
-            long extremumIndex = candleIndexProvider.provideIndex(extremum);
+            long extremumIndex = extremum.getIndex();
             Point2D<Double> point = new Point2D<>((double) extremumIndex, extremum.getTypicalPrice().toDouble());
 
             if (linearModel.addPoint(point)) {
@@ -85,8 +84,10 @@ public class LinearLevelDetector implements LevelDetector<Double> {
         }
 
         if (linearModel.getInliers().size() > 1) {
-            lastIndex = candleIndexProvider.provideIndex(extremums.get(extremums.size() - 1));
-            lastTime = extremums.get(extremums.size() - 1).getTime();
+            Candle lastExtremum = extremums.get(extremums.size() - 1);
+            lastIndex = lastExtremum.getIndex();
+            lastTime = lastExtremum.getTime();
+
             levels.add(
                 createLinearLevel(
                     startLevelTime,

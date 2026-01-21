@@ -2,7 +2,6 @@ package com.siberalt.singularity.strategy.upside.level;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.Level;
-import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 import com.siberalt.singularity.strategy.upside.Upside;
 
 import java.util.List;
@@ -25,10 +24,9 @@ public class BasicLevelBasedUpsideCalculator implements LevelBasedUpsideCalculat
     public Upside calculate(
         Level<Double> resistance,
         Level<Double> support,
-        List<Candle> recentCandles,
-        CandleIndexProvider candleIndexProvider
+        List<Candle> recentCandles
     ) {
-        long currentIndex = candleIndexProvider.provideIndex(recentCandles.get(recentCandles.size() - 1));
+        long currentIndex = recentCandles.get(recentCandles.size() - 1).getIndex();
         double resistancePrice = resistance.function().apply((double) currentIndex);
         double supportPrice = support.function().apply((double) currentIndex);
         double resistanceStrength = resistance.strength();

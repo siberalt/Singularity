@@ -1,10 +1,12 @@
 package com.siberalt.singularity.strategy.extremum;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 public class ConcurrentFrameExtremumLocator implements ExtremumLocator {
@@ -48,13 +50,13 @@ public class ConcurrentFrameExtremumLocator implements ExtremumLocator {
     }
 
     @Override
-    public List<Candle> locate(List<Candle> candles, CandleIndexProvider candleIndexProvider) {
+    public List<Candle> locate(List<Candle> candles) {
         if (candles.isEmpty()) {
             return Collections.emptyList();
         }
 
         if (globalStartFrameIndex == -1) {
-            globalStartFrameIndex = candleIndexProvider.provideIndex(candles.get(0));
+            globalStartFrameIndex = candles.get(0).getIndex();
         }
 
         if (!unfinishedFrameCandles.isEmpty()) {
@@ -83,7 +85,7 @@ public class ConcurrentFrameExtremumLocator implements ExtremumLocator {
                 List<Candle> frame = candles.subList(start, end);
 
                 // Submit frame processing to the thread pool
-                futures.add(executor.submit(() -> baseLocator.locate(frame, candleIndexProvider)));
+                futures.add(executor.submit(() -> baseLocator.locate(frame)));
             }
 
             // Collect results timeFrom all threads
@@ -106,7 +108,6 @@ public class ConcurrentFrameExtremumLocator implements ExtremumLocator {
             extremumList = filterExtremums(
                 extremumList,
                 candles,
-                candleIndexProvider,
                 executor,
                 globalStartFrameIndex
             );
@@ -124,7 +125,6 @@ public class ConcurrentFrameExtremumLocator implements ExtremumLocator {
     private List<Candle> filterExtremums(
         List<Candle> candidateExtremums,
         List<Candle> allCandles,
-        CandleIndexProvider candleIndexProvider,
         ExecutorService executorService,
         long globalStartIndex
     ) {
@@ -132,10 +132,10 @@ public class ConcurrentFrameExtremumLocator implements ExtremumLocator {
         Set<Candle> extremumsToRemove = new HashSet<>();
 
         for (Candle extremum : candidateExtremums) {
-            long extremumIndex = candleIndexProvider.provideIndex(extremum) - globalStartIndex;
+            long extremumIndex = extremum.getIndex() - globalStartIndex;
             if (extremumIndex == -1) continue;
 
-            long endIndex = candleIndexProvider.provideIndex(allCandles.get(allCandles.size() - 1));
+            long endIndex = allCandles.get(allCandles.size() - 1).getIndex();
 
             if (isOutOfRange(extremumIndex, globalStartIndex, endIndex)) {
                 extremumsToRemove.add(extremum);
@@ -157,7 +157,7 @@ public class ConcurrentFrameExtremumLocator implements ExtremumLocator {
             List<Candle> neighborhood = allCandles.subList((int) leftBound, (int) (rightBound + 1));
 
             futures.add(executorService.submit(() -> {
-                List<Candle> realExtremums = baseLocator.locate(neighborhood, candleIndexProvider);
+                List<Candle> realExtremums = baseLocator.locate(neighborhood);
                 Set<Candle> realExtremumsSet = new HashSet<>(realExtremums); // Convert to Set for faster lookups
                 return entry.getValue().removeAll(realExtremumsSet) ? entry.getValue() : Collections.emptySet();
             }));

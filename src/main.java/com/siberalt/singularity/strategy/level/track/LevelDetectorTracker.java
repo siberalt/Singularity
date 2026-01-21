@@ -3,28 +3,30 @@ package com.siberalt.singularity.strategy.level.track;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
-import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-public class LevelDetectorTracker implements LevelDetector<Double> {
-    private final LevelDetector<Double> wrappedDetector;
+public class LevelDetectorTracker implements LevelDetector {
+    private final LevelDetector wrappedDetector;
     private final List<LevelsSnapshot> snapshots = new ArrayList<>();
 
-    public LevelDetectorTracker(LevelDetector<Double> wrappedDetector) {
+    public LevelDetectorTracker(LevelDetector wrappedDetector) {
         this.wrappedDetector = wrappedDetector;
     }
 
     @Override
-    public List<Level<Double>> detect(List<Candle> candles, CandleIndexProvider candleIndexProvider) {
-        List<Level<Double>> levels = wrappedDetector.detect(candles, candleIndexProvider);
+    public List<Level<Double>> detect(List<Candle> candles) {
+        List<Level<Double>> levels = wrappedDetector.detect(candles);
+        Candle firstCandle = candles.get(0);
+        Candle lastCandle = candles.get(candles.size() - 1);
+
         snapshots.add(new LevelsSnapshot(
-            candleIndexProvider.provideIndex(candles.get(0)),
-            candleIndexProvider.provideIndex(candles.get(candles.size() - 1)),
-            candles.get(0).getTime(),
-            candles.get(candles.size() - 1).getTime(),
+            firstCandle.getIndex(),
+            lastCandle.getIndex(),
+            firstCandle.getTime(),
+            lastCandle.getTime(),
             levels
         ));
         return levels;

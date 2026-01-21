@@ -5,7 +5,6 @@ import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.selector.LevelPair;
 import com.siberalt.singularity.strategy.level.selector.LevelSelector;
-import com.siberalt.singularity.strategy.market.CumulativeCandleIndexProvider;
 import com.siberalt.singularity.strategy.upside.Upside;
 import org.junit.jupiter.api.Test;
 
@@ -18,24 +17,22 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 public class KeyLevelsUpsideCalculatorTest {
-    private final CumulativeCandleIndexProvider candleIndexProvider = mock(CumulativeCandleIndexProvider.class);
-
     @Test
     void calculatesUpsideWhenSupportAndResistanceAreDetectedWithDifferentValues() {
         Level<Double> support = new Level<>(null, null, 20L, 20L, x -> 60.0, 0.0);
         Level<Double> resistance = new Level<>(null, null, 25L, 25L, x -> 120.0, 0.0);
         Candle lastCandle = createCandle(90.0);
 
-        LevelDetector<Double> supportDetector = mock(LevelDetector.class);
-        LevelDetector<Double> resistanceDetector = mock(LevelDetector.class);
+        LevelDetector supportDetector = mock(LevelDetector.class);
+        LevelDetector resistanceDetector = mock(LevelDetector.class);
         LevelBasedUpsideCalculator upsideCalculator = mock(LevelBasedUpsideCalculator.class);
         LevelSelector levelSelector = mock(LevelSelector.class);
 
-        when(levelSelector.select(any(), any(), any(), any()))
+        when(levelSelector.select(any(), any(), any()))
             .thenReturn(List.of(new LevelPair(resistance, support)));
-        doReturn(List.of(support)).when(supportDetector).detect(anyList(), any());
-        doReturn(List.of(resistance)).when(resistanceDetector).detect(anyList(), any());
-        when(upsideCalculator.calculate(resistance, support, List.of(lastCandle), candleIndexProvider))
+        doReturn(List.of(support)).when(supportDetector).detect(anyList());
+        doReturn(List.of(resistance)).when(resistanceDetector).detect(anyList());
+        when(upsideCalculator.calculate(resistance, support, List.of(lastCandle)))
             .thenReturn(new Upside(0.7, 1.5));
 
         KeyLevelsUpsideCalculator calculator = new KeyLevelsUpsideCalculator(
@@ -44,7 +41,6 @@ public class KeyLevelsUpsideCalculatorTest {
             upsideCalculator
         );
         calculator.setLevelSelector(levelSelector);
-        calculator.setCandleIndexProvider(candleIndexProvider);
         Upside result = calculator.calculate(List.of(lastCandle));
 
         assertNotNull(result);
@@ -55,12 +51,12 @@ public class KeyLevelsUpsideCalculatorTest {
     void returnsZeroUpsideWhenNoSupportOrResistanceIsDetected() {
         Candle lastCandle = Candle.of(Instant.now(), 1000L, 75);
 
-        LevelDetector<Double> supportDetector = mock(LevelDetector.class);
-        LevelDetector<Double> resistanceDetector = mock(LevelDetector.class);
+        LevelDetector supportDetector = mock(LevelDetector.class);
+        LevelDetector resistanceDetector = mock(LevelDetector.class);
         LevelBasedUpsideCalculator upsideCalculator = mock(LevelBasedUpsideCalculator.class);
 
-        when(supportDetector.detect(anyList(), any())).thenReturn(List.of());
-        when(resistanceDetector.detect(anyList(), any())).thenReturn(List.of());
+        when(supportDetector.detect(anyList())).thenReturn(List.of());
+        when(resistanceDetector.detect(anyList())).thenReturn(List.of());
 
         KeyLevelsUpsideCalculator calculator = new KeyLevelsUpsideCalculator(
             supportDetector,
@@ -75,9 +71,6 @@ public class KeyLevelsUpsideCalculatorTest {
     }
 
     private Candle createCandle(double price) {
-        Candle candle = Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 0, price);
-        when(candleIndexProvider.provideIndex(candle)).thenReturn(0L);
-
-        return candle;
+        return Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 0, price);
     }
 }

@@ -8,7 +8,6 @@ import com.siberalt.singularity.strategy.extremum.BaseExtremumLocator;
 import com.siberalt.singularity.strategy.extremum.ConcurrentFrameExtremumLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.linear.ClusterLevelDetector;
-import com.siberalt.singularity.strategy.market.DefaultCandleIndexProvider;
 
 import java.time.Instant;
 import java.util.List;
@@ -32,25 +31,23 @@ public class ClusterLevelDetectorSimulation {
             120,
             BaseExtremumLocator.createMaxLocator(Candle::getTypicalPriceAsDouble)
         );
-        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
-        candleIndexProvider.accumulate(candles);
         PointSeriesProvider minPoints = new PointSeriesProvider("Minima");
         minPoints.setColor("#00FF00");
         minPoints.setSize(5);
-        minExtremumLocator.locate(candles, candleIndexProvider)
+        minExtremumLocator.locate(candles)
             .forEach(
                 minPoint -> minPoints.addPoint(
-                    candleIndexProvider.provideIndex(minPoint),
+                    minPoint.getIndex(),
                     minPoint.getTypicalPriceAsDouble()
                 )
             );
         PointSeriesProvider maxPoints = new PointSeriesProvider("Maxima");
         maxPoints.setColor("#FF0000");
         maxPoints.setSize(5);
-        maxExtremumLocator.locate(candles, candleIndexProvider)
+        maxExtremumLocator.locate(candles)
             .forEach(
                 maxPoint -> maxPoints.addPoint(
-                    candleIndexProvider.provideIndex(maxPoint),
+                    maxPoint.getIndex(),
                     maxPoint.getTypicalPriceAsDouble()
                 )
             );
@@ -62,8 +59,8 @@ public class ClusterLevelDetectorSimulation {
         );
         ClusterLevelDetector supportDetector = new ClusterLevelDetector(0.005, minExtremumLocator);
         ClusterLevelDetector resistanceDetector = new ClusterLevelDetector(0.005, maxExtremumLocator);
-        var supportLevels = supportDetector.detect(candles, candleIndexProvider);
-        var resistanceLevels = resistanceDetector.detect(candles, candleIndexProvider);
+        var supportLevels = supportDetector.detect(candles);
+        var resistanceLevels = resistanceDetector.detect(candles);
         addLevelsToChart(priceChart, "Support Levels", supportLevels, "#00FFFA");
         addLevelsToChart(priceChart, "Resistance Levels", resistanceLevels, "#FFBB00");
         priceChart.addSeriesProvider(minPoints);

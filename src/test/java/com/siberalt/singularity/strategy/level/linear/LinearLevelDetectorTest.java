@@ -1,10 +1,10 @@
 package com.siberalt.singularity.strategy.level.linear;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.CandleFactory;
 import com.siberalt.singularity.math.ArithmeticOperations;
 import com.siberalt.singularity.math.LinearFunction2D;
 import com.siberalt.singularity.strategy.level.Level;
-import com.siberalt.singularity.strategy.market.DefaultCandleIndexProvider;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -16,17 +16,18 @@ import static org.mockito.Mockito.*;
 
 class LinearLevelDetectorTest {
     private final StrengthCalculator strengthCalculator = mock(StrengthCalculator.class);
+    private final CandleFactory candleFactory = new CandleFactory("TEST_INSTRUMENT");
 
     @Test
     void calculatesSupportLevelsCorrectly() {
         List<Candle> candles = List.of(
-            createCandle("2023-01-01T00:00:00Z", 13.22),
-            createCandle("2023-01-01T00:01:00Z", 10.20),
-            createCandle("2023-01-01T00:02:00Z", 14.75),
-            createCandle("2023-01-01T00:03:00Z", 9.95),
-            createCandle("2023-01-01T00:04:00Z", 11.75),
-            createCandle("2023-01-01T00:05:00Z", 12.75),
-            createCandle("2023-01-01T00:06:00Z", 10.10)
+            candleFactory.createCommon("2023-01-01T00:00:00Z", 13.22),
+            candleFactory.createCommon("2023-01-01T00:01:00Z", 10.20),
+            candleFactory.createCommon("2023-01-01T00:02:00Z", 14.75),
+            candleFactory.createCommon("2023-01-01T00:03:00Z", 9.95),
+            candleFactory.createCommon("2023-01-01T00:04:00Z", 11.75),
+            candleFactory.createCommon("2023-01-01T00:05:00Z", 12.75),
+            candleFactory.createCommon("2023-01-01T00:06:00Z", 10.10)
         );
 
         LinearLevelDetector calculator = LinearLevelDetector.createSupport(
@@ -40,9 +41,7 @@ class LinearLevelDetectorTest {
         // This is a simplification; in a real scenario, the strengthCalculator would have more complex logic
         double expectedStrength = 3 * 3; // Example strength value
         when(strengthCalculator.calculate(any())).thenReturn(expectedStrength);
-        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
-        candleIndexProvider.accumulate(candles);
-        List<Level<Double>> levels = calculator.detect(candles, candleIndexProvider);
+        List<Level<Double>> levels = calculator.detect(candles);
 
         assertEquals(1, levels.size());
         Level<Double> level = levels.get(0);
@@ -62,13 +61,13 @@ class LinearLevelDetectorTest {
     @Test
     void calculatesSeveralSupportLevels() {
         List<Candle> candles = List.of(
-            createCandle("2023-01-01T00:00:00Z", 4),
-            createCandle("2023-01-01T00:01:00Z", 5.1),
-            createCandle("2023-01-01T00:02:00Z", 5.95),
-            createCandle("2023-01-01T00:03:00Z", 7),
-            createCandle("2023-01-01T00:04:00Z", 6.95),
-            createCandle("2023-01-01T00:05:00Z", 6.99),
-            createCandle("2023-01-01T00:06:00Z", 7.05)
+            candleFactory.createCommon("2023-01-01T00:00:00Z", 4),
+            candleFactory.createCommon("2023-01-01T00:01:00Z", 5.1),
+            candleFactory.createCommon("2023-01-01T00:02:00Z", 5.95),
+            candleFactory.createCommon("2023-01-01T00:03:00Z", 7),
+            candleFactory.createCommon("2023-01-01T00:04:00Z", 6.95),
+            candleFactory.createCommon("2023-01-01T00:05:00Z", 6.99),
+            candleFactory.createCommon("2023-01-01T00:06:00Z", 7.05)
         );
 
         LinearLevelDetector calculator = LinearLevelDetector.createSupport(
@@ -81,10 +80,8 @@ class LinearLevelDetectorTest {
         double expectedStrength1 = 3 * 3; // Example strength value
         double expectedStrength2 = 2 * 3; // Example strength value for the second level
         when(strengthCalculator.calculate(any())).thenReturn(expectedStrength1, expectedStrength2);
-        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
-        candleIndexProvider.accumulate(candles);
 
-        List<Level<Double>> levels = calculator.detect(candles, candleIndexProvider);
+        List<Level<Double>> levels = calculator.detect(candles);
 
         assertEquals(2, levels.size());
         Level<Double> level1 = levels.get(0);
@@ -109,7 +106,9 @@ class LinearLevelDetectorTest {
 
     @Test
     void throwsExceptionWhenNotEnoughCandles() {
-        List<Candle> candles = List.of(createCandle("2023-01-01T00:00:00Z", 13.22));
+        List<Candle> candles = List.of(
+            candleFactory.createCommon("2023-01-01T00:00:00Z", 13.22)
+        );
 
         LinearLevelDetector calculator = LinearLevelDetector.createSupport(
             2, 0.1, this::getClosePrice
@@ -118,10 +117,8 @@ class LinearLevelDetectorTest {
         // Mock the strength calculation
         verify(strengthCalculator, never()).calculate(any());
 
-        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
-        candleIndexProvider.accumulate(candles);
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-            calculator.detect(candles, candleIndexProvider)
+            calculator.detect(candles)
         );
 
         assertEquals("Not enough data to calculate support levels", exception.getMessage());
@@ -130,15 +127,15 @@ class LinearLevelDetectorTest {
     @Test
     void calculatesResistanceLevelsCorrectly() {
         List<Candle> candles = List.of(
-            createCandle("2023-01-01T00:00:00Z", 13.22),
-            createCandle("2023-01-01T00:01:00Z", 10.20),
-            createCandle("2023-01-01T00:02:00Z", 13.1),
-            createCandle("2023-01-01T00:03:00Z", 10.19),
-            createCandle("2023-01-01T00:04:00Z", 11.75),
-            createCandle("2023-01-01T00:05:00Z", 12.9),
-            createCandle("2023-01-01T00:06:00Z", 12.95),
-            createCandle("2023-01-01T00:07:00Z", 13.0),
-            createCandle("2023-01-01T00:08:00Z", 11.0)
+            candleFactory.createCommon("2023-01-01T00:00:00Z", 13.22),
+            candleFactory.createCommon("2023-01-01T00:01:00Z", 10.20),
+            candleFactory.createCommon("2023-01-01T00:02:00Z", 13.1),
+            candleFactory.createCommon("2023-01-01T00:03:00Z", 10.19),
+            candleFactory.createCommon("2023-01-01T00:04:00Z", 11.75),
+            candleFactory.createCommon("2023-01-01T00:05:00Z", 12.9),
+            candleFactory.createCommon("2023-01-01T00:06:00Z", 12.95),
+            candleFactory.createCommon("2023-01-01T00:07:00Z", 13.0),
+            candleFactory.createCommon("2023-01-01T00:08:00Z", 11.0)
         );
 
         LinearLevelDetector calculator = LinearLevelDetector.createResistance(3, 0.1, this::getClosePrice);
@@ -149,9 +146,7 @@ class LinearLevelDetectorTest {
         double expectedStrength = 3 * 3; // Example strength value
         when(strengthCalculator.calculate(any())).thenReturn(expectedStrength);
 
-        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
-        candleIndexProvider.accumulate(candles);
-        List<Level<Double>> result = calculator.detect(candles, candleIndexProvider);
+        List<Level<Double>> result = calculator.detect(candles);
 
         Level<Double> level = result.get(0);
         LinearFunction2D<Double> expectedFunction = new LinearFunction2D<>(0., 13.1, ArithmeticOperations.DOUBLE);
@@ -177,10 +172,8 @@ class LinearLevelDetectorTest {
         calculator.setStrengthCalculator(strengthCalculator);
         verify(strengthCalculator, never()).calculate(any());
 
-        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
-        candleIndexProvider.accumulate(candles);
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-            calculator.detect(candles, candleIndexProvider)
+            calculator.detect(candles)
         );
 
         assertEquals("Not enough data to calculate support levels", exception.getMessage());
@@ -189,18 +182,18 @@ class LinearLevelDetectorTest {
     @Test
     void detectCalledMultipleTimesWithFracture() {
         List<Candle> candles1 = List.of(
-            createCandle("2023-01-01T00:00:00Z", 10.0),
-            createCandle("2023-01-01T00:01:00Z", 12.0),
-            createCandle("2023-01-01T00:02:00Z", 11.0),
-            createCandle("2023-01-01T00:03:00Z", 13.0),
-            createCandle("2023-01-01T00:04:00Z", 14.0)
+            candleFactory.createCommon("2023-01-01T00:00:00Z", 10.0),
+            candleFactory.createCommon("2023-01-01T00:01:00Z", 12.0),
+            candleFactory.createCommon("2023-01-01T00:02:00Z", 11.0),
+            candleFactory.createCommon("2023-01-01T00:03:00Z", 13.0),
+            candleFactory.createCommon("2023-01-01T00:04:00Z", 14.0)
         );
         List<Candle> candles2 = List.of(
-            createCandle("2023-01-01T00:05:00Z", 14.0),
-            createCandle("2023-01-01T00:06:00Z", 14.0),
-            createCandle("2023-01-01T00:07:00Z", 13.5),
-            createCandle("2023-01-01T00:08:00Z", 14.2),
-            createCandle("2023-01-01T00:09:00Z", 14.0)
+            candleFactory.createCommon("2023-01-01T00:05:00Z", 14.0),
+            candleFactory.createCommon("2023-01-01T00:06:00Z", 14.0),
+            candleFactory.createCommon("2023-01-01T00:07:00Z", 13.5),
+            candleFactory.createCommon("2023-01-01T00:08:00Z", 14.2),
+            candleFactory.createCommon("2023-01-01T00:09:00Z", 14.0)
         );
 
         LinearLevelDetector detector = LinearLevelDetector.createSupport(
@@ -212,11 +205,8 @@ class LinearLevelDetectorTest {
             .thenReturn(25.0)
             .thenReturn(45.0);
 
-        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
-        candleIndexProvider.accumulate(candles1);
-        candleIndexProvider.accumulate(candles2);
         // First call to detect
-        List<Level<Double>> levelsFirstCall = detector.detect(candles1, candleIndexProvider);
+        List<Level<Double>> levelsFirstCall = detector.detect(candles1);
         assertEquals(1, levelsFirstCall.size());
 
         assertLevel(
@@ -229,7 +219,7 @@ class LinearLevelDetectorTest {
         );
 
         // Second call to detect with the same data
-        List<Level<Double>> levelsSecondCall = detector.detect(candles2, candleIndexProvider);
+        List<Level<Double>> levelsSecondCall = detector.detect(candles2);
         assertEquals(1, levelsSecondCall.size());
 
         assertLevel(
@@ -245,18 +235,18 @@ class LinearLevelDetectorTest {
     @Test
     void detectCalledMultipleTimesWithoutFracture() {
         List<Candle> candles1 = List.of(
-            createCandle("2023-01-01T00:00:00Z", 10.0),
-            createCandle("2023-01-01T00:01:00Z", 10.0),
-            createCandle("2023-01-01T00:02:00Z", 10.0),
-            createCandle("2023-01-01T00:03:00Z", 10.0),
-            createCandle("2023-01-01T00:04:00Z", 10.0)
+            candleFactory.createCommon("2023-01-01T00:00:00Z", 10.0),
+            candleFactory.createCommon("2023-01-01T00:01:00Z", 10.0),
+            candleFactory.createCommon("2023-01-01T00:02:00Z", 10.0),
+            candleFactory.createCommon("2023-01-01T00:03:00Z", 10.0),
+            candleFactory.createCommon("2023-01-01T00:04:00Z", 10.0)
         );
         List<Candle> candles2 = List.of(
-            createCandle("2023-01-01T00:05:00Z", 10.0),
-            createCandle("2023-01-01T00:06:00Z", 10.0),
-            createCandle("2023-01-01T00:07:00Z", 10.0),
-            createCandle("2023-01-01T00:08:00Z", 10.0),
-            createCandle("2023-01-01T00:09:00Z", 10.0)
+            candleFactory.createCommon("2023-01-01T00:05:00Z", 10.0),
+            candleFactory.createCommon("2023-01-01T00:06:00Z", 10.0),
+            candleFactory.createCommon("2023-01-01T00:07:00Z", 10.0),
+            candleFactory.createCommon("2023-01-01T00:08:00Z", 10.0),
+            candleFactory.createCommon("2023-01-01T00:09:00Z", 10.0)
         );
 
         LinearLevelDetector detector = LinearLevelDetector.createSupport(
@@ -268,11 +258,8 @@ class LinearLevelDetectorTest {
             .thenReturn(25.0)
             .thenReturn(45.0);
 
-        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
-        candleIndexProvider.accumulate(candles1);
-        candleIndexProvider.accumulate(candles2);
         // First call to detect
-        List<Level<Double>> levelsFirstCall = detector.detect(candles1, candleIndexProvider);
+        List<Level<Double>> levelsFirstCall = detector.detect(candles1);
         assertEquals(1, levelsFirstCall.size());
 
         assertLevel(
@@ -285,7 +272,7 @@ class LinearLevelDetectorTest {
         );
 
         // Second call to detect with continuous data
-        List<Level<Double>> levelsSecondCall = detector.detect(candles2, candleIndexProvider);
+        List<Level<Double>> levelsSecondCall = detector.detect(candles2);
         assertEquals(1, levelsSecondCall.size());
 
         assertLevel(
@@ -300,10 +287,6 @@ class LinearLevelDetectorTest {
 
     private double getClosePrice(Candle candle) {
         return candle.getClosePrice().toDouble();
-    }
-
-    private Candle createCandle(String time, double close) {
-        return Candle.of(Instant.parse(time), 0, close);
     }
 
     private void assertLevel(

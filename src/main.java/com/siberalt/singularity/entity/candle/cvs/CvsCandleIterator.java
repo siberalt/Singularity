@@ -11,11 +11,12 @@ import java.util.Scanner;
 import java.util.regex.Pattern;
 
 class CvsCandleIterator implements Iterator<Candle> {
-    protected Scanner scanner;
-    protected Instant to;
-    protected Instant currentTime;
-    protected String instrumentUid;
-    protected String initFromLastLine = null;
+    private final Scanner scanner;
+    private Instant to;
+    private Instant currentTime;
+    private String instrumentUid;
+    private String initFromLastLine = null;
+    private long currentIndex = -1;
 
     public CvsCandleIterator(InputStream inputStream) {
         scanner = new Scanner(inputStream);
@@ -42,6 +43,7 @@ class CvsCandleIterator implements Iterator<Candle> {
             currentTime = Instant.parse(data[1]);
 
             return new Candle()
+                .setIndex(++currentIndex)
                 .setInstrumentUid(instrumentUid == null ? data[0] : instrumentUid)
                 .setTime(currentTime)
                 .setOpenPrice(Quotation.of(data[2]))
@@ -69,6 +71,7 @@ class CvsCandleIterator implements Iterator<Candle> {
                 throw new RuntimeException("Invalid line format: " + initFromLastLine);
             }
 
+            currentIndex++;
             currentTime = Instant.parse(matcher.group(1));
         } while (currentTime.isBefore(from));
 

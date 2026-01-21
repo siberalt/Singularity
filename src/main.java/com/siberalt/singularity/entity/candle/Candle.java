@@ -5,10 +5,14 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 public class Candle {
+    public static final long DEFAULT_INDEX = -1;
+
     private String instrumentUid;
     private Instant time;
     private Quotation openPrice;
@@ -16,6 +20,30 @@ public class Candle {
     private Quotation highPrice;
     private Quotation lowPrice;
     private long volume;
+    private long index;
+
+    public Candle() {
+    }
+
+    public Candle(
+        String instrumentUid,
+        Instant time,
+        Quotation openPrice,
+        Quotation closePrice,
+        Quotation highPrice,
+        Quotation lowPrice,
+        long volume,
+        long index
+    ) {
+        this.instrumentUid = instrumentUid;
+        this.time = time;
+        this.openPrice = openPrice;
+        this.closePrice = closePrice;
+        this.highPrice = highPrice;
+        this.lowPrice = lowPrice;
+        this.volume = volume;
+        this.index = index;
+    }
 
     @Override
     public boolean equals(Object o) {
@@ -42,6 +70,15 @@ public class Candle {
             lowPrice.toString(),
             volume
         );
+    }
+
+    public long getIndex() {
+        return index;
+    }
+
+    public Candle setIndex(long index) {
+        this.index = index;
+        return this;
     }
 
     public String getInstrumentUid() {
@@ -138,20 +175,6 @@ public class Candle {
 
     public boolean isEmpty() {
         return openPrice == null && closePrice == null && highPrice == null && lowPrice == null && volume == 0;
-    }
-
-    public Candle merge(Candle other) {
-        if (other == null || other.isEmpty()) {
-            return this;
-        }
-        return new Candle()
-            .setInstrumentUid(instrumentUid)
-            .setTime(time)
-            .setOpenPrice(openPrice != null ? openPrice : other.openPrice)
-            .setClosePrice(closePrice != null ? closePrice : other.closePrice)
-            .setHighPrice(highPrice != null ? highPrice : other.highPrice)
-            .setLowPrice(lowPrice != null ? lowPrice : other.lowPrice)
-            .setVolume(volume + other.volume);
     }
 
     public Candle add(Candle other) {
@@ -256,5 +279,13 @@ public class Candle {
             .setHighPrice(Quotation.of(high))
             .setLowPrice(Quotation.of(low))
             .setClosePrice(Quotation.of(close));
+    }
+
+    public static CandleBuilder builder() {
+        return new CandleBuilder();
+    }
+
+    public static CandleFactory factory(String instrumentUid, long startIndex) {
+        return new CandleFactory(instrumentUid, startIndex);
     }
 }

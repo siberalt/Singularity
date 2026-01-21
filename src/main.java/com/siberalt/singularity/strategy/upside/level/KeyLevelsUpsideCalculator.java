@@ -7,8 +7,6 @@ import com.siberalt.singularity.strategy.level.linear.LinearLevelDetector;
 import com.siberalt.singularity.strategy.level.selector.BasicLevelSelector;
 import com.siberalt.singularity.strategy.level.selector.LevelPair;
 import com.siberalt.singularity.strategy.level.selector.LevelSelector;
-import com.siberalt.singularity.strategy.market.CumulativeCandleIndexProvider;
-import com.siberalt.singularity.strategy.market.DefaultCandleIndexProvider;
 import com.siberalt.singularity.strategy.upside.Upside;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 
@@ -23,15 +21,14 @@ public class KeyLevelsUpsideCalculator implements UpsideCalculator {
     ) {
     }
 
-    private LevelDetector<Double> supportLevelDetector;
-    private LevelDetector<Double> resistanceLevelDetector;
+    private LevelDetector supportLevelDetector;
+    private LevelDetector resistanceLevelDetector;
     private LevelBasedUpsideCalculator levelBasedUpsideCalculator;
-    private CumulativeCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
     private LevelSelector levelSelector = new BasicLevelSelector();
 
     public KeyLevelsUpsideCalculator(
-        LevelDetector<Double> supportLevelDetector,
-        LevelDetector<Double> resistanceLevelDetector,
+        LevelDetector supportLevelDetector,
+        LevelDetector resistanceLevelDetector,
         LevelBasedUpsideCalculator levelBasedUpsideCalculator
     ) {
         this.supportLevelDetector = supportLevelDetector;
@@ -44,50 +41,34 @@ public class KeyLevelsUpsideCalculator implements UpsideCalculator {
         return this;
     }
 
-    public KeyLevelsUpsideCalculator setCandleIndexProvider(CumulativeCandleIndexProvider candleIndexProvider) {
-        this.candleIndexProvider = candleIndexProvider;
-        return this;
-    }
-
     public KeyLevelsUpsideCalculator setLevelBasedUpsideCalculator(LevelBasedUpsideCalculator levelBasedUpsideCalculator) {
         this.levelBasedUpsideCalculator = levelBasedUpsideCalculator;
         return this;
     }
 
-    public KeyLevelsUpsideCalculator setSupportLevelDetector(LevelDetector<Double> supportLevelDetector) {
+    public KeyLevelsUpsideCalculator setSupportLevelDetector(LevelDetector supportLevelDetector) {
         this.supportLevelDetector = supportLevelDetector;
         return this;
     }
 
-    public KeyLevelsUpsideCalculator setResistanceLevelDetector(LevelDetector<Double> resistanceLevelDetector) {
+    public KeyLevelsUpsideCalculator setResistanceLevelDetector(LevelDetector resistanceLevelDetector) {
         this.resistanceLevelDetector = resistanceLevelDetector;
         return this;
     }
 
     @Override
     public Upside calculate(List<Candle> lastCandles) {
-        candleIndexProvider.accumulate(lastCandles);
-        List<Level<Double>> supportLevels = supportLevelDetector.detect(lastCandles, candleIndexProvider);
-        List<Level<Double>> resistanceLevels = resistanceLevelDetector.detect(lastCandles, candleIndexProvider);
+        List<Level<Double>> supportLevels = supportLevelDetector.detect(lastCandles);
+        List<Level<Double>> resistanceLevels = resistanceLevelDetector.detect(lastCandles);
 
-        List<LevelPair> selectedLevels = levelSelector.select(
-            resistanceLevels,
-            supportLevels,
-            lastCandles,
-            candleIndexProvider
-        );
+        List<LevelPair> selectedLevels = levelSelector.select(resistanceLevels, supportLevels, lastCandles);
 
         if (selectedLevels.isEmpty()) {
             return new Upside(0, 0);
         } else if (selectedLevels.size() == 1) {
             LevelPair levelPair = selectedLevels.get(0);
 
-            return levelBasedUpsideCalculator.calculate(
-                levelPair.resistance(),
-                levelPair.support(),
-                lastCandles,
-                candleIndexProvider
-            );
+            return levelBasedUpsideCalculator.calculate(levelPair.resistance(), levelPair.support(), lastCandles);
         }
 
         List<LevelPairUpside> upsides = selectedLevels.stream()
@@ -114,8 +95,7 @@ public class KeyLevelsUpsideCalculator implements UpsideCalculator {
         Upside upside = levelBasedUpsideCalculator.calculate(
             levelPair.resistance(),
             levelPair.support(),
-            lastCandles,
-            candleIndexProvider
+            lastCandles
         );
 
         return new LevelPairUpside(

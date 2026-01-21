@@ -1,8 +1,6 @@
 package com.siberalt.singularity.strategy.extremum;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.strategy.market.CandleIndexProvider;
-import com.siberalt.singularity.strategy.market.DefaultCandleIndexProvider;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -15,17 +13,15 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 public class FrameExtremumLocatorTest {
-    private final CandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
-
     @Test
     void locateReturnsEmptyListWhenInputIsEmpty() {
         ExtremumLocator baseLocator = mock(ExtremumLocator.class);
         FrameExtremumLocator locator = new FrameExtremumLocator(5, baseLocator);
 
-        List<Candle> result = locator.locate(Collections.emptyList(), candleIndexProvider);
+        List<Candle> result = locator.locate(Collections.emptyList());
 
         assertTrue(result.isEmpty());
-        verify(baseLocator, never()).locate(anyList(), any());
+        verify(baseLocator, never()).locate(anyList());
     }
 
     @Test
@@ -39,15 +35,15 @@ public class FrameExtremumLocatorTest {
             extremum
         );
 
-        when(baseLocator.locate(frame, candleIndexProvider)).thenReturn(List.of(extremum));
+        when(baseLocator.locate(frame)).thenReturn(List.of(extremum));
 
         FrameExtremumLocator locator = new FrameExtremumLocator(3, baseLocator);
 
-        List<Candle> result = locator.locate(frame, candleIndexProvider);
+        List<Candle> result = locator.locate(frame);
 
         assertEquals(1, result.size());
         assertEquals(extremum, result.get(0));
-        verify(baseLocator, times(1)).locate(anyList(), eq(candleIndexProvider));
+        verify(baseLocator, times(1)).locate(anyList());
     }
 
     @Test
@@ -66,18 +62,18 @@ public class FrameExtremumLocatorTest {
             extremum2
         );
 
-        when(baseLocator.locate(frame1, candleIndexProvider)).thenReturn(List.of(extremum1));
-        when(baseLocator.locate(remainingCandles, candleIndexProvider)).thenReturn(List.of(extremum2));
+        when(baseLocator.locate(frame1)).thenReturn(List.of(extremum1));
+        when(baseLocator.locate(remainingCandles)).thenReturn(List.of(extremum2));
 
         FrameExtremumLocator locator = new FrameExtremumLocator(3, baseLocator);
 
         List<Candle> candles = Stream.concat(frame1.stream(), remainingCandles.stream()).toList();
-        List<Candle> result = locator.locate(candles, candleIndexProvider);
+        List<Candle> result = locator.locate(candles);
 
         assertEquals(2, result.size());
         assertEquals(extremum1, result.get(0));
         assertEquals(extremum2, result.get(1));
-        verify(baseLocator, times(2)).locate(anyList(), eq(candleIndexProvider));
+        verify(baseLocator, times(2)).locate(anyList());
     }
 
     @Test
@@ -85,27 +81,27 @@ public class FrameExtremumLocatorTest {
         ExtremumLocator baseLocator = mock(ExtremumLocator.class);
         Candle extremum = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 15, 9, 14, 100);
 
-        when(baseLocator.locate(anyList(), eq(candleIndexProvider))).thenReturn(List.of(extremum));
+        when(baseLocator.locate(anyList())).thenReturn(List.of(extremum));
 
         FrameExtremumLocator locator = new FrameExtremumLocator(1, baseLocator);
 
         List<Candle> candles = List.of(extremum);
-        List<Candle> result = locator.locate(candles, candleIndexProvider);
+        List<Candle> result = locator.locate(candles);
 
         assertEquals(1, result.size());
         assertEquals(extremum, result.get(0));
-        verify(baseLocator, times(1)).locate(anyList(), eq(candleIndexProvider));
+        verify(baseLocator, times(1)).locate(anyList());
     }
 
     @Test
     void locateThrowsRuntimeExceptionWhenBaseLocatorFails() {
         ExtremumLocator baseLocator = mock(ExtremumLocator.class);
-        when(baseLocator.locate(anyList(), eq(candleIndexProvider))).thenThrow(new RuntimeException("Test exception"));
+        when(baseLocator.locate(anyList())).thenThrow(new RuntimeException("Test exception"));
 
         FrameExtremumLocator locator = new FrameExtremumLocator(3, baseLocator);
 
         List<Candle> candles = List.of(new Candle(), new Candle(), new Candle());
 
-        assertThrows(RuntimeException.class, () -> locator.locate(candles, candleIndexProvider));
+        assertThrows(RuntimeException.class, () -> locator.locate(candles));
     }
 }

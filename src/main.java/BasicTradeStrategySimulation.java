@@ -38,8 +38,6 @@ import com.siberalt.singularity.strategy.level.linear.ClusterLevelDetector;
 import com.siberalt.singularity.strategy.level.selector.*;
 import com.siberalt.singularity.strategy.level.track.LevelDetectorTracker;
 import com.siberalt.singularity.strategy.level.track.LevelsSnapshot;
-import com.siberalt.singularity.strategy.market.CumulativeCandleIndexProvider;
-import com.siberalt.singularity.strategy.market.DefaultCandleIndexProvider;
 import com.siberalt.singularity.strategy.observer.Observer;
 import com.siberalt.singularity.strategy.upside.CompositeFactorUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
@@ -93,7 +91,6 @@ public class BasicTradeStrategySimulation {
         broker.getOperationsService().addMoney(account.getId(), Money.of("RUB", initialInvestment));
 
         int tradePeriodCandles = 80;
-        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
         ExtremumLocator maximumLocator = createExtremumLocator(tradePeriodCandles, BaseExtremumLocator.createMaxLocator());
         ExtremumLocator minimumLocator = createExtremumLocator(tradePeriodCandles, BaseExtremumLocator.createMinLocator());
         LevelDetectorTracker supportTracker = createLevelDetector(0.005, minimumLocator);
@@ -107,7 +104,6 @@ public class BasicTradeStrategySimulation {
             account,
             supportTracker,
             resistanceTracker,
-            candleIndexProvider,
             selectorTracker
         );
 
@@ -171,7 +167,6 @@ public class BasicTradeStrategySimulation {
             "TMOS",
             startTime,
             endTime,
-            candleIndexProvider,
             selectorTracker.getTrackedLevelPairs()
         );
     }
@@ -180,9 +175,8 @@ public class BasicTradeStrategySimulation {
         ReadCandleRepository candleRepository,
         EventSubscriptionBroker broker,
         Account account,
-        LevelDetector<Double> supportDetector,
-        LevelDetector<Double> resistanceDetector,
-        CumulativeCandleIndexProvider candleIndexProvider,
+        LevelDetector supportDetector,
+        LevelDetector resistanceDetector,
         LevelSelectorTracker selectorTracker
     ){
         KeyLevelsUpsideCalculator upsideCalculator = new KeyLevelsUpsideCalculator(
@@ -193,7 +187,6 @@ public class BasicTradeStrategySimulation {
         );
 
         upsideCalculator.setLevelSelector(selectorTracker);
-        upsideCalculator.setCandleIndexProvider(candleIndexProvider);
         BasicTradeStrategy strategy = new BasicTradeStrategy(
             broker,
             "TMOS",
@@ -218,9 +211,8 @@ public class BasicTradeStrategySimulation {
         ReadCandleRepository candleRepository,
         EventSubscriptionBroker broker,
         Account account,
-        LevelDetector<Double> supportDetector,
-        LevelDetector<Double> resistanceDetector,
-        CumulativeCandleIndexProvider candleIndexProvider,
+        LevelDetector supportDetector,
+        LevelDetector resistanceDetector,
         LevelSelectorTracker selectorTracker
     ) {
         UpsideCalculator compositeUpsideCalculator = new CompositeFactorUpsideCalculator(
@@ -241,7 +233,6 @@ public class BasicTradeStrategySimulation {
             adaptiveUpsideCalculator
         );
         upsideCalculator.setLevelSelector(selectorTracker);
-        upsideCalculator.setCandleIndexProvider(candleIndexProvider);
 
         BasicTradeStrategy strategy = new BasicTradeStrategy(
             broker,
@@ -265,7 +256,6 @@ public class BasicTradeStrategySimulation {
         String instrumentUid,
         Instant startTime,
         Instant endTime,
-        CumulativeCandleIndexProvider candleIndexProvider,
         List<LevelPairsSnapshot> levelPairsSnapshots
     ) {
         List<Candle> candles = candleRepository.getPeriod(instrumentUid, startTime, endTime);
@@ -280,7 +270,6 @@ public class BasicTradeStrategySimulation {
             Candle::getTypicalPriceAsDouble
         );
         priceChart.addSeriesProvider(orderSeriesProvider);
-        candleIndexProvider.accumulate(candles);
         List<List<Level<Double>>> selectedSupportLevels = levelPairsSnapshots.stream()
             .map(snapshot -> snapshot.levelPairs().stream().map(LevelPair::support).toList())
             .toList();
@@ -305,7 +294,6 @@ public class BasicTradeStrategySimulation {
             "#CC8400"
         );
         priceChart.setStepInterval(3);
-        priceChart.setCandleIndexProvider(candleIndexProvider);
         priceChart.render(candles);
     }
 

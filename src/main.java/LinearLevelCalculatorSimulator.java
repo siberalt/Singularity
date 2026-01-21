@@ -5,7 +5,6 @@ import com.siberalt.singularity.presenter.google.render.FasterXmlRenderer;
 import com.siberalt.singularity.presenter.google.series.FunctionSeriesProvider;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.linear.LinearLevelDetector;
-import com.siberalt.singularity.strategy.market.DefaultCandleIndexProvider;
 
 import java.time.Instant;
 import java.util.List;
@@ -30,11 +29,9 @@ public class LinearLevelCalculatorSimulator {
         var resistanceDetector = LinearLevelDetector.createResistance(
             frameSize, 0.003, priceExtractor
         );
-        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
-        candleIndexProvider.accumulate(candles);
 
-        var resultSupport = supportDetector.detect(candles, candleIndexProvider);
-        var resultResistance = resistanceDetector.detect(candles, candleIndexProvider);
+        var resultSupport = supportDetector.detect(candles);
+        var resultResistance = resistanceDetector.detect(candles);
 
         var renderer = new FasterXmlRenderer(
             "src/main/resources/presenter/google/PriceChart.html",

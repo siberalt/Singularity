@@ -8,7 +8,6 @@ import com.siberalt.singularity.strategy.extremum.ConcurrentFrameExtremumLocator
 import com.siberalt.singularity.strategy.extremum.ExtremumLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.StatefulLevelDetector;
-import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -53,7 +52,7 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
     }
 
     @Override
-    public List<Level<Double>> detect(List<Candle> candles, CandleIndexProvider candleIndexProvider) {
+    public List<Level<Double>> detect(List<Candle> candles) {
         if (candles == null || candles.isEmpty()) {
             return getCurrentLevels(); // Возвращаем текущие уровни, а не пустой список
         }
@@ -65,7 +64,7 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         updateMarketStatistics(candles);
 
         // Обрабатываем только новые экстремумы
-        List<Candle> newExtremums = extremumLocator.locate(candles, candleIndexProvider);
+        List<Candle> newExtremums = extremumLocator.locate(candles);
         Map<Double, List<Candle>> levelsNewExtremums = new TreeMap<>();
 
         for (Candle extremum : newExtremums) {
@@ -82,7 +81,7 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
                     .computeIfAbsent(closestLevel.get().getKey(), k -> new ArrayList<>())
                     .add(extremum);
             } else {
-                createNewLevel(extremum, candleIndexProvider);
+                createNewLevel(extremum);
             }
         }
 
@@ -92,7 +91,7 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
             levelExtremums.addAll(newLevelExtremums);
 
             Candle lastExtremum = newLevelExtremums.get(newLevelExtremums.size() - 1);
-            long indexTo = candleIndexProvider.provideIndex(lastExtremum);
+            long indexTo = lastExtremum.getIndex();
             Instant timeTo = lastExtremum.getTime();
 
             double updatedPrice = medianCalculator.calculateMedian(
@@ -170,10 +169,10 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         return strengthCalculator.calculate(context);
     }
 
-    private void createNewLevel(Candle candle, CandleIndexProvider candleIndexProvider) {
+    private void createNewLevel(Candle candle) {
         double price = candle.getTypicalPriceAsDouble();
         Instant time = candle.getTime();
-        long index = candleIndexProvider.provideIndex(candle);
+        long index = candle.getIndex();
 
         Function<Double, Double> function = x -> price;
         Level<Double> newLevel = new Level<>(time, time, index, index, function, 0);

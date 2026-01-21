@@ -2,7 +2,6 @@ package com.siberalt.singularity.strategy.extremum.cache;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.extremum.ExtremumLocator;
-import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 import com.siberalt.singularity.utils.ListUtils;
 
 import java.util.ArrayList;
@@ -55,19 +54,19 @@ public class CachingExtremeLocator implements ExtremumLocator {
     }
 
     @Override
-    public List<Candle> locate(List<Candle> candles, CandleIndexProvider candleIndexProvider) {
+    public List<Candle> locate(List<Candle> candles) {
         if (candles.isEmpty()) {
             return List.of();
         }
 
-        Range outerRange = createRangeFromCandles(candles, candleIndexProvider, RangeType.OUTER);
+        Range outerRange = createRangeFromCandles(candles, RangeType.OUTER);
         List<Range> outerIntersectedRanges = rangeRepository.getIntersects(outerRange, RangeType.OUTER);
 
         if (outerIntersectedRanges.isEmpty()) {
             List<Range> outerNeighborsRanges = rangeRepository.getNeighbors(outerRange, RangeType.OUTER);
 
             Range windowRange = Range.unite(ListUtils.merge(outerNeighborsRanges, List.of(outerRange)));
-            CacheResult cacheResult = cacheRanges(List.of(outerRange), windowRange, candles, candleIndexProvider);
+            CacheResult cacheResult = cacheRanges(List.of(outerRange), windowRange, candles);
             List<Candle> extremes = cacheResult.rangeExtremes().get(0).extremes();
 
             if (extremes.isEmpty()) {
@@ -81,7 +80,7 @@ public class CachingExtremeLocator implements ExtremumLocator {
                 return extremes;
             }
 
-            Range innerRange = createRangeFromCandles(extremes, candleIndexProvider, RangeType.INNER);
+            Range innerRange = createRangeFromCandles(extremes, RangeType.INNER);
             addRange(cacheResult.updatedWindowRange(), innerRange);
 
             return extremes;
@@ -100,7 +99,7 @@ public class CachingExtremeLocator implements ExtremumLocator {
         List<Range> oldOuterRanges = ListUtils.merge(outerIntersectedRanges, outerNeighborsRanges);
         Range windowRange = Range.unite(ListUtils.merge(List.of(outerRange), oldOuterRanges));
 
-        CacheResult cacheResult = cacheRanges(missingInnerRanges, windowRange, candles, candleIndexProvider);
+        CacheResult cacheResult = cacheRanges(missingInnerRanges, windowRange, candles);
 
         List<Range> oldInnerRanges = rangeRepository.getSubsets(windowRange, RangeType.INNER);
         updateRange(cacheResult.updatedWindowRange(), ListUtils.merge(oldOuterRanges, oldInnerRanges));
@@ -118,15 +117,14 @@ public class CachingExtremeLocator implements ExtremumLocator {
 
     private Range createRangeFromCandles(
         List<Candle> candles,
-        CandleIndexProvider candleIndexProvider,
         RangeType rangeType
     ) {
         if (candles.isEmpty()) {
             throw new IllegalArgumentException("Cannot create range from empty candle list");
         }
 
-        long fromIndex = candleIndexProvider.provideIndex(candles.get(0));
-        long toIndex = candleIndexProvider.provideIndex(candles.get(candles.size() - 1));
+        long fromIndex = candles.get(0).getIndex();
+        long toIndex = candles.get(candles.size() - 1).getIndex();
         String instrumentId = candles.get(0).getInstrumentUid();
         validateRange(fromIndex, toIndex);
 
@@ -149,18 +147,17 @@ public class CachingExtremeLocator implements ExtremumLocator {
     private CacheResult cacheRanges(
         List<Range> rangesToCache,
         Range windowRange,
-        List<Candle> candles,
-        CandleIndexProvider candleIndexProvider
+        List<Candle> candles
     ) {
         List<RangeExtremes> locatedExtremes = new ArrayList<>();
-        long startIndex = candleIndexProvider.provideIndex(candles.get(0));
+        long startIndex = candles.get(0).getIndex();
 
         for (Range rangeToCache : rangesToCache) {
             List<Candle> missingCandles = candles.subList(
                 (int) (rangeToCache.fromIndex() - startIndex),
                 (int) (rangeToCache.toIndex() - startIndex + 1)
             );
-            List<Candle> extremes = baseLocator.locate(missingCandles, candleIndexProvider);
+            List<Candle> extremes = baseLocator.locate(missingCandles);
 
             locatedExtremes.add(new RangeExtremes(rangeToCache, extremes));
         }
@@ -187,12 +184,11 @@ public class CachingExtremeLocator implements ExtremumLocator {
                     Range partialCacheRange = rangeExtremes.range().subtract(deleteRange);
                     List<Candle> candlesToCache = extractRangeCandles(
                         partialCacheRange,
-                        rangeExtremes.extremes(),
-                        candleIndexProvider
+                        rangeExtremes.extremes()
                     );
-                    extremeRepository.saveBatch(partialCacheRange, candlesToCache, candleIndexProvider);
+                    extremeRepository.saveBatch(partialCacheRange, candlesToCache);
                 } else {
-                    extremeRepository.saveBatch(rangeToCache, extremes, candleIndexProvider);
+                    extremeRepository.saveBatch(rangeToCache, extremes);
                 }
             }
         }
@@ -226,14 +222,13 @@ public class CachingExtremeLocator implements ExtremumLocator {
 
     private List<Candle> extractRangeCandles(
         Range range,
-        List<Candle> candles,
-        CandleIndexProvider candleIndexProvider
+        List<Candle> candles
     ) {
         long startIndex = -1;
         long endIndex = -1;
 
         for (int i = 0; i < candles.size(); i++) {
-            long candleIndex = candleIndexProvider.provideIndex(candles.get(i));
+            long candleIndex = candles.get(i).getIndex();
 
             if (startIndex == -1 && candleIndex >= range.fromIndex()) {
                 startIndex = i;

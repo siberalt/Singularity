@@ -1,7 +1,6 @@
 package com.siberalt.singularity.strategy.extremum.cache;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 
 import java.util.List;
 
@@ -17,9 +16,8 @@ public interface ExtremeRepository {
      *
      * @param range The range to which the extremes belong.
      * @param extremes The list of extreme candles to be saved.
-     * @param candleIndexProvider The provider for resolving candle indices.
      */
-    void saveBatch(Range range, List<Candle> extremes, CandleIndexProvider candleIndexProvider);
+    void saveBatch(Range range, List<Candle> extremes);
 
     /**
      * Retrieves the inner range that is defined by the first and last extreme indexes

@@ -5,7 +5,6 @@ import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.series.PointSeriesProvider;
 import com.siberalt.singularity.strategy.extremum.BaseExtremumLocator;
 import com.siberalt.singularity.strategy.extremum.ConcurrentFrameExtremumLocator;
-import com.siberalt.singularity.strategy.market.DefaultCandleIndexProvider;
 
 import java.time.Instant;
 import java.util.List;
@@ -29,23 +28,21 @@ public class ConcurrentFrameExtremumLocatorSimulator {
             120,
             BaseExtremumLocator.createMaxLocator(Candle::getTypicalPriceAsDouble)
         );
-        DefaultCandleIndexProvider candleIndexProvider = new DefaultCandleIndexProvider();
-        candleIndexProvider.accumulate(candles);
         PointSeriesProvider minPoints = new PointSeriesProvider("Minima");
         minPoints.setColor("#00FF00");
-        minExtremumLocator.locate(candles, candleIndexProvider)
+        minExtremumLocator.locate(candles)
             .forEach(
                 minPoint -> minPoints.addPoint(
-                    candleIndexProvider.provideIndex(minPoint),
+                    minPoint.getIndex(),
                     minPoint.getTypicalPriceAsDouble()
                 )
             );
         PointSeriesProvider maxPoints = new PointSeriesProvider("Maxima");
         maxPoints.setColor("#FF0000");
-        maxExtremumLocator.locate(candles, candleIndexProvider)
+        maxExtremumLocator.locate(candles)
             .forEach(
                 maxPoint -> maxPoints.addPoint(
-                    candleIndexProvider.provideIndex(maxPoint),
+                    maxPoint.getIndex(),
                     maxPoint.getTypicalPriceAsDouble()
                 )
             );

@@ -2,7 +2,6 @@ package com.siberalt.singularity.strategy.upside.level;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.Level;
-import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 import com.siberalt.singularity.strategy.upside.Upside;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 import org.junit.jupiter.api.Test;
@@ -20,7 +19,6 @@ class AdaptiveUpsideCalculatorTest {
     void calculatesUpsideWithBalancedWeights() {
         LevelBasedUpsideCalculator levelsCalculator = Mockito.mock(LevelBasedUpsideCalculator.class);
         UpsideCalculator volumeCalculator = Mockito.mock(UpsideCalculator.class);
-        CandleIndexProvider candleIndexProvider = Mockito.mock(CandleIndexProvider.class);
 
         AdaptiveUpsideCalculator calculator = new AdaptiveUpsideCalculator(levelsCalculator, volumeCalculator);
 
@@ -30,12 +28,12 @@ class AdaptiveUpsideCalculatorTest {
             Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 60, 95.0)
         );
 
-        when(levelsCalculator.calculate(resistance, support, recentCandles, candleIndexProvider))
+        when(levelsCalculator.calculate(resistance, support, recentCandles))
             .thenReturn(new Upside(0.5, 0.7));
         when(volumeCalculator.calculate(recentCandles))
             .thenReturn(new Upside(0.3, 0.6));
 
-        Upside result = calculator.calculate(resistance, support, recentCandles, candleIndexProvider);
+        Upside result = calculator.calculate(resistance, support, recentCandles);
 
         assertEquals(0.42, result.signal(), 0.01);
         assertEquals(0.66, result.strength(), 0.01);
@@ -45,7 +43,6 @@ class AdaptiveUpsideCalculatorTest {
     void adjustsWeightsNearKeyLevelWithStrongVolumeSignal() {
         LevelBasedUpsideCalculator levelsCalculator = Mockito.mock(LevelBasedUpsideCalculator.class);
         UpsideCalculator volumeCalculator = Mockito.mock(UpsideCalculator.class);
-        CandleIndexProvider candleIndexProvider = Mockito.mock(CandleIndexProvider.class);
 
         AdaptiveUpsideCalculator calculator = new AdaptiveUpsideCalculator(levelsCalculator, volumeCalculator);
 
@@ -55,13 +52,12 @@ class AdaptiveUpsideCalculatorTest {
             Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 60, 100.5)
         );
 
-        when(candleIndexProvider.provideIndex(recentCandles.get(0))).thenReturn(0L);
-        when(levelsCalculator.calculate(resistance, support, recentCandles, candleIndexProvider))
+        when(levelsCalculator.calculate(resistance, support, recentCandles))
             .thenReturn(new Upside(0.5, 0.7));
         when(volumeCalculator.calculate(recentCandles))
             .thenReturn(new Upside(0.8, 0.9));
 
-        Upside result = calculator.calculate(resistance, support, recentCandles, candleIndexProvider);
+        Upside result = calculator.calculate(resistance, support, recentCandles);
 
         assertEquals(0.71, result.signal(), 0.01);
         assertEquals(0.84, result.strength(), 0.01);
@@ -71,7 +67,6 @@ class AdaptiveUpsideCalculatorTest {
     void normalizesWeightsWhenSignalsDiverge() {
         LevelBasedUpsideCalculator levelsCalculator = Mockito.mock(LevelBasedUpsideCalculator.class);
         UpsideCalculator volumeCalculator = Mockito.mock(UpsideCalculator.class);
-        CandleIndexProvider candleIndexProvider = Mockito.mock(CandleIndexProvider.class);
 
         AdaptiveUpsideCalculator calculator = new AdaptiveUpsideCalculator(levelsCalculator, volumeCalculator);
 
@@ -81,12 +76,12 @@ class AdaptiveUpsideCalculatorTest {
             Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 60, 95.0)
         );
 
-        when(levelsCalculator.calculate(resistance, support, recentCandles, candleIndexProvider))
+        when(levelsCalculator.calculate(resistance, support, recentCandles))
             .thenReturn(new Upside(0.5, 0.7));
         when(volumeCalculator.calculate(recentCandles))
             .thenReturn(new Upside(-0.8, 0.9));
 
-        Upside result = calculator.calculate(resistance, support, recentCandles, candleIndexProvider);
+        Upside result = calculator.calculate(resistance, support, recentCandles);
 
         assertEquals(-0.34, result.signal(), 0.01);
         assertEquals(0.83, result.strength(), 0.01);

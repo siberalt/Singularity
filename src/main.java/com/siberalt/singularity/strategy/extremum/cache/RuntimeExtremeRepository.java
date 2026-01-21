@@ -1,7 +1,6 @@
 package com.siberalt.singularity.strategy.extremum.cache;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.strategy.market.CandleIndexProvider;
 
 import java.util.HashMap;
 import java.util.List;
@@ -11,14 +10,13 @@ public class RuntimeExtremeRepository implements ExtremeRepository {
     private final HashMap<String, TreeMap<Long, Candle>> storage = new HashMap<>();
 
     @Override
-    public void saveBatch(Range range, List<Candle> extremes, CandleIndexProvider candleIndexProvider) {
+    public void saveBatch(Range range, List<Candle> extremes) {
         String instrumentId = range.instrumentId();
         String key = generateKey(instrumentId, range.extremeType());
         TreeMap<Long, Candle> instrumentStorage = storage.computeIfAbsent(key, k -> new TreeMap<>());
 
         for (Candle extreme : extremes) {
-            long index = candleIndexProvider.provideIndex(extreme);
-            instrumentStorage.put(index, extreme);
+            instrumentStorage.put(extreme.getIndex(), extreme);
         }
     }
 
