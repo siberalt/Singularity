@@ -3,13 +3,13 @@ import com.siberalt.singularity.entity.candle.cvs.CvsCandleRepository;
 import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory;
 import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.series.PointSeriesProvider;
-import com.siberalt.singularity.strategy.extremum.BaseExtremumLocator;
-import com.siberalt.singularity.strategy.extremum.ConcurrentFrameExtremumLocator;
+import com.siberalt.singularity.strategy.extreme.BaseExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.ConcurrentFrameExtremeLocator;
 
 import java.time.Instant;
 import java.util.List;
 
-public class ConcurrentFrameExtremumLocatorSimulator {
+public class ConcurrentFrameExtremesLocatorSimulator {
     public static void main(String[] args) {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
@@ -20,17 +20,17 @@ public class ConcurrentFrameExtremumLocatorSimulator {
             "src/test/resources/entity.candle.cvs/TMOS"
         );
         List<Candle> candles = candleRepository.getPeriod("TMOS", startTime, endTime);
-        ConcurrentFrameExtremumLocator minExtremumLocator = new ConcurrentFrameExtremumLocator(
+        ConcurrentFrameExtremeLocator minExtremeLocator = new ConcurrentFrameExtremeLocator(
             120,
-            BaseExtremumLocator.createMinLocator(Candle::getTypicalPriceAsDouble)
+            BaseExtremeLocator.createMinLocator(Candle::getTypicalPriceAsDouble)
         );
-        ConcurrentFrameExtremumLocator maxExtremumLocator = new ConcurrentFrameExtremumLocator(
+        ConcurrentFrameExtremeLocator maxExtremeLocator = new ConcurrentFrameExtremeLocator(
             120,
-            BaseExtremumLocator.createMaxLocator(Candle::getTypicalPriceAsDouble)
+            BaseExtremeLocator.createMaxLocator(Candle::getTypicalPriceAsDouble)
         );
         PointSeriesProvider minPoints = new PointSeriesProvider("Minima");
         minPoints.setColor("#00FF00");
-        minExtremumLocator.locate(candles)
+        minExtremeLocator.locate(candles)
             .forEach(
                 minPoint -> minPoints.addPoint(
                     minPoint.getIndex(),
@@ -39,7 +39,7 @@ public class ConcurrentFrameExtremumLocatorSimulator {
             );
         PointSeriesProvider maxPoints = new PointSeriesProvider("Maxima");
         maxPoints.setColor("#FF0000");
-        maxExtremumLocator.locate(candles)
+        maxExtremeLocator.locate(candles)
             .forEach(
                 maxPoint -> maxPoints.addPoint(
                     maxPoint.getIndex(),

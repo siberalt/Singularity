@@ -1,4 +1,4 @@
-package com.siberalt.singularity.strategy.extremum;
+package com.siberalt.singularity.strategy.extreme;
 
 import com.siberalt.singularity.entity.candle.Candle;
 
@@ -9,44 +9,44 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
-public class ConcurrentFrameExtremumLocator implements ExtremumLocator {
-    public static int DEFAULT_EXTREMUM_VICINITY = 2;
+public class ConcurrentFrameExtremeLocator implements ExtremeLocator {
+    public static int DEFAULT_EXTREME_VICINITY = 2;
 
-    private int extremumVicinity = DEFAULT_EXTREMUM_VICINITY;
+    private int extremeVicinity = DEFAULT_EXTREME_VICINITY;
     private final int frameSize;
-    private final ExtremumLocator baseLocator;
+    private final ExtremeLocator baseLocator;
     private int threadCount = Runtime.getRuntime().availableProcessors();
     private List<Candle> lastOverlapCandles = new ArrayList<>();
     private List<Candle> unfinishedFrameCandles = new ArrayList<>();
     private long globalStartFrameIndex = -1;
 
-    public ConcurrentFrameExtremumLocator(int frameSize, ExtremumLocator baseLocator) {
+    public ConcurrentFrameExtremeLocator(int frameSize, ExtremeLocator baseLocator) {
         this.frameSize = frameSize;
         this.baseLocator = baseLocator;
     }
 
-    public ConcurrentFrameExtremumLocator(int frameSize, ExtremumLocator baseLocator, int threadCount) {
-        this(frameSize, baseLocator, threadCount, DEFAULT_EXTREMUM_VICINITY);
+    public ConcurrentFrameExtremeLocator(int frameSize, ExtremeLocator baseLocator, int threadCount) {
+        this(frameSize, baseLocator, threadCount, DEFAULT_EXTREME_VICINITY);
     }
 
-    public ConcurrentFrameExtremumLocator(
+    public ConcurrentFrameExtremeLocator(
         int frameSize,
-        ExtremumLocator baseLocator,
+        ExtremeLocator baseLocator,
         int threadCount,
-        int extremumVicinity
+        int extremeVicinity
     ) {
         if (frameSize < 2) {
             throw new IllegalArgumentException("Frame size must be at least 2");
         }
 
-        if (frameSize < extremumVicinity * 2) {
-            throw new IllegalArgumentException("Frame size must be at least twice the extremum vicinity");
+        if (frameSize < extremeVicinity * 2) {
+            throw new IllegalArgumentException("Frame size must be at least twice the extreme vicinity");
         }
 
         this.frameSize = frameSize;
         this.baseLocator = baseLocator;
         this.threadCount = threadCount;
-        this.extremumVicinity = extremumVicinity;
+        this.extremeVicinity = extremeVicinity;
     }
 
     @Override
@@ -65,7 +65,7 @@ public class ConcurrentFrameExtremumLocator implements ExtremumLocator {
             candles = temp;
         }
 
-        List<Candle> extremumList = new ArrayList<>();
+        List<Candle> extremeList = new ArrayList<>();
 
         boolean allFramesComplete = candles.size() % frameSize == 0;
         int totalFrames = (int) Math.ceil((double) candles.size() / frameSize) - (allFramesComplete ? 0 : 1);
@@ -91,7 +91,7 @@ public class ConcurrentFrameExtremumLocator implements ExtremumLocator {
             // Collect results timeFrom all threads
             for (Future<List<Candle>> future : futures) {
                 try {
-                    extremumList.addAll(future.get());
+                    extremeList.addAll(future.get());
                 } catch (InterruptedException | ExecutionException e) {
                     executor.shutdownNow(); // Прерываем все задачи при ошибке
                     Thread.currentThread().interrupt();
@@ -105,67 +105,67 @@ public class ConcurrentFrameExtremumLocator implements ExtremumLocator {
                 candles = withOverlapCandles;
             }
 
-            extremumList = filterExtremums(
-                extremumList,
+            extremeList = filterExtremes(
+                extremeList,
                 candles,
                 executor,
                 globalStartFrameIndex
             );
 
-            int overlapStart = Math.max(0, candles.size() - extremumVicinity - (allFramesComplete ? 0 : 1));
+            int overlapStart = Math.max(0, candles.size() - extremeVicinity - (allFramesComplete ? 0 : 1));
             lastOverlapCandles = new ArrayList<>(candles.subList(overlapStart, candles.size()));
         }
 
-        return extremumList;
+        return extremeList;
     }
 
     /**
      * Фильтрует ложные экстремумы, проверяя их в контексте всего ряда свечей
      */
-    private List<Candle> filterExtremums(
-        List<Candle> candidateExtremums,
+    private List<Candle> filterExtremes(
+        List<Candle> candidateExtremes,
         List<Candle> allCandles,
         ExecutorService executorService,
         long globalStartIndex
     ) {
-        Map<Long, Set<Candle>> frameEdgeExtremums = new HashMap<>();
-        Set<Candle> extremumsToRemove = new HashSet<>();
+        Map<Long, Set<Candle>> frameEdgeExtremes = new HashMap<>();
+        Set<Candle> extremeToRemove = new HashSet<>();
 
-        for (Candle extremum : candidateExtremums) {
-            long extremumIndex = extremum.getIndex() - globalStartIndex;
-            if (extremumIndex == -1) continue;
+        for (Candle extreme : candidateExtremes) {
+            long extremeIndex = extreme.getIndex() - globalStartIndex;
+            if (extremeIndex == -1) continue;
 
             long endIndex = allCandles.get(allCandles.size() - 1).getIndex();
 
-            if (isOutOfRange(extremumIndex, globalStartIndex, endIndex)) {
-                extremumsToRemove.add(extremum);
-            } else if(!isWithinFrameBounds(extremumIndex, frameSize, extremumVicinity)) {
-                long extremumFrameIndex = calculateFrameIndex(extremumIndex, frameSize);
-                frameEdgeExtremums
-                    .computeIfAbsent(extremumFrameIndex, k -> new HashSet<>())
-                    .add(extremum);
+            if (isOutOfRange(extremeIndex, globalStartIndex, endIndex)) {
+                extremeToRemove.add(extreme);
+            } else if(!isWithinFrameBounds(extremeIndex, frameSize, extremeVicinity)) {
+                long extremeFrameIndex = calculateFrameIndex(extremeIndex, frameSize);
+                frameEdgeExtremes
+                    .computeIfAbsent(extremeFrameIndex, k -> new HashSet<>())
+                    .add(extreme);
             }
         }
 
         List<Future<Set<Candle>>> futures = new ArrayList<>();
 
-        for (Map.Entry<Long, Set<Candle>> entry : frameEdgeExtremums.entrySet()) {
+        for (Map.Entry<Long, Set<Candle>> entry : frameEdgeExtremes.entrySet()) {
             long frameIndex = entry.getKey();
 
-            long leftBound = Math.min(0, frameIndex * frameSize - extremumVicinity * 2L);
-            long rightBound = Math.min(allCandles.size() - 1, (frameIndex + 1) * frameSize + extremumVicinity * 2L);
+            long leftBound = Math.min(0, frameIndex * frameSize - extremeVicinity * 2L);
+            long rightBound = Math.min(allCandles.size() - 1, (frameIndex + 1) * frameSize + extremeVicinity * 2L);
             List<Candle> neighborhood = allCandles.subList((int) leftBound, (int) (rightBound + 1));
 
             futures.add(executorService.submit(() -> {
-                List<Candle> realExtremums = baseLocator.locate(neighborhood);
-                Set<Candle> realExtremumsSet = new HashSet<>(realExtremums); // Convert to Set for faster lookups
-                return entry.getValue().removeAll(realExtremumsSet) ? entry.getValue() : Collections.emptySet();
+                List<Candle> realExtremes = baseLocator.locate(neighborhood);
+                Set<Candle> realExtremesSet = new HashSet<>(realExtremes); // Convert to Set for faster lookups
+                return entry.getValue().removeAll(realExtremesSet) ? entry.getValue() : Collections.emptySet();
             }));
         }
 
         for (Future<Set<Candle>> future : futures) {
             try {
-                extremumsToRemove.addAll(future.get());
+                extremeToRemove.addAll(future.get());
             } catch (InterruptedException | ExecutionException e) {
                 executorService.shutdownNow(); // Прерываем все задачи при ошибке
                 Thread.currentThread().interrupt();
@@ -173,22 +173,22 @@ public class ConcurrentFrameExtremumLocator implements ExtremumLocator {
             }
         }
 
-        return candidateExtremums.stream()
-            .filter(candidate -> !extremumsToRemove.contains(candidate))
+        return candidateExtremes.stream()
+            .filter(candidate -> !extremeToRemove.contains(candidate))
             .distinct()
             .collect(Collectors.toList());
     }
 
-    private boolean isOutOfRange(long extremumIndex, long startIndex, long endIndex) {
-        return extremumIndex - startIndex < extremumVicinity || endIndex - extremumIndex < extremumVicinity;
+    private boolean isOutOfRange(long extremeIndex, long startIndex, long endIndex) {
+        return extremeIndex - startIndex < extremeVicinity || endIndex - extremeIndex < extremeVicinity;
     }
 
-    private boolean isWithinFrameBounds(long extremumIndex, int frameSize, int overlapSize) {
-        long framePosition = extremumIndex % frameSize;
+    private boolean isWithinFrameBounds(long extremeIndex, int frameSize, int overlapSize) {
+        long framePosition = extremeIndex % frameSize;
         return framePosition >= overlapSize && frameSize - framePosition >= overlapSize;
     }
 
-    private long calculateFrameIndex(long extremumIndex, int frameSize) {
-        return (extremumIndex + frameSize / 2) / frameSize;
+    private long calculateFrameIndex(long extremeIndex, int frameSize) {
+        return (extremeIndex + frameSize / 2) / frameSize;
     }
 }

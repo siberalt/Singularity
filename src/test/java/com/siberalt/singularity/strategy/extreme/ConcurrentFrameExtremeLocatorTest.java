@@ -1,4 +1,4 @@
-package com.siberalt.singularity.strategy.extremum;
+package com.siberalt.singularity.strategy.extreme;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.CandleFactory;
@@ -13,12 +13,12 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class ConcurrentFrameExtremumLocatorTest {
+class ConcurrentFrameExtremeLocatorTest {
     private final CandleFactory candleFactory = new CandleFactory("TEST_INSTRUMENT");
     @Test
     void locateReturnsEmptyListWhenCandlesIsEmpty() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
-        ConcurrentFrameExtremumLocator locator = new ConcurrentFrameExtremumLocator(10, baseLocator);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
+        ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(10, baseLocator);
 
         List<Candle> result = locator.locate(Collections.emptyList());
 
@@ -28,7 +28,7 @@ class ConcurrentFrameExtremumLocatorTest {
 
     @Test
     void locatesAllNonOverlappingExtremes() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
 
         List<Candle> frame1 = List.of(
             candleFactory.createCommon("2023-01-01T00:01:00Z", 100),
@@ -51,7 +51,7 @@ class ConcurrentFrameExtremumLocatorTest {
         when(baseLocator.locate(eq(frame1))).thenReturn(List.of(extreme1));
         when(baseLocator.locate(eq(frame2))).thenReturn(List.of(extreme2));
 
-        ConcurrentFrameExtremumLocator locator = new ConcurrentFrameExtremumLocator(5, baseLocator);
+        ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(5, baseLocator);
 
         List<Candle> candles = ListUtils.merge(frame1, frame2);
         List<Candle> result = locator.locate(candles);
@@ -71,9 +71,9 @@ class ConcurrentFrameExtremumLocatorTest {
         );
         Candle extreme = candles.get(2); // Candle with value 200 and time "2023-01-01T00:02:00Z"
 
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         when(baseLocator.locate(anyList())).thenReturn(List.of(extreme));
-        ConcurrentFrameExtremumLocator locator = new ConcurrentFrameExtremumLocator(
+        ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(
             3, baseLocator, 5, 0
         );
 
@@ -92,11 +92,11 @@ class ConcurrentFrameExtremumLocatorTest {
             candleFactory.createCommon("2023-01-01T00:03:00Z", 150),
             candleFactory.createCommon("2023-01-01T00:04:00Z", 100)
         );
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         Candle extreme = candles.get(2); // Candle with value 200 and time "2023-01-01T00:02:00Z"
         when(baseLocator.locate(anyList())).thenReturn(List.of(extreme));
 
-        ConcurrentFrameExtremumLocator locator = new ConcurrentFrameExtremumLocator(10, baseLocator);
+        ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(10, baseLocator);
         List<Candle> result = locator.locate(candles);
 
         assertEquals(0, result.size());
@@ -120,11 +120,11 @@ class ConcurrentFrameExtremumLocatorTest {
             candleFactory.createCommon("2023-01-01T00:09:00Z", 100)
         );
 
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         Candle extreme = framePart1.get(4); // Candle with value 300 and time "2023-01-01T00:04:00Z"
         when(baseLocator.locate(anyList())).thenReturn(List.of(extreme));
 
-        ConcurrentFrameExtremumLocator locator = new ConcurrentFrameExtremumLocator(10, baseLocator);
+        ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(10, baseLocator);
 
         List<Candle> result1 = locator.locate(framePart1);
         assertEquals(0, result1.size());
@@ -138,10 +138,10 @@ class ConcurrentFrameExtremumLocatorTest {
 
     @Test
     void locateThrowsRuntimeExceptionOnExecutionError() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         when(baseLocator.locate(anyList())).thenThrow(new RuntimeException("Test exception"));
 
-        ConcurrentFrameExtremumLocator locator = new ConcurrentFrameExtremumLocator(3, baseLocator);
+        ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(3, baseLocator);
 
         List<Candle> candles = List.of(new Candle(), new Candle(), new Candle());
 
@@ -150,7 +150,7 @@ class ConcurrentFrameExtremumLocatorTest {
 
     @Test
     void locatesAllOverlappingExtremes() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
 
         List<Candle> frame1 = List.of(
             candleFactory.createCommon("2023-01-01T00:00:00Z", 100),
@@ -172,7 +172,7 @@ class ConcurrentFrameExtremumLocatorTest {
         when(baseLocator.locate(eq(frame1))).thenReturn(List.of(extreme1));
         when(baseLocator.locate(eq(frame2))).thenReturn(List.of(extreme2));
 
-        ConcurrentFrameExtremumLocator locator = new ConcurrentFrameExtremumLocator(5, baseLocator);
+        ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(5, baseLocator);
 
         List<Candle> candles = ListUtils.merge(frame1, frame2);
         List<Candle> result = locator.locate(candles);
@@ -184,7 +184,7 @@ class ConcurrentFrameExtremumLocatorTest {
 
     @Test
     void locateHandlesEmptyOverlapGracefully() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
 
         List<Candle> frame = List.of(
             candleFactory.createCommon("2023-01-01T00:00:00Z", 100),
@@ -195,7 +195,7 @@ class ConcurrentFrameExtremumLocatorTest {
 
         when(baseLocator.locate(eq(frame))).thenReturn(List.of(extreme));
 
-        ConcurrentFrameExtremumLocator locator = new ConcurrentFrameExtremumLocator(
+        ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(
             3, baseLocator, 2, 0
         );
         List<Candle> result = locator.locate(frame);
@@ -206,7 +206,7 @@ class ConcurrentFrameExtremumLocatorTest {
 
     @Test
     void locateFiltersFalseExtremesCorrectly() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
 
 
         List<Candle> frame1 = List.of(
@@ -230,7 +230,7 @@ class ConcurrentFrameExtremumLocatorTest {
         when(baseLocator.locate(eq(frame1))).thenReturn(List.of(falseExtreme));
         when(baseLocator.locate(eq(frame2))).thenReturn(List.of(realExtreme));
 
-        ConcurrentFrameExtremumLocator locator = new ConcurrentFrameExtremumLocator(5, baseLocator);
+        ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(5, baseLocator);
 
         List<Candle> result1 = locator.locate(frame1);
         assertEquals(0, result1.size());
@@ -242,7 +242,7 @@ class ConcurrentFrameExtremumLocatorTest {
 
     @Test
     void locateFiltersFalseEdgeExtremesCorrectly() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
 
         List<Candle> frame1 = List.of(
             candleFactory.createCommon("2023-01-01T00:00:00Z", 100),
@@ -265,7 +265,7 @@ class ConcurrentFrameExtremumLocatorTest {
         when(baseLocator.locate(eq(frame1))).thenReturn(List.of(falseExtreme));
         when(baseLocator.locate(eq(frame2))).thenReturn(List.of(realExtreme));
 
-        ConcurrentFrameExtremumLocator locator = new ConcurrentFrameExtremumLocator(5, baseLocator);
+        ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(5, baseLocator);
 
         List<Candle> result1 = locator.locate(frame1);
         assertEquals(0, result1.size());
@@ -277,7 +277,7 @@ class ConcurrentFrameExtremumLocatorTest {
 
     @Test
     void locateFiltersFalseLastExtreme() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
 
         List<Candle> frame1 = List.of(
             candleFactory.createCommon("2023-01-01T00:00:00Z", 100),
@@ -301,7 +301,7 @@ class ConcurrentFrameExtremumLocatorTest {
             .thenReturn(List.of(realExtreme))
             .thenReturn(List.of(falseExtreme));
 
-        ConcurrentFrameExtremumLocator locator = new ConcurrentFrameExtremumLocator(
+        ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(
             5, baseLocator, 5, 2
         );
 
@@ -315,7 +315,7 @@ class ConcurrentFrameExtremumLocatorTest {
 
     @Test
     void locateHandlesLargeInputEfficiently() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         List<Candle> candles = new ArrayList<>();
         for (int i = 0; i < 1000; i++) {
             candles.add(
@@ -326,7 +326,7 @@ class ConcurrentFrameExtremumLocatorTest {
         }
 
         when(baseLocator.locate(anyList())).thenReturn(Collections.emptyList());
-        ConcurrentFrameExtremumLocator locator = new ConcurrentFrameExtremumLocator(100, baseLocator);
+        ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(100, baseLocator);
 
         List<Candle> result = locator.locate(candles);
 

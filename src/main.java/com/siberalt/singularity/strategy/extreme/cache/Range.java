@@ -1,4 +1,4 @@
-package com.siberalt.singularity.strategy.extremum.cache;
+package com.siberalt.singularity.strategy.extreme.cache;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,24 +11,24 @@ public record Range(
     String extremeType,
     RangeType rangeType
 ) {
-    Range(long fromIndex, long toIndex, String instrumentId, String extremumType, RangeType rangeType) {
+    Range(long fromIndex, long toIndex, String instrumentId, String extremeType, RangeType rangeType) {
         this(
-            instrumentId + "-" + extremumType + "-" + fromIndex + "-" + toIndex,
+            instrumentId + "-" + extremeType + "-" + fromIndex + "-" + toIndex,
             fromIndex,
             toIndex,
             instrumentId,
-            extremumType,
+            extremeType,
             rangeType
         );
     }
 
-    Range(long fromIndex, long toIndex, String instrumentId, String extremumType) {
+    Range(long fromIndex, long toIndex, String instrumentId, String extremeType) {
         this(
-            instrumentId + "-" + extremumType + "-" + fromIndex + "-" + toIndex,
+            instrumentId + "-" + extremeType + "-" + fromIndex + "-" + toIndex,
             fromIndex,
             toIndex,
             instrumentId,
-            extremumType,
+            extremeType,
             RangeType.OUTER
         );
     }

@@ -1,8 +1,8 @@
-package com.siberalt.singularity.strategy.extremum.cache;
+package com.siberalt.singularity.strategy.extreme.cache;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.CandleFactory;
-import com.siberalt.singularity.strategy.extremum.ExtremumLocator;
+import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -16,7 +16,7 @@ class CachingExtremeLocatorTest {
 
     @Test
     void locateReturnsEmptyListWhenNoExtremesFound() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         RangeRepository rangeRepository = mock(RangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
@@ -48,7 +48,7 @@ class CachingExtremeLocatorTest {
 
     @Test
     void locateHandlesEmptyInputCandlesGracefully() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         RangeRepository rangeRepository = mock(RangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
@@ -64,7 +64,7 @@ class CachingExtremeLocatorTest {
 
     @Test
     void locateCachesExtremesForFullRange() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         RangeRepository rangeRepository = mock(RangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
@@ -97,7 +97,7 @@ class CachingExtremeLocatorTest {
 
     @Test
     void locateExtractsExtremesFullyFromCache() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         RangeRepository rangeRepository = mock(RangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
@@ -131,7 +131,7 @@ class CachingExtremeLocatorTest {
 
     @Test
     void locateHandlesNewRangeWithNeighbor() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         RangeRepository rangeRepository = mock(RangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
@@ -175,7 +175,7 @@ class CachingExtremeLocatorTest {
 
     @Test
     void locateHandlesCachedExtremesAtRangeStart() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         RangeRepository rangeRepository = mock(RangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
@@ -228,7 +228,7 @@ class CachingExtremeLocatorTest {
 
     @Test
     void locateHandlesRangeExceedingMaxLength() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         RangeRepository rangeRepository = mock(RangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
@@ -284,7 +284,7 @@ class CachingExtremeLocatorTest {
 
     @Test
     void locateHandlesLeftIntersectAndRightNeighbor() {
-        ExtremumLocator baseLocator = mock(ExtremumLocator.class);
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         RangeRepository rangeRepository = mock(RangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 

@@ -1,4 +1,4 @@
-package com.siberalt.singularity.strategy.extremum.cache;
+package com.siberalt.singularity.strategy.extreme.cache;
 
 import com.siberalt.singularity.entity.candle.Candle;
 

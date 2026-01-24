@@ -27,10 +27,10 @@ import com.siberalt.singularity.simulation.EventSimulator;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
 import com.siberalt.singularity.strategy.StrategyInterface;
-import com.siberalt.singularity.strategy.extremum.BaseExtremumLocator;
-import com.siberalt.singularity.strategy.extremum.ConcurrentFrameExtremumLocator;
-import com.siberalt.singularity.strategy.extremum.ExtremumLocator;
-import com.siberalt.singularity.strategy.extremum.cache.CachingExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.BaseExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.ConcurrentFrameExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.cache.CachingExtremeLocator;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
@@ -91,8 +91,8 @@ public class BasicTradeStrategySimulation {
         broker.getOperationsService().addMoney(account.getId(), Money.of("RUB", initialInvestment));
 
         int tradePeriodCandles = 80;
-        ExtremumLocator maximumLocator = createExtremumLocator(tradePeriodCandles, BaseExtremumLocator.createMaxLocator());
-        ExtremumLocator minimumLocator = createExtremumLocator(tradePeriodCandles, BaseExtremumLocator.createMinLocator());
+        ExtremeLocator maximumLocator = createExtremeLocator(tradePeriodCandles, BaseExtremeLocator.createMaxLocator());
+        ExtremeLocator minimumLocator = createExtremeLocator(tradePeriodCandles, BaseExtremeLocator.createMinLocator());
         LevelDetectorTracker supportTracker = createLevelDetector(0.005, minimumLocator);
         LevelDetectorTracker resistanceTracker = createLevelDetector(0.005, maximumLocator);
         LevelSelectorTracker selectorTracker = new LevelSelectorTracker(
@@ -201,9 +201,9 @@ public class BasicTradeStrategySimulation {
         return strategy;
     }
 
-    private static ExtremumLocator createExtremumLocator(int frameSize, ExtremumLocator baseLocator) {
+    private static ExtremeLocator createExtremeLocator(int frameSize, ExtremeLocator baseLocator) {
         return new CachingExtremeLocator(
-            new ConcurrentFrameExtremumLocator(frameSize, baseLocator, Runtime.getRuntime().availableProcessors(), 15)
+            new ConcurrentFrameExtremeLocator(frameSize, baseLocator, Runtime.getRuntime().availableProcessors(), 15)
         );
     }
 
@@ -297,7 +297,7 @@ public class BasicTradeStrategySimulation {
         priceChart.render(candles);
     }
 
-    private static LevelDetectorTracker createLevelDetector(double sensitivity, ExtremumLocator baseLocator) {
+    private static LevelDetectorTracker createLevelDetector(double sensitivity, ExtremeLocator baseLocator) {
         ClusterLevelDetector levelDetector = new ClusterLevelDetector(sensitivity, baseLocator);
 
         return new LevelDetectorTracker(

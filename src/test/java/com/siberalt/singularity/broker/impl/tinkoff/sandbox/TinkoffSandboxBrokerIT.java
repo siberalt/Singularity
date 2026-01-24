@@ -29,11 +29,12 @@ public class TinkoffSandboxBrokerIT extends AbstractTinkoffSanboxIT {
 
     @Test
     public void permissionDeniedExceptionHandling() throws IOException {
-        TinkoffSandboxBroker finalTinkoffBroker = new TinkoffSandboxBroker(
+        try (TinkoffSandboxBroker finalTinkoffBroker = new TinkoffSandboxBroker(
             getConfiguration().get("sandboxToken") + "123"
-        );
-        Assertions.assertThrows(
-            PermissionDeniedException.class, () -> finalTinkoffBroker.getUserService().getAccounts(null)
-        );
+        )) {
+            Assertions.assertThrows(
+                PermissionDeniedException.class, () -> finalTinkoffBroker.getUserService().getAccounts(null)
+            );
+        }
     }
 }

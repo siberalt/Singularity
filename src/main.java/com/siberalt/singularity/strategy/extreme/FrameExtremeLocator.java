@@ -1,4 +1,4 @@
-package com.siberalt.singularity.strategy.extremum;
+package com.siberalt.singularity.strategy.extreme;
 
 import com.siberalt.singularity.entity.candle.Candle;
 
@@ -6,18 +6,18 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-public class FrameExtremumLocator implements ExtremumLocator {
+public class FrameExtremeLocator implements ExtremeLocator {
     private final long frameSize;
-    private final ExtremumLocator baseLocator;
+    private final ExtremeLocator baseLocator;
 
-    public FrameExtremumLocator(long frameSize, ExtremumLocator baseLocator) {
+    public FrameExtremeLocator(long frameSize, ExtremeLocator baseLocator) {
         this.frameSize = frameSize;
         this.baseLocator = baseLocator;
     }
 
     @Override
     public List<Candle> locate(List<Candle> candles) {
-        List<Candle> extremumList = new ArrayList<>();
+        List<Candle> extremeList = new ArrayList<>();
         ArrayList<Candle> currentFrameCandles = new ArrayList<>();
         Instant startFrameTime = null;
 
@@ -29,16 +29,16 @@ public class FrameExtremumLocator implements ExtremumLocator {
             currentFrameCandles.add(candle);
 
             if (currentFrameCandles.size() == frameSize) {
-                extremumList.addAll(baseLocator.locate(currentFrameCandles));
+                extremeList.addAll(baseLocator.locate(currentFrameCandles));
                 startFrameTime = null;
                 currentFrameCandles.clear();
             }
         }
 
         if (!currentFrameCandles.isEmpty()) {
-            extremumList.addAll(baseLocator.locate(currentFrameCandles));
+            extremeList.addAll(baseLocator.locate(currentFrameCandles));
         }
 
-        return extremumList;
+        return extremeList;
     }
 }

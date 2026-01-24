@@ -1,7 +1,7 @@
 package com.siberalt.singularity.strategy.level.linear;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.strategy.extremum.ExtremumLocator;
+import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -21,10 +21,10 @@ class ClusterLevelDetectorTest {
         Candle candle1 = Candle.of(Instant.now(), 100, 105.0);
         Candle candle2 = Candle.of(Instant.now(), 101, 106.0);
         List<Candle> candles = List.of(candle1, candle2);
-        ExtremumLocator mockExtremumLocator = Mockito.mock(ExtremumLocator.class);
-        when(mockExtremumLocator.locate(eq(candles))).thenReturn(candles);
+        ExtremeLocator mockExtremeLocator = Mockito.mock(ExtremeLocator.class);
+        when(mockExtremeLocator.locate(eq(candles))).thenReturn(candles);
 
-        ClusterLevelDetector detector = new ClusterLevelDetector(0.03, mockExtremumLocator);
+        ClusterLevelDetector detector = new ClusterLevelDetector(0.03, mockExtremeLocator);
         List<Level<Double>> levels = detector.detect(candles);
 
         assertEquals(1, levels.size());
@@ -38,10 +38,10 @@ class ClusterLevelDetectorTest {
         Candle candle3 = Candle.of(Instant.now(), 110, 115.0);
         Candle candle4 = Candle.of(Instant.now(), 110, 115.0);
         List<Candle> candles = List.of(candle1, candle2, candle3, candle4);
-        ExtremumLocator mockExtremumLocator = Mockito.mock(ExtremumLocator.class);
-        when(mockExtremumLocator.locate(eq(candles))).thenReturn(candles);
+        ExtremeLocator mockExtremeLocator = Mockito.mock(ExtremeLocator.class);
+        when(mockExtremeLocator.locate(eq(candles))).thenReturn(candles);
 
-        ClusterLevelDetector detector = new ClusterLevelDetector(0.01, mockExtremumLocator);
+        ClusterLevelDetector detector = new ClusterLevelDetector(0.01, mockExtremeLocator);
         List<Level<Double>> levels = detector.detect(candles);
 
         assertEquals(2, levels.size());
@@ -52,10 +52,10 @@ class ClusterLevelDetectorTest {
         Candle candle1 = Candle.of(Instant.now(), 100, 105.0);
         Candle candle2 = Candle.of(Instant.now(), 101, 106.0);
         List<Candle> candles = List.of(candle1, candle2);
-        ExtremumLocator mockExtremumLocator = Mockito.mock(ExtremumLocator.class);
-        when(mockExtremumLocator.locate(candles)).thenReturn(candles);
+        ExtremeLocator mockExtremeLocator = Mockito.mock(ExtremeLocator.class);
+        when(mockExtremeLocator.locate(candles)).thenReturn(candles);
 
-        ClusterLevelDetector detector = new ClusterLevelDetector(0.03, mockExtremumLocator);
+        ClusterLevelDetector detector = new ClusterLevelDetector(0.03, mockExtremeLocator);
         List<Level<Double>> levels = detector.detect(candles);
 
         assertEquals(1, levels.size());
@@ -64,10 +64,10 @@ class ClusterLevelDetectorTest {
 
     @Test
     void handlesEmptyCandleList() {
-        ExtremumLocator mockExtremumLocator = Mockito.mock(ExtremumLocator.class);
-        when(mockExtremumLocator.locate(any())).thenReturn(List.of());
+        ExtremeLocator mockExtremeLocator = Mockito.mock(ExtremeLocator.class);
+        when(mockExtremeLocator.locate(any())).thenReturn(List.of());
 
-        ClusterLevelDetector detector = new ClusterLevelDetector(0.03, mockExtremumLocator);
+        ClusterLevelDetector detector = new ClusterLevelDetector(0.03, mockExtremeLocator);
         List<Level<Double>> levels = detector.detect(List.of());
 
         assertEquals(0, levels.size());
@@ -83,11 +83,11 @@ class ClusterLevelDetectorTest {
         Candle candle4 = Candle.of(Instant.now(), 111, 116.0);
         List<Candle> candlesSecondCall = List.of(candle3, candle4);
 
-        ExtremumLocator mockExtremumLocator = Mockito.mock(ExtremumLocator.class);
-        when(mockExtremumLocator.locate(candlesFirstCall)).thenReturn(candlesFirstCall);
-        when(mockExtremumLocator.locate(candlesSecondCall)).thenReturn(candlesSecondCall);
+        ExtremeLocator mockExtremeLocator = Mockito.mock(ExtremeLocator.class);
+        when(mockExtremeLocator.locate(candlesFirstCall)).thenReturn(candlesFirstCall);
+        when(mockExtremeLocator.locate(candlesSecondCall)).thenReturn(candlesSecondCall);
 
-        ClusterLevelDetector detector = new ClusterLevelDetector(0.03, mockExtremumLocator);
+        ClusterLevelDetector detector = new ClusterLevelDetector(0.03, mockExtremeLocator);
 
         // First detect call
         List<Level<Double>> levelsFirstCall = detector.detect(candlesFirstCall);

@@ -1,4 +1,4 @@
-package com.siberalt.singularity.strategy.extremum;
+package com.siberalt.singularity.strategy.extreme;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import org.junit.jupiter.api.Test;
@@ -8,11 +8,11 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class BaseExtremumLocatorTest {
+class BaseExtremesLocatorTest {
 
     @Test
     void locateReturnsEmptyListWhenCandlesIsEmpty() {
-        BaseExtremumLocator locator = BaseExtremumLocator.createMaxLocator(x -> x.getClosePrice().toDouble());
+        BaseExtremeLocator locator = BaseExtremeLocator.createMaxLocator(x -> x.getClosePrice().toDouble());
 
         List<Candle> result = locator.locate(List.of());
 
@@ -21,7 +21,7 @@ class BaseExtremumLocatorTest {
 
     @Test
     void locateFindsMaximumCorrectly() {
-        BaseExtremumLocator locator = BaseExtremumLocator.createMaxLocator(x -> x.getClosePrice().toDouble());
+        BaseExtremeLocator locator = BaseExtremeLocator.createMaxLocator(x -> x.getClosePrice().toDouble());
         Candle extremeCandle = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 20);
 
         List<Candle> result = locator.locate(
@@ -38,25 +38,25 @@ class BaseExtremumLocatorTest {
 
     @Test
     void locateFindsMinimumCorrectly() {
-        BaseExtremumLocator locator = BaseExtremumLocator.createMinLocator(x -> x.getClosePrice().toDouble());
-        Candle extremumCandle = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 12);
+        BaseExtremeLocator locator = BaseExtremeLocator.createMinLocator(x -> x.getClosePrice().toDouble());
+        Candle extremeCandle = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 12);
 
         List<Candle> result = locator.locate(
             List.of(
-                extremumCandle,
+                extremeCandle,
                 Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 20),
                 Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 18)
             )
         );
 
         assertEquals(1, result.size());
-        assertSame(extremumCandle, result.get(0));
+        assertSame(extremeCandle, result.get(0));
     }
 
     @Test
     void locateHandlesSingleCandleCorrectly() {
         Candle candle = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 10);
-        BaseExtremumLocator locator = BaseExtremumLocator.createMaxLocator(x -> x.getClosePrice().toDouble());
+        BaseExtremeLocator locator = BaseExtremeLocator.createMaxLocator(x -> x.getClosePrice().toDouble());
 
         List<Candle> result = locator.locate(List.of(candle));
 

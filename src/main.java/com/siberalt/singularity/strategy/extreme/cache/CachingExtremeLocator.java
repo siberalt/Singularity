@@ -1,7 +1,7 @@
-package com.siberalt.singularity.strategy.extremum.cache;
+package com.siberalt.singularity.strategy.extreme.cache;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.strategy.extremum.ExtremumLocator;
+import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.utils.ListUtils;
 
 import java.util.ArrayList;
@@ -9,7 +9,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
-public class CachingExtremeLocator implements ExtremumLocator {
+public class CachingExtremeLocator implements ExtremeLocator {
     private record RangeExtremes(Range range, List<Candle> extremes) {
     }
 
@@ -19,18 +19,18 @@ public class CachingExtremeLocator implements ExtremumLocator {
     public static long MAX_RANGE_LENGTH = 43200; // Maximum range size for one month (1 candle = 1 minute)
     public static String EXTREME_TYPE_DEFAULT = "DEFAULT";
 
-    private final ExtremumLocator baseLocator;
+    private final ExtremeLocator baseLocator;
     private RangeRepository rangeRepository = new RuntimeRangeRepository();
     private ExtremeRepository extremeRepository = new RuntimeExtremeRepository();
     private String extremeType = EXTREME_TYPE_DEFAULT;
     private long maxRangeLength = MAX_RANGE_LENGTH;
 
-    public CachingExtremeLocator(ExtremumLocator baseLocator) {
+    public CachingExtremeLocator(ExtremeLocator baseLocator) {
         this.baseLocator = baseLocator;
     }
 
     public CachingExtremeLocator(
-        ExtremumLocator baseLocator,
+        ExtremeLocator baseLocator,
         RangeRepository rangeRepository,
         ExtremeRepository extremeRepository
     ) {
@@ -40,7 +40,7 @@ public class CachingExtremeLocator implements ExtremumLocator {
     }
 
     public CachingExtremeLocator(
-        ExtremumLocator baseLocator,
+        ExtremeLocator baseLocator,
         RangeRepository rangeRepository,
         ExtremeRepository extremeRepository,
         String extremeType,

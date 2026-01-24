@@ -3,9 +3,9 @@ package com.siberalt.singularity.strategy.level.linear;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.math.IncrementalLinearRegression;
 import com.siberalt.singularity.math.Point2D;
-import com.siberalt.singularity.strategy.extremum.BaseExtremumLocator;
-import com.siberalt.singularity.strategy.extremum.ExtremumLocator;
-import com.siberalt.singularity.strategy.extremum.FrameExtremumLocator;
+import com.siberalt.singularity.strategy.extreme.BaseExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.FrameExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 
@@ -21,14 +21,14 @@ public class LinearLevelDetector implements LevelDetector {
     private IncrementalLinearRegression linearModel;
     private final double neighbourhoodRatio; // Default neighborhood percentage for support level calculation
     private StrengthCalculator strengthCalculator = new BasicStrengthCalculator();
-    private final ExtremumLocator extremumLocator;
+    private final ExtremeLocator extremeLocator;
 
     public LinearLevelDetector(
         double neighbourhoodRatio,
-        ExtremumLocator extremumLocator
+        ExtremeLocator extremeLocator
     ) {
         this.neighbourhoodRatio = neighbourhoodRatio;
-        this.extremumLocator = extremumLocator;
+        this.extremeLocator = extremeLocator;
     }
 
     public List<Level<Double>> detect(List<Candle> candles) {
@@ -51,18 +51,18 @@ public class LinearLevelDetector implements LevelDetector {
             startLevelTime = candles.get(0).getTime();
         }
 
-        List<Candle> extremums = extremumLocator.locate(candles);
+        List<Candle> extremes = extremeLocator.locate(candles);
 
         long lastIndex = -1;
 
-        for (Candle extremum : extremums) {
-            long extremumIndex = extremum.getIndex();
-            Point2D<Double> point = new Point2D<>((double) extremumIndex, extremum.getTypicalPrice().toDouble());
+        for (Candle extreme : extremes) {
+            long extremeIndex = extreme.getIndex();
+            Point2D<Double> point = new Point2D<>((double) extremeIndex, extreme.getTypicalPrice().toDouble());
 
             if (linearModel.addPoint(point)) {
                 lastPoint = point;
-                lastTime = extremum.getTime();
-                lastIndex = extremumIndex;
+                lastTime = extreme.getTime();
+                lastIndex = extremeIndex;
             } else {
                 if (lastPoint != null) {
                     levels.add(
@@ -76,17 +76,17 @@ public class LinearLevelDetector implements LevelDetector {
                     );
                 }
 
-                startLevelTime = extremum.getTime();
-                startLevelIndex = (int) extremumIndex;
+                startLevelTime = extreme.getTime();
+                startLevelIndex = (int) extremeIndex;
                 linearModel.reset();
                 linearModel.addPoint(point);
             }
         }
 
         if (linearModel.getInliers().size() > 1) {
-            Candle lastExtremum = extremums.get(extremums.size() - 1);
-            lastIndex = lastExtremum.getIndex();
-            lastTime = lastExtremum.getTime();
+            Candle lastExtreme = extremes.get(extremes.size() - 1);
+            lastIndex = lastExtreme.getIndex();
+            lastTime = lastExtreme.getTime();
 
             levels.add(
                 createLinearLevel(
@@ -145,8 +145,8 @@ public class LinearLevelDetector implements LevelDetector {
     ) {
         return new LinearLevelDetector(
             neighbourhoodRatio,
-            new FrameExtremumLocator(
-                frameSize, BaseExtremumLocator.createMinLocator(candle -> candle.getTypicalPrice().toDouble())
+            new FrameExtremeLocator(
+                frameSize, BaseExtremeLocator.createMinLocator(candle -> candle.getTypicalPrice().toDouble())
             )
         );
     }
@@ -158,8 +158,8 @@ public class LinearLevelDetector implements LevelDetector {
     ) {
         return new LinearLevelDetector(
             neighbourhoodRatio,
-            new FrameExtremumLocator(
-                frameSize, BaseExtremumLocator.createMinLocator(priceExtractor)
+            new FrameExtremeLocator(
+                frameSize, BaseExtremeLocator.createMinLocator(priceExtractor)
             )
         );
     }
@@ -170,8 +170,8 @@ public class LinearLevelDetector implements LevelDetector {
     ) {
         return new LinearLevelDetector(
             neighbourhoodRatio,
-            new FrameExtremumLocator(
-                frameSize, BaseExtremumLocator.createMaxLocator(candle -> candle.getTypicalPrice().toDouble())
+            new FrameExtremeLocator(
+                frameSize, BaseExtremeLocator.createMaxLocator(candle -> candle.getTypicalPrice().toDouble())
             )
         );
     }
@@ -183,8 +183,8 @@ public class LinearLevelDetector implements LevelDetector {
     ) {
         return new LinearLevelDetector(
             neighbourhoodRatio,
-            new FrameExtremumLocator(
-                frameSize, BaseExtremumLocator.createMaxLocator(priceExtractor)
+            new FrameExtremeLocator(
+                frameSize, BaseExtremeLocator.createMaxLocator(priceExtractor)
             )
         );
     }

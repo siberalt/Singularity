@@ -1,4 +1,4 @@
-package com.siberalt.singularity.strategy.extremum;
+package com.siberalt.singularity.strategy.extreme;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.Level;
@@ -16,8 +16,8 @@ import static org.mockito.Mockito.when;
 class ExtremeBasedLevelSelectorTest {
     @Test
     void selectsClosestLevelsWithinVicinity() {
-        ExtremumLocator minimumLocator = Mockito.mock(ExtremumLocator.class);
-        ExtremumLocator maximumLocator = Mockito.mock(ExtremumLocator.class);
+        ExtremeLocator minimumLocator = Mockito.mock(ExtremeLocator.class);
+        ExtremeLocator maximumLocator = Mockito.mock(ExtremeLocator.class);
 
         Candle lastMinimum = Candle.of(Instant.parse("2021-01-01T00:00:00Z"),100.0);
         Candle lastMaximum = Candle.of(Instant.parse("2021-01-02T00:00:00Z"),200.0);
@@ -44,8 +44,8 @@ class ExtremeBasedLevelSelectorTest {
 
     @Test
     void doesNotSelectLevelsOutsideVicinity() {
-        ExtremumLocator minimumLocator = Mockito.mock(ExtremumLocator.class);
-        ExtremumLocator maximumLocator = Mockito.mock(ExtremumLocator.class);
+        ExtremeLocator minimumLocator = Mockito.mock(ExtremeLocator.class);
+        ExtremeLocator maximumLocator = Mockito.mock(ExtremeLocator.class);
 
         Candle lastMinimum = Candle.of(Instant.parse("2021-01-01T00:00:00Z"),100.0);
         Candle lastMaximum = Candle.of(Instant.parse("2021-01-02T00:00:00Z"),200.0);
@@ -66,8 +66,8 @@ class ExtremeBasedLevelSelectorTest {
 
     @Test
     void handlesEmptyLevelLists() {
-        ExtremumLocator minimumLocator = Mockito.mock(ExtremumLocator.class);
-        ExtremumLocator maximumLocator = Mockito.mock(ExtremumLocator.class);
+        ExtremeLocator minimumLocator = Mockito.mock(ExtremeLocator.class);
+        ExtremeLocator maximumLocator = Mockito.mock(ExtremeLocator.class);
 
         when(minimumLocator.locate(Mockito.anyList())).thenReturn(List.of());
         when(maximumLocator.locate(Mockito.anyList())).thenReturn(List.of());

@@ -4,8 +4,8 @@ import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory
 import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.series.FunctionGroupSeriesProvider;
 import com.siberalt.singularity.presenter.google.series.PointSeriesProvider;
-import com.siberalt.singularity.strategy.extremum.BaseExtremumLocator;
-import com.siberalt.singularity.strategy.extremum.ConcurrentFrameExtremumLocator;
+import com.siberalt.singularity.strategy.extreme.BaseExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.ConcurrentFrameExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.linear.ClusterLevelDetector;
 
@@ -23,18 +23,18 @@ public class ClusterLevelDetectorSimulation {
             "src/test/resources/entity.candle.cvs/TMOS"
         );
         List<Candle> candles = candleRepository.getPeriod("TMOS", startTime, endTime);
-        ConcurrentFrameExtremumLocator minExtremumLocator = new ConcurrentFrameExtremumLocator(
+        ConcurrentFrameExtremeLocator minExtremeLocator = new ConcurrentFrameExtremeLocator(
             120,
-            BaseExtremumLocator.createMinLocator(Candle::getTypicalPriceAsDouble)
+            BaseExtremeLocator.createMinLocator(Candle::getTypicalPriceAsDouble)
         );
-        ConcurrentFrameExtremumLocator maxExtremumLocator = new ConcurrentFrameExtremumLocator(
+        ConcurrentFrameExtremeLocator maxExtremeLocator = new ConcurrentFrameExtremeLocator(
             120,
-            BaseExtremumLocator.createMaxLocator(Candle::getTypicalPriceAsDouble)
+            BaseExtremeLocator.createMaxLocator(Candle::getTypicalPriceAsDouble)
         );
         PointSeriesProvider minPoints = new PointSeriesProvider("Minima");
         minPoints.setColor("#00FF00");
         minPoints.setSize(5);
-        minExtremumLocator.locate(candles)
+        minExtremeLocator.locate(candles)
             .forEach(
                 minPoint -> minPoints.addPoint(
                     minPoint.getIndex(),
@@ -44,7 +44,7 @@ public class ClusterLevelDetectorSimulation {
         PointSeriesProvider maxPoints = new PointSeriesProvider("Maxima");
         maxPoints.setColor("#FF0000");
         maxPoints.setSize(5);
-        maxExtremumLocator.locate(candles)
+        maxExtremeLocator.locate(candles)
             .forEach(
                 maxPoint -> maxPoints.addPoint(
                     maxPoint.getIndex(),
@@ -57,8 +57,8 @@ public class ClusterLevelDetectorSimulation {
             "TMOS",
             Candle::getTypicalPriceAsDouble
         );
-        ClusterLevelDetector supportDetector = new ClusterLevelDetector(0.005, minExtremumLocator);
-        ClusterLevelDetector resistanceDetector = new ClusterLevelDetector(0.005, maxExtremumLocator);
+        ClusterLevelDetector supportDetector = new ClusterLevelDetector(0.005, minExtremeLocator);
+        ClusterLevelDetector resistanceDetector = new ClusterLevelDetector(0.005, maxExtremeLocator);
         var supportLevels = supportDetector.detect(candles);
         var resistanceLevels = resistanceDetector.detect(candles);
         addLevelsToChart(priceChart, "Support Levels", supportLevels, "#00FFFA");

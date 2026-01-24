@@ -3,9 +3,9 @@ package com.siberalt.singularity.strategy.level.linear;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.math.median.MedianCalculator;
 import com.siberalt.singularity.math.median.RobustMedianCalculator;
-import com.siberalt.singularity.strategy.extremum.BaseExtremumLocator;
-import com.siberalt.singularity.strategy.extremum.ConcurrentFrameExtremumLocator;
-import com.siberalt.singularity.strategy.extremum.ExtremumLocator;
+import com.siberalt.singularity.strategy.extreme.BaseExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.ConcurrentFrameExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.StatefulLevelDetector;
 
@@ -18,13 +18,13 @@ import java.util.stream.Collectors;
 public class ClusterLevelDetector implements StatefulLevelDetector {
     private static final int MAX_LEVELS = 30;
 
-    private record LevelDetails(Level<Double> level, double price, int touchesCount, List<Candle> extremums) {
+    private record LevelDetails(Level<Double> level, double price, int touchesCount, List<Candle> extremes) {
     }
 
     private final Map<Double, Function<Double, Double>> functionsCache = new TreeMap<>();
     private final TreeMap<Double, LevelDetails> levelDetails = new TreeMap<>();
     private final double sensitivity;
-    private final ExtremumLocator extremumLocator;
+    private final ExtremeLocator extremeLocator;
     private final MedianCalculator medianCalculator = new RobustMedianCalculator();
     private StrengthCalculator strengthCalculator = new BasicStrengthCalculator();
 
@@ -35,14 +35,14 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
     // Статистика для адаптивной чувствительности
     private double priceVolatility = 0.0;
 
-    public ClusterLevelDetector(double sensitivity, ExtremumLocator extremumLocator) {
+    public ClusterLevelDetector(double sensitivity, ExtremeLocator extremeLocator) {
         this.sensitivity = sensitivity;
-        this.extremumLocator = extremumLocator;
+        this.extremeLocator = extremeLocator;
     }
 
-    public ClusterLevelDetector(double sensitivity, ExtremumLocator extremumLocator, int maxLevels) {
+    public ClusterLevelDetector(double sensitivity, ExtremeLocator extremeLocator, int maxLevels) {
         this.sensitivity = sensitivity;
-        this.extremumLocator = extremumLocator;
+        this.extremeLocator = extremeLocator;
         this.maxLevels = maxLevels;
     }
 
@@ -64,11 +64,11 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         updateMarketStatistics(candles);
 
         // Обрабатываем только новые экстремумы
-        List<Candle> newExtremums = extremumLocator.locate(candles);
-        Map<Double, List<Candle>> levelsNewExtremums = new TreeMap<>();
+        List<Candle> newExtremes = extremeLocator.locate(candles);
+        Map<Double, List<Candle>> levelsNewExtremes = new TreeMap<>();
 
-        for (Candle extremum : newExtremums) {
-            double price = extremum.getTypicalPriceAsDouble();
+        for (Candle extreme : newExtremes) {
+            double price = extreme.getTypicalPriceAsDouble();
 
             // Адаптивная чувствительность на основе волатильности
             double adaptiveSensitivity = calculateAdaptiveSensitivity(price);
@@ -77,25 +77,25 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
             Optional<Map.Entry<Double, LevelDetails>> closestLevel = findClosestLevel(price, sensitivityRange);
 
             if (closestLevel.isPresent()) {
-                levelsNewExtremums
+                levelsNewExtremes
                     .computeIfAbsent(closestLevel.get().getKey(), k -> new ArrayList<>())
-                    .add(extremum);
+                    .add(extreme);
             } else {
-                createNewLevel(extremum);
+                createNewLevel(extreme);
             }
         }
 
-        for (Map.Entry<Double, List<Candle>> entry : levelsNewExtremums.entrySet()) {
-            List<Candle> levelExtremums = levelDetails.get(entry.getKey()).extremums();
-            List<Candle> newLevelExtremums = entry.getValue();
-            levelExtremums.addAll(newLevelExtremums);
+        for (Map.Entry<Double, List<Candle>> entry : levelsNewExtremes.entrySet()) {
+            List<Candle> levelExtremes = levelDetails.get(entry.getKey()).extremes();
+            List<Candle> newLevelExtremes = entry.getValue();
+            levelExtremes.addAll(newLevelExtremes);
 
-            Candle lastExtremum = newLevelExtremums.get(newLevelExtremums.size() - 1);
-            long indexTo = lastExtremum.getIndex();
-            Instant timeTo = lastExtremum.getTime();
+            Candle lastExtreme = newLevelExtremes.get(newLevelExtremes.size() - 1);
+            long indexTo = lastExtreme.getIndex();
+            Instant timeTo = lastExtreme.getTime();
 
             double updatedPrice = medianCalculator.calculateMedian(
-                new ArrayList<>(levelExtremums.stream()
+                new ArrayList<>(levelExtremes.stream()
                     .map(Candle::getTypicalPriceAsDouble)
                     .collect(Collectors.toList()))
             );
@@ -117,14 +117,14 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
                         function,
                         existingDetails.level().strength()
                     ),
-                    existingDetails.touchesCount() + newLevelExtremums.size()
+                    existingDetails.touchesCount() + newLevelExtremes.size()
                 )
             );
             LevelDetails newDetails = new LevelDetails(
                 updatedLevel,
                 updatedPrice,
-                existingDetails.touchesCount() + newLevelExtremums.size(),
-                levelExtremums
+                existingDetails.touchesCount() + newLevelExtremes.size(),
+                levelExtremes
             );
             levelDetails.remove(entry.getKey());
             levelDetails.put(updatedPrice, newDetails);
@@ -257,9 +257,9 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
     ) {
         return new ClusterLevelDetector(
             sensitivity,
-            new ConcurrentFrameExtremumLocator(
+            new ConcurrentFrameExtremeLocator(
                 frameSize,
-                BaseExtremumLocator.createMinLocator(Candle::getTypicalPriceAsDouble),
+                BaseExtremeLocator.createMinLocator(Candle::getTypicalPriceAsDouble),
                 Runtime.getRuntime().availableProcessors(),
                 15
             )
@@ -272,9 +272,9 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
     ) {
         return new ClusterLevelDetector(
             sensitivity,
-            new ConcurrentFrameExtremumLocator(
+            new ConcurrentFrameExtremeLocator(
                 frameSize,
-                BaseExtremumLocator.createMaxLocator(Candle::getTypicalPriceAsDouble),
+                BaseExtremeLocator.createMaxLocator(Candle::getTypicalPriceAsDouble),
                 Runtime.getRuntime().availableProcessors(),
                 15
             )

@@ -1,7 +1,7 @@
 package com.siberalt.singularity.strategy.level.selector;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.strategy.extremum.ExtremumLocator;
+import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.market.PriceExtractor;
 
@@ -12,15 +12,15 @@ import java.util.List;
 public class ExtremeBasedLevelSelector implements LevelSelector {
     final double DEFAULT_EXTREME_VICINITY = 0.004;
 
-    private final ExtremumLocator minimumLocator;
-    private final ExtremumLocator maximumLocator;
+    private final ExtremeLocator minimumLocator;
+    private final ExtremeLocator maximumLocator;
     private double minimumVicinity = DEFAULT_EXTREME_VICINITY;
     private double maximumVicinity = DEFAULT_EXTREME_VICINITY;
     private PriceExtractor priceExtractor = Candle::getTypicalPrice;
 
     public ExtremeBasedLevelSelector(
-        ExtremumLocator minimumLocator,
-        ExtremumLocator maximumLocator
+        ExtremeLocator minimumLocator,
+        ExtremeLocator maximumLocator
     ) {
         this.minimumLocator = minimumLocator;
         this.maximumLocator = maximumLocator;
@@ -71,9 +71,9 @@ public class ExtremeBasedLevelSelector implements LevelSelector {
             .toList();
     }
 
-    private boolean isWithinVicinity(Level<Double> level, Candle extremum, double vicinity) {
-        double levelPrice = level.function().apply((double) extremum.getIndex());
-        double extremePrice = priceExtractor.extract(extremum).toDouble();
+    private boolean isWithinVicinity(Level<Double> level, Candle extreme, double vicinity) {
+        double levelPrice = level.function().apply((double) extreme.getIndex());
+        double extremePrice = priceExtractor.extract(extreme).toDouble();
         return Math.abs(levelPrice - extremePrice) / extremePrice <= vicinity;
     }
 }

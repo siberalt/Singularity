@@ -1,4 +1,4 @@
-package com.siberalt.singularity.strategy.extremum.cache;
+package com.siberalt.singularity.strategy.extreme.cache;
 
 import java.util.ArrayList;
 import java.util.List;
