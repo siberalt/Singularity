@@ -22,4 +22,13 @@ public class ListUtils {
             .distinct()
             .toList();
     }
+
+    public static <T> List<T> merge(List<T> list1, List<T> list2, List<T> list3, List<T> list4) {
+        return Stream.concat(
+                Stream.concat(list1.stream(), list2.stream()),
+                Stream.concat(list3.stream(), list4.stream())
+            )
+            .distinct()
+            .toList();
+    }
 }

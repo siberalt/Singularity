@@ -257,12 +257,10 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
     ) {
         return new ClusterLevelDetector(
             sensitivity,
-            new ConcurrentFrameExtremeLocator(
-                frameSize,
-                BaseExtremeLocator.createMinLocator(Candle::getTypicalPriceAsDouble),
-                Runtime.getRuntime().availableProcessors(),
-                15
-            )
+            ConcurrentFrameExtremeLocator.builder(BaseExtremeLocator.createMinLocator(Candle::getTypicalPriceAsDouble))
+                .setFrameSize(frameSize)
+                .setExtremeVicinity(15)
+                .build()
         );
     }
 
@@ -272,12 +270,10 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
     ) {
         return new ClusterLevelDetector(
             sensitivity,
-            new ConcurrentFrameExtremeLocator(
-                frameSize,
-                BaseExtremeLocator.createMaxLocator(Candle::getTypicalPriceAsDouble),
-                Runtime.getRuntime().availableProcessors(),
-                15
-            )
+            ConcurrentFrameExtremeLocator.builder(BaseExtremeLocator.createMaxLocator(Candle::getTypicalPriceAsDouble))
+                .setFrameSize(frameSize)
+                .setExtremeVicinity(15)
+                .build()
         );
     }
 }

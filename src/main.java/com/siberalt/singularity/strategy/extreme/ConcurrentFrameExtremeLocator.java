@@ -11,30 +11,86 @@ import java.util.stream.Collectors;
 
 public class ConcurrentFrameExtremeLocator implements ExtremeLocator {
     public static int DEFAULT_EXTREME_VICINITY = 2;
+    public static int DEFAULT_START_INDEX = 0;
+    public static int DEFAULT_FRAME_SIZE = 120;
 
     private int extremeVicinity = DEFAULT_EXTREME_VICINITY;
-    private final int frameSize;
+    private int frameSize = DEFAULT_FRAME_SIZE;
     private final ExtremeLocator baseLocator;
     private int threadCount = Runtime.getRuntime().availableProcessors();
-    private List<Candle> lastOverlapCandles = new ArrayList<>();
-    private List<Candle> unfinishedFrameCandles = new ArrayList<>();
-    private long globalStartFrameIndex = -1;
+    private long startIndex = DEFAULT_START_INDEX;
+
+    public static class Builder {
+        private long startIndex = DEFAULT_START_INDEX;
+        private int frameSize = DEFAULT_FRAME_SIZE;
+        private final ExtremeLocator baseLocator;
+        private int threadCount = Runtime.getRuntime().availableProcessors();
+        private int extremeVicinity = DEFAULT_EXTREME_VICINITY;
+
+        public Builder(ExtremeLocator baseLocator) {
+            if (baseLocator == null) {
+                throw new IllegalArgumentException("Base locator cannot be null");
+            }
+            this.baseLocator = baseLocator;
+        }
+
+        public Builder setStartIndex(long startIndex) {
+            if (startIndex < 0) {
+                throw new IllegalArgumentException("Start index must be non-negative");
+            }
+            this.startIndex = startIndex;
+            return this;
+        }
+
+        public Builder setFrameSize(int frameSize) {
+            if (frameSize < 2) {
+                throw new IllegalArgumentException("Frame size must be at least 2");
+            }
+            this.frameSize = frameSize;
+            return this;
+        }
+
+        public Builder setThreadCount(int threadCount) {
+            if (threadCount <= 0) {
+                throw new IllegalArgumentException("Thread count must be greater than 0");
+            }
+            this.threadCount = threadCount;
+            return this;
+        }
+
+        public Builder setExtremeVicinity(int extremeVicinity) {
+            if (extremeVicinity < 0) {
+                throw new IllegalArgumentException("Extreme vicinity must be non-negative");
+            }
+            this.extremeVicinity = extremeVicinity;
+            return this;
+        }
+
+        public ConcurrentFrameExtremeLocator build() {
+            return new ConcurrentFrameExtremeLocator(startIndex, frameSize, baseLocator, threadCount, extremeVicinity);
+        }
+    }
+
+    public ConcurrentFrameExtremeLocator(ExtremeLocator baseLocator) {
+        this.baseLocator = baseLocator;
+    }
 
     public ConcurrentFrameExtremeLocator(int frameSize, ExtremeLocator baseLocator) {
         this.frameSize = frameSize;
         this.baseLocator = baseLocator;
     }
 
-    public ConcurrentFrameExtremeLocator(int frameSize, ExtremeLocator baseLocator, int threadCount) {
-        this(frameSize, baseLocator, threadCount, DEFAULT_EXTREME_VICINITY);
-    }
-
     public ConcurrentFrameExtremeLocator(
+        long startIndex,
         int frameSize,
         ExtremeLocator baseLocator,
         int threadCount,
         int extremeVicinity
     ) {
+        if (startIndex < 0) {
+            throw new IllegalArgumentException("Start index must be non-negative");
+        }
+
         if (frameSize < 2) {
             throw new IllegalArgumentException("Frame size must be at least 2");
         }
@@ -43,10 +99,15 @@ public class ConcurrentFrameExtremeLocator implements ExtremeLocator {
             throw new IllegalArgumentException("Frame size must be at least twice the extreme vicinity");
         }
 
+        this.startIndex = startIndex;
         this.frameSize = frameSize;
         this.baseLocator = baseLocator;
         this.threadCount = threadCount;
         this.extremeVicinity = extremeVicinity;
+    }
+
+    public static Builder builder(ExtremeLocator baseLocator) {
+        return new Builder(baseLocator);
     }
 
     @Override
@@ -55,31 +116,22 @@ public class ConcurrentFrameExtremeLocator implements ExtremeLocator {
             return Collections.emptyList();
         }
 
-        if (globalStartFrameIndex == -1) {
-            globalStartFrameIndex = candles.get(0).getIndex();
-        }
+        long localStartIndex = candles.get(0).getIndex();
+        int listIndexShift = (int) (Math.abs(localStartIndex - startIndex) % frameSize);
+        int totalFrames = (candles.size() - listIndexShift) / frameSize;
 
-        if (!unfinishedFrameCandles.isEmpty()) {
-            ArrayList<Candle> temp = new ArrayList<>(unfinishedFrameCandles);
-            temp.addAll(candles);
-            candles = temp;
+        if (totalFrames <= 0) {
+            return Collections.emptyList();
         }
 
         List<Candle> extremeList = new ArrayList<>();
-
-        boolean allFramesComplete = candles.size() % frameSize == 0;
-        int totalFrames = (int) Math.ceil((double) candles.size() / frameSize) - (allFramesComplete ? 0 : 1);
-
-        unfinishedFrameCandles = allFramesComplete
-            ? new ArrayList<>()
-            : new ArrayList<>(candles.subList(frameSize * totalFrames, candles.size()));
 
         // Thread pool with a fixed number of threads
         try (ExecutorService executor = Executors.newFixedThreadPool(threadCount)) {
             List<Future<List<Candle>>> futures = new ArrayList<>();
 
             for (int i = 0; i < totalFrames; i++) {
-                int start = i * frameSize;
+                int start = i * frameSize + listIndexShift;
                 int end = Math.min(start + frameSize, candles.size());
 
                 List<Candle> frame = candles.subList(start, end);
@@ -99,24 +151,12 @@ public class ConcurrentFrameExtremeLocator implements ExtremeLocator {
                 }
             }
 
-            if (!lastOverlapCandles.isEmpty()) {
-                List<Candle> withOverlapCandles = new ArrayList<>(lastOverlapCandles);
-                withOverlapCandles.addAll(candles);
-                candles = withOverlapCandles;
-            }
-
-            extremeList = filterExtremes(
+            return filterExtremes(
                 extremeList,
-                candles,
-                executor,
-                globalStartFrameIndex
+                candles.subList(listIndexShift, totalFrames * frameSize + listIndexShift),
+                executor
             );
-
-            int overlapStart = Math.max(0, candles.size() - extremeVicinity - (allFramesComplete ? 0 : 1));
-            lastOverlapCandles = new ArrayList<>(candles.subList(overlapStart, candles.size()));
         }
-
-        return extremeList;
     }
 
     /**
@@ -125,21 +165,23 @@ public class ConcurrentFrameExtremeLocator implements ExtremeLocator {
     private List<Candle> filterExtremes(
         List<Candle> candidateExtremes,
         List<Candle> allCandles,
-        ExecutorService executorService,
-        long globalStartIndex
+        ExecutorService executorService
     ) {
         Map<Long, Set<Candle>> frameEdgeExtremes = new HashMap<>();
         Set<Candle> extremeToRemove = new HashSet<>();
 
+        long startIndex = allCandles.get(0).getIndex();
+        long endIndex = allCandles.get(allCandles.size() - 1).getIndex();
+
         for (Candle extreme : candidateExtremes) {
-            long extremeIndex = extreme.getIndex() - globalStartIndex;
-            if (extremeIndex == -1) continue;
-
-            long endIndex = allCandles.get(allCandles.size() - 1).getIndex();
-
-            if (isOutOfRange(extremeIndex, globalStartIndex, endIndex)) {
+            if (isOutOfRange(extreme.getIndex(), startIndex, endIndex)) {
                 extremeToRemove.add(extreme);
-            } else if(!isWithinFrameBounds(extremeIndex, frameSize, extremeVicinity)) {
+                continue;
+            }
+
+            long extremeIndex = extreme.getIndex() - startIndex;
+
+            if (!isWithinFrameBounds(extremeIndex, frameSize, extremeVicinity)) {
                 long extremeFrameIndex = calculateFrameIndex(extremeIndex, frameSize);
                 frameEdgeExtremes
                     .computeIfAbsent(extremeFrameIndex, k -> new HashSet<>())
@@ -152,14 +194,16 @@ public class ConcurrentFrameExtremeLocator implements ExtremeLocator {
         for (Map.Entry<Long, Set<Candle>> entry : frameEdgeExtremes.entrySet()) {
             long frameIndex = entry.getKey();
 
-            long leftBound = Math.min(0, frameIndex * frameSize - extremeVicinity * 2L);
-            long rightBound = Math.min(allCandles.size() - 1, (frameIndex + 1) * frameSize + extremeVicinity * 2L);
-            List<Candle> neighborhood = allCandles.subList((int) leftBound, (int) (rightBound + 1));
+            long leftBound = Math.max(0, frameIndex * frameSize - extremeVicinity * 2L);
+            long rightBound = Math.min(allCandles.size() - 1, frameIndex * frameSize + extremeVicinity * 2L);
+            List<Candle> neighborhood = allCandles.subList((int) leftBound, (int) rightBound);
 
             futures.add(executorService.submit(() -> {
                 List<Candle> realExtremes = baseLocator.locate(neighborhood);
                 Set<Candle> realExtremesSet = new HashSet<>(realExtremes); // Convert to Set for faster lookups
-                return entry.getValue().removeAll(realExtremesSet) ? entry.getValue() : Collections.emptySet();
+                entry.getValue().removeAll(realExtremesSet);
+
+                return entry.getValue();
             }));
         }
 

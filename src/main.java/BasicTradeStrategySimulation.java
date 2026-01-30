@@ -203,7 +203,10 @@ public class BasicTradeStrategySimulation {
 
     private static ExtremeLocator createExtremeLocator(int frameSize, ExtremeLocator baseLocator) {
         return new CachingExtremeLocator(
-            new ConcurrentFrameExtremeLocator(frameSize, baseLocator, Runtime.getRuntime().availableProcessors(), 15)
+            ConcurrentFrameExtremeLocator.builder(baseLocator)
+                .setFrameSize(frameSize)
+                .setExtremeVicinity(15)
+                .build()
         );
     }
 
