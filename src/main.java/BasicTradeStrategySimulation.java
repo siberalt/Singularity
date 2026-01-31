@@ -41,6 +41,7 @@ import com.siberalt.singularity.strategy.level.track.LevelsSnapshot;
 import com.siberalt.singularity.strategy.observer.Observer;
 import com.siberalt.singularity.strategy.upside.CompositeFactorUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
+import com.siberalt.singularity.strategy.upside.WindowUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.level.*;
 import com.siberalt.singularity.strategy.upside.volume.MFIUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.volume.VPTUpsideCalculator;
@@ -191,7 +192,7 @@ public class BasicTradeStrategySimulation {
             broker,
             "TMOS",
             account.getId(),
-            upsideCalculator,
+            new WindowUpsideCalculator(upsideCalculator, 10080),
             candleRepository
         );
         strategy.setBuyThreshold(0.4);
