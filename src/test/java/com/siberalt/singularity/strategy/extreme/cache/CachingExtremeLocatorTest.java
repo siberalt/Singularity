@@ -195,7 +195,7 @@ class CachingExtremeLocatorTest {
         Range unitedInnerRange = createInnerRange(1, 4);
         Range unitedOuterRange = createOuterRange(0, 4);
         Range newUnitedOuterRange = createOuterRange(1, 4);
-        Range saveInnerRange = createOuterRange(3, 4);
+        Range saveInnerRange = createInnerRange(3, 4);
 
         List<Candle> cachedExtremes = List.of(
             candleFactory.createCommon("2024-01-01T00:01:00Z", 100),
@@ -221,9 +221,7 @@ class CachingExtremeLocatorTest {
         ), result);
 
         verify(baseLocator, times(1)).locate(candles.subList(3, 5));
-        verify(extremeRepository, times(1)).saveBatch(
-            eq(saveInnerRange), eq(baseLocatorExtremes)
-        );
+        verify(extremeRepository, times(1)).saveBatch(saveInnerRange, baseLocatorExtremes);
     }
 
     @Test
@@ -326,7 +324,7 @@ class CachingExtremeLocatorTest {
         Range rightNeighborInnerRange = createInnerRange(8, 8);
         Range unitedOuterRange = createOuterRange(0, 9);
         Range unitedInnerRange = createInnerRange(1, 8);
-        Range saveExtremesRange = createOuterRange(3, 6);
+        Range saveExtremesRange = createInnerRange(3, 6);
 
         when(rangeRepository.getIntersects(newOuterRange, RangeType.OUTER)).thenReturn(List.of(leftIntersectingOuterRange));
         when(rangeRepository.getIntersects(newOuterRange, RangeType.INNER)).thenReturn(List.of(leftIntersectingInnerRange));

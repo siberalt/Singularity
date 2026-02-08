@@ -11,17 +11,17 @@ import java.util.stream.Collectors;
 
 public class ConcurrentFrameExtremeLocator implements ExtremeLocator {
     public static int DEFAULT_EXTREME_VICINITY = 2;
-    public static int DEFAULT_START_INDEX = 0;
+    public static int DEFAULT_PINNED_INDEX = 0;
     public static int DEFAULT_FRAME_SIZE = 120;
 
     private int extremeVicinity = DEFAULT_EXTREME_VICINITY;
     private int frameSize = DEFAULT_FRAME_SIZE;
     private final ExtremeLocator baseLocator;
     private int threadCount = Runtime.getRuntime().availableProcessors();
-    private long startIndex = DEFAULT_START_INDEX;
+    private long pinnedIndex = DEFAULT_PINNED_INDEX;
 
     public static class Builder {
-        private long startIndex = DEFAULT_START_INDEX;
+        private long startIndex = DEFAULT_PINNED_INDEX;
         private int frameSize = DEFAULT_FRAME_SIZE;
         private final ExtremeLocator baseLocator;
         private int threadCount = Runtime.getRuntime().availableProcessors();
@@ -99,7 +99,7 @@ public class ConcurrentFrameExtremeLocator implements ExtremeLocator {
             throw new IllegalArgumentException("Frame size must be at least twice the extreme vicinity");
         }
 
-        this.startIndex = startIndex;
+        this.pinnedIndex = startIndex;
         this.frameSize = frameSize;
         this.baseLocator = baseLocator;
         this.threadCount = threadCount;
@@ -116,8 +116,8 @@ public class ConcurrentFrameExtremeLocator implements ExtremeLocator {
             return Collections.emptyList();
         }
 
-        long localStartIndex = candles.get(0).getIndex();
-        int listIndexShift = (int) (Math.abs(localStartIndex - startIndex) % frameSize);
+        long startIndex = candles.get(0).getIndex();
+        int listIndexShift = calculateListIndexShift(startIndex, pinnedIndex, frameSize);
         int totalFrames = (candles.size() - listIndexShift) / frameSize;
 
         if (totalFrames <= 0) {
@@ -152,6 +152,7 @@ public class ConcurrentFrameExtremeLocator implements ExtremeLocator {
             }
 
             return filterExtremes(
+                pinnedIndex,
                 extremeList,
                 candles.subList(listIndexShift, totalFrames * frameSize + listIndexShift),
                 executor
@@ -159,10 +160,16 @@ public class ConcurrentFrameExtremeLocator implements ExtremeLocator {
         }
     }
 
+    private int calculateListIndexShift(long startIndex, long pinnedIndex, int frameSize) {
+        int differenceModulo = (int) Math.abs(startIndex - pinnedIndex) % frameSize;
+        return differenceModulo == 0 || startIndex <= pinnedIndex ? differenceModulo : frameSize - differenceModulo;
+    }
+
     /**
      * Фильтрует ложные экстремумы, проверяя их в контексте всего ряда свечей
      */
     private List<Candle> filterExtremes(
+        long pinnedIndex,
         List<Candle> candidateExtremes,
         List<Candle> allCandles,
         ExecutorService executorService
@@ -179,10 +186,8 @@ public class ConcurrentFrameExtremeLocator implements ExtremeLocator {
                 continue;
             }
 
-            long extremeIndex = extreme.getIndex() - startIndex;
-
-            if (!isWithinFrameBounds(extremeIndex, frameSize, extremeVicinity)) {
-                long extremeFrameIndex = calculateFrameIndex(extremeIndex, frameSize);
+            if (!isWithinFrameBounds(extreme.getIndex(), pinnedIndex, frameSize, extremeVicinity)) {
+                long extremeFrameIndex = calculateFrameIndex(extreme.getIndex() - startIndex, frameSize);
                 frameEdgeExtremes
                     .computeIfAbsent(extremeFrameIndex, k -> new HashSet<>())
                     .add(extreme);
@@ -227,9 +232,9 @@ public class ConcurrentFrameExtremeLocator implements ExtremeLocator {
         return extremeIndex - startIndex < extremeVicinity || endIndex - extremeIndex < extremeVicinity;
     }
 
-    private boolean isWithinFrameBounds(long extremeIndex, int frameSize, int overlapSize) {
-        long framePosition = extremeIndex % frameSize;
-        return framePosition >= overlapSize && frameSize - framePosition >= overlapSize;
+    private boolean isWithinFrameBounds(long extremeIndex, long pinnedIndex, int frameSize, int extremeVicinity) {
+        long framePosition = (extremeIndex - pinnedIndex) % frameSize;
+        return framePosition >= extremeVicinity && frameSize - framePosition >= extremeVicinity;
     }
 
     private long calculateFrameIndex(long extremeIndex, int frameSize) {

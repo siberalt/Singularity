@@ -35,6 +35,7 @@ class CvsCandleIterator implements Iterator<Candle> {
             line = initFromLastLine;
             initFromLastLine = null;
         } else {
+            currentIndex++;
             line = scanner.nextLine();
         }
 
@@ -43,7 +44,7 @@ class CvsCandleIterator implements Iterator<Candle> {
             currentTime = Instant.parse(data[1]);
 
             return new Candle()
-                .setIndex(++currentIndex)
+                .setIndex(currentIndex)
                 .setInstrumentUid(instrumentUid == null ? data[0] : instrumentUid)
                 .setTime(currentTime)
                 .setOpenPrice(Quotation.of(data[2]))

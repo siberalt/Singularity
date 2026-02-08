@@ -93,7 +93,7 @@ public class CachingExtremeLocator implements ExtremeLocator {
         }
 
         List<Range> intersectedInnerRanges = rangeRepository.getIntersects(outerRange, RangeType.INNER);
-        List<Range> missingInnerRanges = outerRange.subtract(intersectedInnerRanges);
+        List<Range> missingInnerRanges = outerRange.subtract(intersectedInnerRanges, RangeType.INNER);
 
         List<Range> outerNeighborsRanges = rangeRepository.getNeighbors(outerRange, RangeType.OUTER);
         List<Range> oldOuterRanges = ListUtils.merge(outerIntersectedRanges, outerNeighborsRanges);

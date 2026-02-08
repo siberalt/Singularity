@@ -87,6 +87,10 @@ public record Range(
     }
 
     public List<Range> subtract(List<Range> intersectedRanges) {
+        return subtract(intersectedRanges, this.rangeType);
+    }
+
+    public List<Range> subtract(List<Range> intersectedRanges, RangeType resultRangeType) {
         if (intersectedRanges.isEmpty()) {
             return List.of(this);
         }
@@ -105,7 +109,8 @@ public record Range(
                     currentStart,
                     intersected.fromIndex - 1,
                     this.instrumentId,
-                    this.extremeType
+                    this.extremeType,
+                    resultRangeType
                 ));
             }
             currentStart = Math.max(currentStart, intersected.toIndex + 1);
@@ -116,7 +121,8 @@ public record Range(
                 currentStart,
                 this.toIndex,
                 this.instrumentId,
-                this.extremeType
+                this.extremeType,
+                resultRangeType
             ));
         }
 
