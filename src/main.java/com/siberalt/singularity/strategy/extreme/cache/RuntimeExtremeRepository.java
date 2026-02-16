@@ -10,7 +10,7 @@ public class RuntimeExtremeRepository implements ExtremeRepository {
     private final HashMap<String, TreeMap<Long, Candle>> storage = new HashMap<>();
 
     @Override
-    public void saveBatch(Range range, List<Candle> extremes) {
+    public void saveBatch(ExtremeRange range, List<Candle> extremes) {
         String instrumentId = range.instrumentId();
         String key = generateKey(instrumentId, range.extremeType());
         TreeMap<Long, Candle> instrumentStorage = storage.computeIfAbsent(key, k -> new TreeMap<>());
@@ -21,7 +21,7 @@ public class RuntimeExtremeRepository implements ExtremeRepository {
     }
 
     @Override
-    public Range getInnerRange(Range outerRange) {
+    public ExtremeRange getInnerRange(ExtremeRange outerRange) {
         String instrumentId = outerRange.instrumentId();
         String key = generateKey(instrumentId, outerRange.extremeType());
         TreeMap<Long, Candle> instrumentStorage = storage.get(key);
@@ -37,11 +37,11 @@ public class RuntimeExtremeRepository implements ExtremeRepository {
             return null;
         }
 
-        return new Range(firstKey, lastKey, instrumentId, outerRange.extremeType());
+        return new ExtremeRange(firstKey, lastKey, instrumentId, outerRange.extremeType());
     }
 
     @Override
-    public List<Candle> getByRange(Range range) {
+    public List<Candle> getByRange(ExtremeRange range) {
         String instrumentId = range.instrumentId();
         String key = generateKey(instrumentId, range.extremeType());
         TreeMap<Long, Candle> instrumentStorage = storage.get(key);
@@ -57,8 +57,8 @@ public class RuntimeExtremeRepository implements ExtremeRepository {
     }
 
     @Override
-    public void deleteBatch(List<Range> ranges) {
-        for (Range range : ranges) {
+    public void deleteBatch(List<ExtremeRange> ranges) {
+        for (ExtremeRange range : ranges) {
             String instrumentId = range.instrumentId();
             String key = generateKey(instrumentId, range.extremeType());
             TreeMap<Long, Candle> instrumentStorage = storage.get(key);

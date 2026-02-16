@@ -17,7 +17,7 @@ public interface ExtremeRepository {
      * @param range The range to which the extremes belong.
      * @param extremes The list of extreme candles to be saved.
      */
-    void saveBatch(Range range, List<Candle> extremes);
+    void saveBatch(ExtremeRange range, List<Candle> extremes);
 
     /**
      * Retrieves the inner range that is defined by the first and last extreme indexes
@@ -26,7 +26,7 @@ public interface ExtremeRepository {
      * @param outerRange The outer range within which the inner range is to be determined.
      * @return The inner range defined by the first and last extreme indexes under the outer range.
      */
-    Range getInnerRange(Range outerRange);
+    ExtremeRange getInnerRange(ExtremeRange outerRange);
 
     /**
      * Retrieves a list of candles that fall within the specified range.
@@ -34,12 +34,12 @@ public interface ExtremeRepository {
      * @param range The range for which candles are to be retrieved.
      * @return A list of candles within the specified range.
      */
-    List<Candle> getByRange(Range range);
+    List<Candle> getByRange(ExtremeRange range);
 
     /**
      * Deletes extremes within the specified ranges from the repository.
      *
      * @param ranges A list of ranges whose associated extremes are to be deleted.
      */
-    void deleteBatch(List<Range> ranges);
+    void deleteBatch(List<ExtremeRange> ranges);
 }

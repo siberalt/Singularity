@@ -17,7 +17,7 @@ class CachingExtremeLocatorTest {
     @Test
     void locateReturnsEmptyListWhenNoExtremesFound() {
         ExtremeLocator baseLocator = mock(ExtremeLocator.class);
-        RangeRepository rangeRepository = mock(RangeRepository.class);
+        ExtremeRangeRepository rangeRepository = mock(ExtremeRangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
         CachingExtremeLocator locator = new CachingExtremeLocator(baseLocator, rangeRepository, extremeRepository);
@@ -33,7 +33,7 @@ class CachingExtremeLocatorTest {
             candleFactory.createCommon("2024-01-01T00:07:00Z", 110)
         );
 
-        Range outerRange = createOuterRange(0, 10);
+        ExtremeRange outerRange = createOuterRange(0, 10);
 
         when(rangeRepository.getIntersects(outerRange, RangeType.OUTER)).thenReturn(List.of());
         when(rangeRepository.getNeighbors(outerRange, RangeType.OUTER)).thenReturn(List.of());
@@ -49,7 +49,7 @@ class CachingExtremeLocatorTest {
     @Test
     void locateHandlesEmptyInputCandlesGracefully() {
         ExtremeLocator baseLocator = mock(ExtremeLocator.class);
-        RangeRepository rangeRepository = mock(RangeRepository.class);
+        ExtremeRangeRepository rangeRepository = mock(ExtremeRangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
         CachingExtremeLocator locator = new CachingExtremeLocator(baseLocator, rangeRepository, extremeRepository);
@@ -65,7 +65,7 @@ class CachingExtremeLocatorTest {
     @Test
     void locateCachesExtremesForFullRange() {
         ExtremeLocator baseLocator = mock(ExtremeLocator.class);
-        RangeRepository rangeRepository = mock(RangeRepository.class);
+        ExtremeRangeRepository rangeRepository = mock(ExtremeRangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
         CachingExtremeLocator locator = new CachingExtremeLocator(baseLocator, rangeRepository, extremeRepository);
@@ -78,8 +78,8 @@ class CachingExtremeLocatorTest {
             candleFactory.createCommon("2024-01-01T00:04:00Z", 130)
         );
 
-        Range outerRange = createOuterRange(0, 4);
-        Range innerRange = createInnerRange(2, 4);
+        ExtremeRange outerRange = createOuterRange(0, 4);
+        ExtremeRange innerRange = createInnerRange(2, 4);
         List<Candle> expectedExtremes = List.of(
             candleFactory.createCommon("2024-01-01T00:02:00Z", 120),
             candleFactory.createCommon("2024-01-01T00:04:00Z", 130)
@@ -98,7 +98,7 @@ class CachingExtremeLocatorTest {
     @Test
     void locateExtractsExtremesFullyFromCache() {
         ExtremeLocator baseLocator = mock(ExtremeLocator.class);
-        RangeRepository rangeRepository = mock(RangeRepository.class);
+        ExtremeRangeRepository rangeRepository = mock(ExtremeRangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
         CachingExtremeLocator locator = new CachingExtremeLocator(baseLocator, rangeRepository, extremeRepository);
@@ -111,8 +111,8 @@ class CachingExtremeLocatorTest {
             candleFactory.createCommon("2024-01-01T00:04:00Z", 130)
         );
 
-        Range cachedRange = createOuterRange(0, 10);
-        Range outerRange = createOuterRange(0, 4);
+        ExtremeRange cachedRange = createOuterRange(0, 10);
+        ExtremeRange outerRange = createOuterRange(0, 4);
         List<Candle> cachedExtremes = List.of(
             candleFactory.createCommon("2024-01-01T00:01:00Z", 120),
             candleFactory.createCommon("2024-01-01T00:03:00Z", 90)
@@ -132,7 +132,7 @@ class CachingExtremeLocatorTest {
     @Test
     void locateHandlesNewRangeWithNeighbor() {
         ExtremeLocator baseLocator = mock(ExtremeLocator.class);
-        RangeRepository rangeRepository = mock(RangeRepository.class);
+        ExtremeRangeRepository rangeRepository = mock(ExtremeRangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
         CachingExtremeLocator locator = new CachingExtremeLocator(baseLocator, rangeRepository, extremeRepository);
@@ -145,11 +145,11 @@ class CachingExtremeLocatorTest {
             candleFactory.createCommon("2024-01-01T00:04:00Z", 130)
         );
 
-        Range newOuterRange = createOuterRange(0, 4);
-        Range neighborOuterRange = createOuterRange(5, 9);
-        Range neighborInnerRange = createInnerRange(6, 7);
-        Range unitedOuterRange = createOuterRange(0, 9);
-        Range unitedInnerRange = createInnerRange(2, 7);
+        ExtremeRange newOuterRange = createOuterRange(0, 4);
+        ExtremeRange neighborOuterRange = createOuterRange(5, 9);
+        ExtremeRange neighborInnerRange = createInnerRange(6, 7);
+        ExtremeRange unitedOuterRange = createOuterRange(0, 9);
+        ExtremeRange unitedInnerRange = createInnerRange(2, 7);
 
         List<Candle> newExtremes = List.of(
             Candle.of(Instant.parse("2024-01-01T00:02:00Z"),  120),
@@ -176,7 +176,7 @@ class CachingExtremeLocatorTest {
     @Test
     void locateHandlesCachedExtremesAtRangeStart() {
         ExtremeLocator baseLocator = mock(ExtremeLocator.class);
-        RangeRepository rangeRepository = mock(RangeRepository.class);
+        ExtremeRangeRepository rangeRepository = mock(ExtremeRangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
         CachingExtremeLocator locator = new CachingExtremeLocator(baseLocator, rangeRepository, extremeRepository);
@@ -189,13 +189,13 @@ class CachingExtremeLocatorTest {
             candleFactory.createCommon("2024-01-01T00:04:00Z", 130)
         );
 
-        Range outerRange = createOuterRange(0, 4);
-        Range cachedOuterRange = createOuterRange(0, 3);
-        Range cachedInnerRange = createInnerRange(1, 2);
-        Range unitedInnerRange = createInnerRange(1, 4);
-        Range unitedOuterRange = createOuterRange(0, 4);
-        Range newUnitedOuterRange = createOuterRange(1, 4);
-        Range saveInnerRange = createInnerRange(3, 4);
+        ExtremeRange outerRange = createOuterRange(0, 4);
+        ExtremeRange cachedOuterRange = createOuterRange(0, 3);
+        ExtremeRange cachedInnerRange = createInnerRange(1, 2);
+        ExtremeRange unitedInnerRange = createInnerRange(1, 4);
+        ExtremeRange unitedOuterRange = createOuterRange(0, 4);
+        ExtremeRange newUnitedOuterRange = createOuterRange(1, 4);
+        ExtremeRange saveInnerRange = createInnerRange(3, 4);
 
         List<Candle> cachedExtremes = List.of(
             candleFactory.createCommon("2024-01-01T00:01:00Z", 100),
@@ -227,7 +227,7 @@ class CachingExtremeLocatorTest {
     @Test
     void locateHandlesRangeExceedingMaxLength() {
         ExtremeLocator baseLocator = mock(ExtremeLocator.class);
-        RangeRepository rangeRepository = mock(RangeRepository.class);
+        ExtremeRangeRepository rangeRepository = mock(ExtremeRangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
         CachingExtremeLocator locator = new CachingExtremeLocator(
@@ -258,11 +258,11 @@ class CachingExtremeLocatorTest {
             candleFactory.createCommon("2024-01-01T00:09:00Z", 110)
         );
 
-        Range newOuterRange = createOuterRange(0, 9);
-        Range intersectedOuterRange = createOuterRange(4, 12);
-        Range intersectedInnerRange = createInnerRange(9, 11);
-        Range trimmedInnerRange = createInnerRange(2, 4);
-        Range trimmedOuterRange = createOuterRange(0, 7);
+        ExtremeRange newOuterRange = createOuterRange(0, 9);
+        ExtremeRange intersectedOuterRange = createOuterRange(4, 12);
+        ExtremeRange intersectedInnerRange = createInnerRange(9, 11);
+        ExtremeRange trimmedInnerRange = createInnerRange(2, 4);
+        ExtremeRange trimmedOuterRange = createOuterRange(0, 7);
 
         when(rangeRepository.getIntersects(newOuterRange, RangeType.OUTER)).thenReturn(List.of(intersectedOuterRange));
         when(rangeRepository.getIntersects(newOuterRange, RangeType.INNER)).thenReturn(List.of(intersectedInnerRange));
@@ -283,7 +283,7 @@ class CachingExtremeLocatorTest {
     @Test
     void locateHandlesLeftIntersectAndRightNeighbor() {
         ExtremeLocator baseLocator = mock(ExtremeLocator.class);
-        RangeRepository rangeRepository = mock(RangeRepository.class);
+        ExtremeRangeRepository rangeRepository = mock(ExtremeRangeRepository.class);
         ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
 
         CachingExtremeLocator locator = new CachingExtremeLocator(baseLocator, rangeRepository, extremeRepository);
@@ -317,14 +317,14 @@ class CachingExtremeLocatorTest {
             candleFactory.createCommon("2024-01-01T00:04:00Z", 130)
         );
 
-        Range newOuterRange = createOuterRange(2, 6);
-        Range leftIntersectingOuterRange = createOuterRange(0, 2);
-        Range leftIntersectingInnerRange = createInnerRange(1, 2);
-        Range rightNeighborOuterRange = createOuterRange(7, 9);
-        Range rightNeighborInnerRange = createInnerRange(8, 8);
-        Range unitedOuterRange = createOuterRange(0, 9);
-        Range unitedInnerRange = createInnerRange(1, 8);
-        Range saveExtremesRange = createInnerRange(3, 6);
+        ExtremeRange newOuterRange = createOuterRange(2, 6);
+        ExtremeRange leftIntersectingOuterRange = createOuterRange(0, 2);
+        ExtremeRange leftIntersectingInnerRange = createInnerRange(1, 2);
+        ExtremeRange rightNeighborOuterRange = createOuterRange(7, 9);
+        ExtremeRange rightNeighborInnerRange = createInnerRange(8, 8);
+        ExtremeRange unitedOuterRange = createOuterRange(0, 9);
+        ExtremeRange unitedInnerRange = createInnerRange(1, 8);
+        ExtremeRange saveExtremesRange = createInnerRange(3, 6);
 
         when(rangeRepository.getIntersects(newOuterRange, RangeType.OUTER)).thenReturn(List.of(leftIntersectingOuterRange));
         when(rangeRepository.getIntersects(newOuterRange, RangeType.INNER)).thenReturn(List.of(leftIntersectingInnerRange));
@@ -345,11 +345,11 @@ class CachingExtremeLocatorTest {
         verify(rangeRepository, times(1)).deleteBatch(anyList());
     }
 
-    private Range createOuterRange(int fromIndex, int toIndex) {
-        return new Range(fromIndex, toIndex, "instrument1", "DEFAULT", RangeType.OUTER);
+    private ExtremeRange createOuterRange(int fromIndex, int toIndex) {
+        return new ExtremeRange(fromIndex, toIndex, "instrument1", "DEFAULT", RangeType.OUTER);
     }
 
-    private Range createInnerRange(int fromIndex, int toIndex) {
-        return new Range(fromIndex, toIndex, "instrument1", "DEFAULT", RangeType.INNER);
+    private ExtremeRange createInnerRange(int fromIndex, int toIndex) {
+        return new ExtremeRange(fromIndex, toIndex, "instrument1", "DEFAULT", RangeType.INNER);
     }
 }

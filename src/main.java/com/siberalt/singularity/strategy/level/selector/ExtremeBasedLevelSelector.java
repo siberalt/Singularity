@@ -58,11 +58,11 @@ public class ExtremeBasedLevelSelector implements LevelSelector {
         Candle lastMaximum = maximums.get(maximums.size() - 1);
 
         List<Level<Double>> closestResistanceLevels = resistanceLevels.stream()
-            .filter(level -> isWithinVicinity(level, lastMinimum, minimumVicinity))
+            .filter(level -> isWithinVicinity(level, lastMaximum, maximumVicinity))
             .toList();
 
         List<Level<Double>> closestSupportLevels = supportLevels.stream()
-            .filter(level -> isWithinVicinity(level, lastMaximum, maximumVicinity))
+            .filter(level -> isWithinVicinity(level, lastMinimum, minimumVicinity))
             .toList();
 
         return closestSupportLevels.stream()

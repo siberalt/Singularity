@@ -36,7 +36,7 @@ import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.ClusterLevelDetector;
 import com.siberalt.singularity.strategy.level.selector.*;
-import com.siberalt.singularity.strategy.level.track.LevelDetectorTracker;
+import com.siberalt.singularity.strategy.level.track.LevelDetectorWindowTracker;
 import com.siberalt.singularity.strategy.level.track.LevelsSnapshot;
 import com.siberalt.singularity.strategy.observer.Observer;
 import com.siberalt.singularity.strategy.upside.CompositeFactorUpsideCalculator;
@@ -94,9 +94,9 @@ public class BasicTradeStrategySimulation {
         int tradePeriodCandles = 80;
         ExtremeLocator maximumLocator = createExtremeLocator(tradePeriodCandles, BaseExtremeLocator.createMaxLocator());
         ExtremeLocator minimumLocator = createExtremeLocator(tradePeriodCandles, BaseExtremeLocator.createMinLocator());
-        LevelDetectorTracker supportTracker = createLevelDetector(0.005, minimumLocator);
-        LevelDetectorTracker resistanceTracker = createLevelDetector(0.005, maximumLocator);
-        LevelSelectorTracker selectorTracker = new LevelSelectorTracker(
+        LevelDetectorWindowTracker supportTracker = createLevelDetector(0.005, minimumLocator);
+        LevelDetectorWindowTracker resistanceTracker = createLevelDetector(0.005, maximumLocator);
+        LevelSelectorWindowTracker selectorTracker = new LevelSelectorWindowTracker(
             new ExtremeBasedLevelSelector(minimumLocator, maximumLocator)
         );
         StrategyInterface strategy = createLevelsStrategy(
@@ -178,7 +178,7 @@ public class BasicTradeStrategySimulation {
         Account account,
         LevelDetector supportDetector,
         LevelDetector resistanceDetector,
-        LevelSelectorTracker selectorTracker
+        LevelSelector selectorTracker
     ){
         KeyLevelsUpsideCalculator upsideCalculator = new KeyLevelsUpsideCalculator(
             supportDetector,
@@ -301,10 +301,10 @@ public class BasicTradeStrategySimulation {
         priceChart.render(candles);
     }
 
-    private static LevelDetectorTracker createLevelDetector(double sensitivity, ExtremeLocator baseLocator) {
+    private static LevelDetectorWindowTracker createLevelDetector(double sensitivity, ExtremeLocator baseLocator) {
         ClusterLevelDetector levelDetector = new ClusterLevelDetector(sensitivity, baseLocator);
 
-        return new LevelDetectorTracker(
+        return new LevelDetectorWindowTracker(
 //            LinearLevelDetector.createSupport(
 //                tradePeriodCandles, 0.003
 //            )
@@ -324,7 +324,11 @@ public class BasicTradeStrategySimulation {
         var selectedLevelsProvider = new FunctionGroupSeriesProvider(name + " Selected");
 
         Iterator<Map<String, Level<Double>>> iterator = selectedLevels.stream()
-            .map(levels -> levels.stream().collect(Collectors.toMap(Level::id, level -> level)))
+            .map(
+                levels -> levels.stream().collect(
+                    Collectors.toMap(Level::id, level -> level, (existing, replacement) -> existing)
+                )
+            )
             .iterator();
 
         for (LevelsSnapshot snapshot : levelsSnapshots) {

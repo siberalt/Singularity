@@ -25,8 +25,8 @@ class ExtremeBasedLevelSelectorTest {
         when(minimumLocator.locate(Mockito.anyList())).thenReturn(List.of(lastMinimum));
         when(maximumLocator.locate(Mockito.anyList())).thenReturn(List.of(lastMaximum));
 
-        Level<Double> resistanceLevel = new Level<>(0, 10, index -> 101.0);
-        Level<Double> supportLevel = new Level<>(0, 10, index -> 199.0);
+        Level<Double> resistanceLevel = new Level<>(0, 10, index -> 199.0);
+        Level<Double> supportLevel = new Level<>(0, 10, index -> 101.0);
 
         ExtremeBasedLevelSelector selector = new ExtremeBasedLevelSelector(minimumLocator, maximumLocator);
         selector.setMinimumVicinity(0.02).setMaximumVicinity(0.02);

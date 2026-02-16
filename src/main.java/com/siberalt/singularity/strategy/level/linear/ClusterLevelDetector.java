@@ -17,11 +17,11 @@ import java.util.stream.Collectors;
 
 public class ClusterLevelDetector implements StatefulLevelDetector {
     private static final int MAX_LEVELS = 30;
+    private static final Map<Double, Function<Double, Double>> functionsCache = new TreeMap<>();
 
     private record LevelDetails(Level<Double> level, double price, int touchesCount, List<Candle> extremes) {
     }
 
-    private final Map<Double, Function<Double, Double>> functionsCache = new TreeMap<>();
     private final TreeMap<Double, LevelDetails> levelDetails = new TreeMap<>();
     private final double sensitivity;
     private final ExtremeLocator extremeLocator;
@@ -100,7 +100,7 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
                     .collect(Collectors.toList()))
             );
 
-            Function<Double, Double> function = x -> updatedPrice;
+            Function<Double, Double> function = functionsCache.computeIfAbsent(updatedPrice, p -> x -> p);
             LevelDetails existingDetails = levelDetails.get(entry.getKey());
             Level<Double> updatedLevel = new Level<>(
                 existingDetails.level().timeFrom(),
@@ -128,7 +128,6 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
             );
             levelDetails.remove(entry.getKey());
             levelDetails.put(updatedPrice, newDetails);
-            updateFunctionCache(updatedPrice);
         }
 
         return getCurrentLevels();
@@ -174,11 +173,10 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         Instant time = candle.getTime();
         long index = candle.getIndex();
 
-        Function<Double, Double> function = x -> price;
+        Function<Double, Double> function = functionsCache.computeIfAbsent(price, p -> x -> p);
         Level<Double> newLevel = new Level<>(time, time, index, index, function, 0);
 
         levelDetails.put(price, new LevelDetails(newLevel, price, 1, new ArrayList<>(List.of(candle))));
-        functionsCache.put(price, function);
     }
 
     private boolean isSignificantLevel(LevelDetails levelDetails) {
@@ -187,10 +185,6 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         // 2. Имеет достаточную силу И
         // 3. Временной диапазон достаточно большой
         return levelDetails.touchesCount() > 1;
-    }
-
-    private void updateFunctionCache(double price) {
-        functionsCache.computeIfAbsent(price, p -> x -> p);
     }
 
     /**
@@ -249,31 +243,5 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         levelDetails.clear();
         functionsCache.clear();
         priceVolatility = 0.0;
-    }
-
-    public static ClusterLevelDetector createSupport(
-        int frameSize,
-        double sensitivity
-    ) {
-        return new ClusterLevelDetector(
-            sensitivity,
-            ConcurrentFrameExtremeLocator.builder(BaseExtremeLocator.createMinLocator(Candle::getTypicalPriceAsDouble))
-                .setFrameSize(frameSize)
-                .setExtremeVicinity(15)
-                .build()
-        );
-    }
-
-    public static ClusterLevelDetector createResistance(
-        int frameSize,
-        double sensitivity
-    ) {
-        return new ClusterLevelDetector(
-            sensitivity,
-            ConcurrentFrameExtremeLocator.builder(BaseExtremeLocator.createMaxLocator(Candle::getTypicalPriceAsDouble))
-                .setFrameSize(frameSize)
-                .setExtremeVicinity(15)
-                .build()
-        );
     }
 }
