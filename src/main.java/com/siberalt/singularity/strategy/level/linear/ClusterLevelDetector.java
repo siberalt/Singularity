@@ -3,8 +3,6 @@ package com.siberalt.singularity.strategy.level.linear;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.math.median.MedianCalculator;
 import com.siberalt.singularity.math.median.RobustMedianCalculator;
-import com.siberalt.singularity.strategy.extreme.BaseExtremeLocator;
-import com.siberalt.singularity.strategy.extreme.ConcurrentFrameExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.StatefulLevelDetector;
@@ -17,9 +15,9 @@ import java.util.stream.Collectors;
 
 public class ClusterLevelDetector implements StatefulLevelDetector {
     private static final int MAX_LEVELS = 30;
-    private static final Map<Double, Function<Double, Double>> functionsCache = new TreeMap<>();
+    private static final Map<Double, Function<Double, Double>> functionsCache = new WeakHashMap<>();
 
-    private record LevelDetails(Level<Double> level, double price, int touchesCount, List<Candle> extremes) {
+    private record LevelDetails(Level<Double> level, double price, int touchesCount, Set<Candle> extremes) {
     }
 
     private final TreeMap<Double, LevelDetails> levelDetails = new TreeMap<>();
@@ -86,7 +84,7 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         }
 
         for (Map.Entry<Double, List<Candle>> entry : levelsNewExtremes.entrySet()) {
-            List<Candle> levelExtremes = levelDetails.get(entry.getKey()).extremes();
+            Set<Candle> levelExtremes = levelDetails.get(entry.getKey()).extremes();
             List<Candle> newLevelExtremes = entry.getValue();
             levelExtremes.addAll(newLevelExtremes);
 
@@ -176,7 +174,7 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         Function<Double, Double> function = functionsCache.computeIfAbsent(price, p -> x -> p);
         Level<Double> newLevel = new Level<>(time, time, index, index, function, 0);
 
-        levelDetails.put(price, new LevelDetails(newLevel, price, 1, new ArrayList<>(List.of(candle))));
+        levelDetails.put(price, new LevelDetails(newLevel, price, 1, new HashSet<>(List.of(candle))));
     }
 
     private boolean isSignificantLevel(LevelDetails levelDetails) {

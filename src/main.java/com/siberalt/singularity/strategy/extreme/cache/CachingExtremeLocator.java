@@ -1,7 +1,7 @@
 package com.siberalt.singularity.strategy.extreme.cache;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.shared.Range;
+import com.siberalt.singularity.shared.RangeLong;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.utils.ListUtils;
 
@@ -154,7 +154,7 @@ public class CachingExtremeLocator implements ExtremeLocator {
         long startIndex = candles.get(0).getIndex();
 
         for (ExtremeRange rangeToCache : rangesToCache) {
-            Range range = rangeToCache.range();
+            RangeLong range = rangeToCache.range();
             List<Candle> missingCandles = candles.subList(
                 (int) (range.fromIndex() - startIndex),
                 (int) (range.toIndex() - startIndex + 1)

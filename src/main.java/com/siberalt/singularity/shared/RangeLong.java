@@ -3,35 +3,33 @@ package com.siberalt.singularity.shared;
 import java.util.ArrayList;
 import java.util.List;
 
-public record Range(long fromIndex, long toIndex) {
+public record RangeLong(long fromIndex, long toIndex) {
+    public RangeLong {
+        if (fromIndex > toIndex) {
+            throw new IllegalArgumentException("fromIndex cannot be greater than toIndex");
+        }
+    }
+
     public long length() {
         return toIndex - fromIndex + 1;
     }
 
-    public long getFromIndex() {
-        return fromIndex;
-    }
-
-    public long getToIndex() {
-        return toIndex;
-    }
-
-    public boolean isOverlapping(Range other) {
+    public boolean isOverlapping(RangeLong other) {
         return this.fromIndex <= other.toIndex && this.toIndex >= other.fromIndex;
     }
 
-    public boolean isSubsetOf(Range other) {
+    public boolean isSubsetOf(RangeLong other) {
         return this.fromIndex >= other.fromIndex && this.toIndex <= other.toIndex;
     }
 
-    public boolean isEdgeSubsetOf(Range other) {
+    public boolean isEdgeSubsetOf(RangeLong other) {
         if (!this.isSubsetOf(other)) {
             return false;
         }
         return this.fromIndex == other.fromIndex || this.toIndex == other.toIndex;
     }
 
-    public Range subtract(Range intersectedRange) {
+    public RangeLong subtract(RangeLong intersectedRange) {
         if (!this.isOverlapping(intersectedRange)) {
             return this; // No overlap, return the original range
         }
@@ -52,25 +50,25 @@ public record Range(long fromIndex, long toIndex) {
             throw new IllegalArgumentException("Invalid range after subtraction: fromIndex=" + newFromIndex + ", toIndex=" + newToIndex);
         }
 
-        return new Range(newFromIndex, newToIndex);
+        return new RangeLong(newFromIndex, newToIndex);
     }
 
-    public List<Range> subtract(List<Range> intersectedRanges) {
+    public List<RangeLong> subtract(List<RangeLong> intersectedRanges) {
         if (intersectedRanges.isEmpty()) {
             return List.of(this);
         }
 
-        List<Range> result = new ArrayList<>();
+        List<RangeLong> result = new ArrayList<>();
         long currentStart = this.fromIndex;
 
         // Filter intersectedRanges to include only those that overlap with the current range
-        List<Range> validIntersectedRanges = intersectedRanges.stream()
+        List<RangeLong> validIntersectedRanges = intersectedRanges.stream()
             .filter(this::isOverlapping)
             .toList();
 
-        for (Range intersected : validIntersectedRanges) {
+        for (RangeLong intersected : validIntersectedRanges) {
             if (intersected.fromIndex > currentStart) {
-                result.add(new Range(
+                result.add(new RangeLong(
                     currentStart,
                     intersected.fromIndex - 1
                 ));
@@ -79,7 +77,7 @@ public record Range(long fromIndex, long toIndex) {
         }
 
         if (currentStart <= this.toIndex) {
-            result.add(new Range(
+            result.add(new RangeLong(
                 currentStart,
                 this.toIndex
             ));
@@ -88,18 +86,18 @@ public record Range(long fromIndex, long toIndex) {
         return result;
     }
 
-    public static Range average(List<Range> ranges) {
+    public static RangeLong average(List<RangeLong> ranges) {
         if (ranges.isEmpty()) {
             throw new IllegalArgumentException("Cannot average empty range list");
         }
 
-        long fromIndex = Math.round(ranges.stream().mapToLong(Range::fromIndex).average().orElseThrow());
-        long toIndex = Math.round(ranges.stream().mapToLong(Range::toIndex).average().orElseThrow());
+        long fromIndex = Math.round(ranges.stream().mapToLong(RangeLong::fromIndex).average().orElseThrow());
+        long toIndex = Math.round(ranges.stream().mapToLong(RangeLong::toIndex).average().orElseThrow());
 
-        return new Range(fromIndex, toIndex);
+        return new RangeLong(fromIndex, toIndex);
     }
 
-    public Range intersection(Range other) {
+    public RangeLong intersection(RangeLong other) {
         if (!this.isOverlapping(other)) {
             return null; // No intersection
         }
@@ -107,17 +105,17 @@ public record Range(long fromIndex, long toIndex) {
         long intersectFromIndex = Math.max(this.fromIndex(), other.fromIndex());
         long intersectToIndex = Math.min(this.toIndex(), other.toIndex());
 
-        return new Range(intersectFromIndex, intersectToIndex);
+        return new RangeLong(intersectFromIndex, intersectToIndex);
     }
 
-    public static Range unite(List<Range> ranges) {
+    public static RangeLong unite(List<RangeLong> ranges) {
         if (ranges.isEmpty()) {
             throw new IllegalArgumentException("Cannot unite empty range list");
         }
 
-        long fromIndex = ranges.stream().mapToLong(Range::fromIndex).min().orElseThrow();
-        long toIndex = ranges.stream().mapToLong(Range::toIndex).max().orElseThrow();
+        long fromIndex = ranges.stream().mapToLong(RangeLong::fromIndex).min().orElseThrow();
+        long toIndex = ranges.stream().mapToLong(RangeLong::toIndex).max().orElseThrow();
 
-        return new Range(fromIndex, toIndex);
+        return new RangeLong(fromIndex, toIndex);
     }
 }

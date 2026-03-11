@@ -7,7 +7,8 @@ import com.siberalt.singularity.presenter.google.series.PointSeriesProvider;
 import com.siberalt.singularity.strategy.extreme.BaseExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.ConcurrentFrameExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
-import com.siberalt.singularity.strategy.level.linear.ClusterLevelDetector;
+import com.siberalt.singularity.strategy.level.LevelDetector;
+import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetector;
 
 import java.time.Instant;
 import java.util.List;
@@ -23,14 +24,16 @@ public class ClusterLevelDetectorSimulation {
             "src/test/resources/entity.candle.cvs/TMOS"
         );
         List<Candle> candles = candleRepository.getPeriod("TMOS", startTime, endTime);
-        ConcurrentFrameExtremeLocator minExtremeLocator = new ConcurrentFrameExtremeLocator(
-            120,
-            BaseExtremeLocator.createMinLocator(Candle::getTypicalPriceAsDouble)
-        );
-        ConcurrentFrameExtremeLocator maxExtremeLocator = new ConcurrentFrameExtremeLocator(
-            120,
-            BaseExtremeLocator.createMaxLocator(Candle::getTypicalPriceAsDouble)
-        );
+        ConcurrentFrameExtremeLocator minExtremeLocator = ConcurrentFrameExtremeLocator
+            .builder(BaseExtremeLocator.createMinLocator(Candle::getTypicalPriceAsDouble))
+            .setFrameSize(70)
+            .setExtremeVicinity(30)
+            .build();
+        ConcurrentFrameExtremeLocator maxExtremeLocator = ConcurrentFrameExtremeLocator
+            .builder(BaseExtremeLocator.createMaxLocator(Candle::getTypicalPriceAsDouble))
+            .setFrameSize(70)
+            .setExtremeVicinity(30)
+            .build();
         PointSeriesProvider minPoints = new PointSeriesProvider("Minima");
         minPoints.setColor("#00FF00");
         minPoints.setSize(5);
@@ -57,8 +60,8 @@ public class ClusterLevelDetectorSimulation {
             "TMOS",
             Candle::getTypicalPriceAsDouble
         );
-        ClusterLevelDetector supportDetector = new ClusterLevelDetector(0.005, minExtremeLocator);
-        ClusterLevelDetector resistanceDetector = new ClusterLevelDetector(0.005, maxExtremeLocator);
+        LevelDetector supportDetector = StatelessClusterLevelDetector.createDefault(0.005, minExtremeLocator);
+        LevelDetector resistanceDetector = StatelessClusterLevelDetector.createDefault(0.005, maxExtremeLocator);
         var supportLevels = supportDetector.detect(candles);
         var resistanceLevels = resistanceDetector.detect(candles);
         addLevelsToChart(priceChart, "Support Levels", supportLevels, "#00FFFA");

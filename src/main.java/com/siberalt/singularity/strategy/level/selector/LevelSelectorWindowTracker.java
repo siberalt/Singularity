@@ -1,7 +1,7 @@
 package com.siberalt.singularity.strategy.level.selector;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.shared.Range;
+import com.siberalt.singularity.shared.RangeLong;
 import com.siberalt.singularity.strategy.level.Level;
 
 import java.time.Instant;
@@ -11,7 +11,7 @@ import java.util.List;
 public class LevelSelectorWindowTracker implements LevelSelector {
     private final LevelSelector baseSelector;
     private final List<LevelPairsSnapshot> trackedLevelPairs = new ArrayList<>();
-    private Range previousRange;
+    private RangeLong previousRange;
 
     public LevelSelectorWindowTracker(LevelSelector baseSelector) {
         this.baseSelector = baseSelector;
@@ -29,18 +29,18 @@ public class LevelSelectorWindowTracker implements LevelSelector {
             return levelPairs; // No candles, nothing to track
         }
 
-        Range newRange = new Range(
+        RangeLong newRange = new RangeLong(
             recentCandles.get(0).getIndex(),
             recentCandles.get(recentCandles.size() - 1).getIndex()
         );
-        Range untrackedRange = null != previousRange ? newRange.subtract(previousRange) : newRange;
+        RangeLong untrackedRange = null != previousRange ? newRange.subtract(previousRange) : newRange;
 
         if (null == untrackedRange) {
             return levelPairs;// No new candles, nothing to track
         }
 
-        long fromIndex = untrackedRange.getFromIndex();
-        long toIndex = untrackedRange.getToIndex();
+        long fromIndex = untrackedRange.fromIndex();
+        long toIndex = untrackedRange.toIndex();
         Instant timeFrom = recentCandles.get((int) (fromIndex - newRange.fromIndex())).getTime();
         Instant timeTo = recentCandles.get((int) (toIndex - newRange.fromIndex())).getTime();
 

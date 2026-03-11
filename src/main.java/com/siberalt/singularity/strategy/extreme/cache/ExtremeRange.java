@@ -1,18 +1,18 @@
 package com.siberalt.singularity.strategy.extreme.cache;
 
-import com.siberalt.singularity.shared.Range;
+import com.siberalt.singularity.shared.RangeLong;
 
 import java.util.List;
 
 public record ExtremeRange(
     String id,
-    Range range,
+    RangeLong range,
     String instrumentId,
     String extremeType,
     RangeType rangeType
 ) {
 
-    ExtremeRange(Range range, String instrumentId, String extremeType, RangeType rangeType) {
+    ExtremeRange(RangeLong range, String instrumentId, String extremeType, RangeType rangeType) {
         this(
             generateId(instrumentId, extremeType, range.fromIndex(), range.toIndex()),
             range,
@@ -25,7 +25,7 @@ public record ExtremeRange(
     ExtremeRange(String id, long fromIndex, long toIndex, String instrumentId, String extremeType, RangeType rangeType) {
         this(
             id,
-            new Range(fromIndex, toIndex),
+            new RangeLong(fromIndex, toIndex),
             instrumentId,
             extremeType,
             rangeType
@@ -109,7 +109,7 @@ public record ExtremeRange(
             return this; // Cannot subtract non-homogeneous ranges, return the original range
         }
 
-        Range newRange = this.range().subtract(intersectedRange.range());
+        RangeLong newRange = this.range().subtract(intersectedRange.range());
 
         if (newRange == null) {
             return null; // No valid range after subtraction
@@ -147,7 +147,7 @@ public record ExtremeRange(
     }
 
     public static ExtremeRange average(List<ExtremeRange> ranges, RangeType resultRangeType) {
-        Range averageRange = Range.average(ranges.stream().map(ExtremeRange::range).toList());
+        RangeLong averageRange = RangeLong.average(ranges.stream().map(ExtremeRange::range).toList());
 
         String instrumentId = ranges.get(0).instrumentId();
         String extremeType = ranges.get(0).extremeType();
@@ -160,7 +160,7 @@ public record ExtremeRange(
     }
 
     public static ExtremeRange unite(List<ExtremeRange> extremeRanges, RangeType resultRangeType) {
-        Range unitedRange = Range.unite(extremeRanges.stream().map(ExtremeRange::range).toList());
+        RangeLong unitedRange = RangeLong.unite(extremeRanges.stream().map(ExtremeRange::range).toList());
 
         String instrumentId = extremeRanges.get(0).instrumentId();
         String extremeType = extremeRanges.get(0).extremeType();
