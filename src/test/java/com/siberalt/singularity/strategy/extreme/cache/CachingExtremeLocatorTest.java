@@ -234,17 +234,6 @@ class CachingExtremeLocatorTest {
             baseLocator, rangeRepository, extremeRepository, "DEFAULT", 8
         );
 
-        List<Candle> baseLocatorCandles = List.of(
-            candleFactory.createCommon("2024-01-01T00:00:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:01:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:02:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:03:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:04:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:05:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:06:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:07:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:08:00Z", 110)
-        );
         List<Candle> candles = List.of(
             candleFactory.createCommon("2024-01-01T00:00:00Z", 110),
             candleFactory.createCommon("2024-01-01T00:01:00Z", 110),
@@ -257,6 +246,7 @@ class CachingExtremeLocatorTest {
             candleFactory.createCommon("2024-01-01T00:08:00Z", 110),
             candleFactory.createCommon("2024-01-01T00:09:00Z", 110)
         );
+        List<Candle> baseLocatorCandles = candles.subList(0, 9);
 
         ExtremeRange newOuterRange = createOuterRange(0, 9);
         ExtremeRange intersectedOuterRange = createOuterRange(4, 12);
@@ -269,10 +259,7 @@ class CachingExtremeLocatorTest {
         when(rangeRepository.getSubsets(trimmedOuterRange, RangeType.INNER)).thenReturn(List.of(intersectedInnerRange));
         when(extremeRepository.getInnerRange(trimmedOuterRange)).thenReturn(trimmedInnerRange);
 
-        List<Candle> baseLocatorExtremes = List.of(
-            Candle.of(Instant.parse("2024-01-01T00:02:00Z"), "instrument1", 100, 110),
-            Candle.of(Instant.parse("2024-01-01T00:04:00Z"), "instrument1", 100, 110)
-        );
+        List<Candle> baseLocatorExtremes = List.of(candles.get(2), candles.get(4));
         when(baseLocator.locate(baseLocatorCandles)).thenReturn(baseLocatorExtremes);
         locator.locate(candles);
 

@@ -118,10 +118,8 @@ class StatelessClusterLevelDetectorTest {
                 .reduce(0.0, (sum, candle) -> sum + candle.getTypicalPriceAsDouble(), Double::sum) / extremes.size();
             levels.add(
                 new Level<>(
-                    extremes.first().getTime(),
-                    extremes.last().getTime(),
-                    extremes.first().getIndex(),
-                    extremes.last().getIndex(),
+                    extremes.first().getTimePoint(),
+                    extremes.last().getTimePoint(),
                     StatelessClusterLevelDetector.createFunction(price),
                     0.0
                 )

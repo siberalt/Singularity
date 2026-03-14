@@ -5,44 +5,38 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
-import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Stream;
 
 public class Candle {
     public static final long DEFAULT_INDEX = -1;
 
     private String instrumentUid;
-    private Instant time;
+    private TimePoint timePoint;
     private Quotation openPrice;
     private Quotation closePrice;
     private Quotation highPrice;
     private Quotation lowPrice;
     private long volume;
-    private long index;
 
     public Candle() {
     }
 
     public Candle(
         String instrumentUid,
-        Instant time,
+        TimePoint timePoint,
         Quotation openPrice,
         Quotation closePrice,
         Quotation highPrice,
         Quotation lowPrice,
-        long volume,
-        long index
+        long volume
     ) {
         this.instrumentUid = instrumentUid;
-        this.time = time;
+        this.timePoint = timePoint;
         this.openPrice = openPrice;
         this.closePrice = closePrice;
         this.highPrice = highPrice;
         this.lowPrice = lowPrice;
         this.volume = volume;
-        this.index = index;
     }
 
     @Override
@@ -52,7 +46,7 @@ public class Candle {
         Candle candle = (Candle) o;
         return volume == candle.volume &&
             Objects.equals(instrumentUid, candle.instrumentUid) &&
-            Objects.equals(time, candle.time) &&
+            Objects.equals(timePoint, candle.timePoint) &&
             Objects.equals(openPrice, candle.openPrice) &&
             Objects.equals(closePrice, candle.closePrice) &&
             Objects.equals(highPrice, candle.highPrice) &&
@@ -63,7 +57,7 @@ public class Candle {
     public int hashCode() {
         return Objects.hash(
             instrumentUid,
-            time.toString(),
+            timePoint.toString(),
             openPrice.toString(),
             closePrice.toString(),
             highPrice.toString(),
@@ -73,11 +67,11 @@ public class Candle {
     }
 
     public long getIndex() {
-        return index;
+        return timePoint.index();
     }
 
     public Candle setIndex(long index) {
-        this.index = index;
+        timePoint = (timePoint == null) ? new TimePoint(index, null) : new TimePoint(index, timePoint.time());
         return this;
     }
 
@@ -91,11 +85,11 @@ public class Candle {
     }
 
     public Instant getTime() {
-        return time;
+        return timePoint.time();
     }
 
     public Candle setTime(Instant time) {
-        this.time = time;
+        timePoint = (timePoint == null) ? new TimePoint(DEFAULT_INDEX, time) : new TimePoint(timePoint.index(), time);
         return this;
     }
 
@@ -161,11 +155,20 @@ public class Candle {
         return this;
     }
 
+    public TimePoint getTimePoint() {
+        return timePoint;
+    }
+
+    public Candle setTimePoint(TimePoint timePoint) {
+        this.timePoint = timePoint;
+        return this;
+    }
+
     @Override
     public Candle clone() {
         return new Candle()
             .setInstrumentUid(instrumentUid)
-            .setTime(time)
+            .setTimePoint(timePoint)
             .setOpenPrice(openPrice)
             .setClosePrice(closePrice)
             .setHighPrice(highPrice)
@@ -175,66 +178,6 @@ public class Candle {
 
     public boolean isEmpty() {
         return openPrice == null && closePrice == null && highPrice == null && lowPrice == null && volume == 0;
-    }
-
-    public Candle add(Candle other) {
-        if (other == null) {
-            return this;
-        }
-        return new Candle()
-            .setInstrumentUid(instrumentUid)
-            .setTime(time)
-            .setOpenPrice(openPrice.add(other.openPrice))
-            .setClosePrice(closePrice.add(other.closePrice))
-            .setHighPrice(highPrice.add(other.highPrice))
-            .setLowPrice(lowPrice.add(other.lowPrice))
-            .setVolume(volume + other.volume);
-    }
-
-    public Candle divide(int divisor) {
-        if (divisor <= 0) {
-            throw new IllegalArgumentException("Divisor must be greater than zero");
-        }
-        return new Candle()
-            .setInstrumentUid(instrumentUid)
-            .setTime(time)
-            .setOpenPrice(openPrice.divide(divisor))
-            .setClosePrice(closePrice.divide(divisor))
-            .setHighPrice(highPrice.divide(divisor))
-            .setLowPrice(lowPrice.divide(divisor))
-            .setVolume(volume / divisor);
-    }
-
-    /**
-     * Calculates the average price of the candle using the formula:
-     * (lowPrice + highPrice + closePrice + openPrice) / 4
-     *
-     * @return The average price as a Quotation.
-     */
-    public Quotation getAveragePrice() {
-        return getAveragePrice(RoundingMode.HALF_EVEN);
-    }
-
-    public Quotation getAveragePrice(RoundingMode roundingMode) {
-        var sum = Stream.of(lowPrice, highPrice, closePrice, openPrice)
-            .map(Objects::requireNonNull)
-            .map(Quotation::toBigDecimal)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return Quotation.of(sum.divide(BigDecimal.valueOf(4), roundingMode));
-    }
-
-    public static Candle of(Instant time, long volume, Quotation open, Quotation high, Quotation low, Quotation close) {
-        return new Candle()
-            .setTime(time)
-            .setVolume(volume)
-            .setOpenPrice(open)
-            .setHighPrice(high)
-            .setLowPrice(low)
-            .setClosePrice(close);
-    }
-
-    public static Candle of(Instant time, String instrumentUid, double repeatedValue) {
-        return Candle.of(time, instrumentUid, 0, repeatedValue, repeatedValue, repeatedValue, repeatedValue);
     }
 
     public static Candle of(Instant time, String instrumentUid, long volume, double repeatedValue) {
@@ -247,6 +190,31 @@ public class Candle {
 
     public static Candle of(Instant time, double repeatedValue) {
         return Candle.of(time, 0, repeatedValue, repeatedValue, repeatedValue, repeatedValue);
+    }
+
+    public static Candle of(TimePoint timePoint, double repeatedValue) {
+        return Candle.of(timePoint, 0L, repeatedValue, repeatedValue, repeatedValue, repeatedValue);
+    }
+
+    public static Candle of(TimePoint timePoint, String instrumentUid, long volume, double open, double high, double low, double close) {
+        return new Candle()
+            .setInstrumentUid(instrumentUid)
+            .setTimePoint(timePoint)
+            .setVolume(volume)
+            .setOpenPrice(Quotation.of(open))
+            .setHighPrice(Quotation.of(high))
+            .setLowPrice(Quotation.of(low))
+            .setClosePrice(Quotation.of(close));
+    }
+
+    public static Candle of(TimePoint timePoint, long volume, double open, double high, double low, double close) {
+        return new Candle()
+            .setTimePoint(timePoint)
+            .setVolume(volume)
+            .setOpenPrice(Quotation.of(open))
+            .setHighPrice(Quotation.of(high))
+            .setLowPrice(Quotation.of(low))
+            .setClosePrice(Quotation.of(close));
     }
 
     public static Candle of(Instant time, String instrumentUid, long volume, double open, double high, double low, double close) {

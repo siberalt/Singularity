@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.level.linear;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.math.median.RobustMedianCalculator;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
@@ -60,22 +61,20 @@ public class StatelessClusterLevelDetector implements LevelDetector {
             Candle lastExtreme = clusterExtremes.last();
 
             Function<Double, Double> function = createFunction(cluster.price());
+            TimePoint pointFrom = new TimePoint(firstExtreme.getIndex(), firstExtreme.getTime());
+            TimePoint pointTo = new TimePoint(lastExtreme.getIndex(), lastExtreme.getTime());
 
             StrengthCalculator.LevelContext context = new StrengthCalculator.LevelContext(
-                firstExtreme.getTime(),
-                lastExtreme.getTime(),
-                firstExtreme.getIndex(),
-                lastExtreme.getIndex(),
+                pointFrom,
+                pointTo,
                 function,
                 0.0, // Временная заглушка для силы, будет пересчитано ниже
                 cluster.size()
             );
 
             Level<Double> updatedLevel = new Level<>(
-                firstExtreme.getTime(),
-                lastExtreme.getTime(),
-                firstExtreme.getIndex(),
-                lastExtreme.getIndex(),
+                pointFrom,
+                pointTo,
                 function,
                 strengthCalculator.calculate(context)
             );

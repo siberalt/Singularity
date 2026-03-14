@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.upside.level;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.upside.Upside;
 import org.junit.jupiter.api.Test;
@@ -94,6 +95,6 @@ public class BasicLevelBasedUpsideCalculatorTest {
     }
 
     private Level<Double> createLevel(double price, double strength, long indexTo) {
-        return new Level<>(null, null, 0L, indexTo, x -> price, strength);
+        return new Level<>(new TimePoint(0L), new TimePoint(indexTo), x -> price, strength);
     }
 }

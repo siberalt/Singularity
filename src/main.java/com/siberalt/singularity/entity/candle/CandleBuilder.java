@@ -57,12 +57,11 @@ public class CandleBuilder {
     public Candle build() {
         return new Candle()
             .setInstrumentUid(instrumentUid)
-            .setTime(time)
+            .setTimePoint(new TimePoint(index, time))
             .setOpenPrice(openPrice)
             .setClosePrice(closePrice)
             .setHighPrice(highPrice)
             .setLowPrice(lowPrice)
-            .setVolume(volume)
-            .setIndex(index);
+            .setVolume(volume);
     }
 }

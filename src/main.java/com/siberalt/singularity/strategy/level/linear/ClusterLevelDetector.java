@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.level.linear;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.math.median.MedianCalculator;
 import com.siberalt.singularity.math.median.RobustMedianCalculator;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
@@ -100,18 +101,19 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
 
             Function<Double, Double> function = functionsCache.computeIfAbsent(updatedPrice, p -> x -> p);
             LevelDetails existingDetails = levelDetails.get(entry.getKey());
+            TimePoint timePointFrom = new TimePoint(
+                existingDetails.level().indexFrom(), existingDetails.level().timeFrom()
+            );
+            TimePoint timePointTo = new TimePoint(indexTo, timeTo);
+
             Level<Double> updatedLevel = new Level<>(
-                existingDetails.level().timeFrom(),
-                timeTo,
-                existingDetails.level().indexFrom(),
-                indexTo,
+                timePointFrom,
+                timePointTo,
                 function,
                 recalculateStrength(
                     new Level<>(
-                        existingDetails.level().timeFrom(),
-                        timeTo,
-                        existingDetails.level().indexFrom(),
-                        indexTo,
+                        timePointFrom,
+                        timePointTo,
                         function,
                         existingDetails.level().strength()
                     ),
@@ -155,10 +157,8 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
 
     private double recalculateStrength(Level<Double> updatedLevel, int touchesCount) {
         StrengthCalculator.LevelContext context = new StrengthCalculator.LevelContext(
-            updatedLevel.timeFrom(),
-            updatedLevel.timeTo(),
-            updatedLevel.indexFrom(),
-            updatedLevel.indexTo(),
+            updatedLevel.pointFrom(),
+            updatedLevel.pointTo(),
             updatedLevel.function(),
             updatedLevel.strength(),
             touchesCount
@@ -172,7 +172,8 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         long index = candle.getIndex();
 
         Function<Double, Double> function = functionsCache.computeIfAbsent(price, p -> x -> p);
-        Level<Double> newLevel = new Level<>(time, time, index, index, function, 0);
+        TimePoint timePoint = new TimePoint(index, time);
+        Level<Double> newLevel = new Level<>(timePoint, timePoint, function, 0);
 
         levelDetails.put(price, new LevelDetails(newLevel, price, 1, new HashSet<>(List.of(candle))));
     }

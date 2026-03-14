@@ -2,6 +2,7 @@ package com.siberalt.singularity.entity.candle.cvs;
 
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.TimePoint;
 
 import java.io.InputStream;
 import java.time.Instant;
@@ -44,9 +45,8 @@ class CvsCandleIterator implements Iterator<Candle> {
             currentTime = Instant.parse(data[1]);
 
             return new Candle()
-                .setIndex(currentIndex)
                 .setInstrumentUid(instrumentUid == null ? data[0] : instrumentUid)
-                .setTime(currentTime)
+                .setTimePoint(new TimePoint(currentIndex, currentTime))
                 .setOpenPrice(Quotation.of(data[2]))
                 .setClosePrice(Quotation.of(data[3]))
                 .setHighPrice(Quotation.of(data[4]))

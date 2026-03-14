@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.upside.level;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.upside.Upside;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
@@ -21,9 +22,10 @@ class AdaptiveUpsideCalculatorTest {
         UpsideCalculator volumeCalculator = Mockito.mock(UpsideCalculator.class);
 
         AdaptiveUpsideCalculator calculator = new AdaptiveUpsideCalculator(levelsCalculator, volumeCalculator);
+        TimePoint timePoint = new TimePoint(0);
 
-        Level<Double> resistance = new Level<>(null, null, 0, 0, x -> 100.0, 0.0);
-        Level<Double> support = new Level<>(null, null, 0, 0, x -> 90.0, 0.0);
+        Level<Double> resistance = new Level<>(timePoint, timePoint, x -> 100.0, 0.0);
+        Level<Double> support = new Level<>(timePoint, timePoint, x -> 90.0, 0.0);
         List<Candle> recentCandles = List.of(
             Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 60, 95.0)
         );
@@ -45,9 +47,10 @@ class AdaptiveUpsideCalculatorTest {
         UpsideCalculator volumeCalculator = Mockito.mock(UpsideCalculator.class);
 
         AdaptiveUpsideCalculator calculator = new AdaptiveUpsideCalculator(levelsCalculator, volumeCalculator);
+        TimePoint timePoint = new TimePoint(0);
 
-        Level<Double> resistance = new Level<>(null, null, 0, 0, x -> 100.0, 0.0);
-        Level<Double> support = new Level<>(null, null, 0, 0, x -> 90.0, 0.0);
+        Level<Double> resistance = new Level<>(timePoint, timePoint, x -> 100.0, 0.0);
+        Level<Double> support = new Level<>(timePoint, timePoint, x -> 90.0, 0.0);
         List<Candle> recentCandles = List.of(
             Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 60, 100.5)
         );
@@ -69,9 +72,10 @@ class AdaptiveUpsideCalculatorTest {
         UpsideCalculator volumeCalculator = Mockito.mock(UpsideCalculator.class);
 
         AdaptiveUpsideCalculator calculator = new AdaptiveUpsideCalculator(levelsCalculator, volumeCalculator);
+        TimePoint timePoint = new TimePoint(0);
 
-        Level<Double> resistance = new Level<>(null, null, 0, 0, x -> 100.0, 0.0);
-        Level<Double> support = new Level<>(null, null, 0, 0, x -> 90.0, 0.0);
+        Level<Double> resistance = new Level<>(timePoint, timePoint, x -> 100.0, 0.0);
+        Level<Double> support = new Level<>(timePoint, timePoint, x -> 90.0, 0.0);
         List<Candle> recentCandles = List.of(
             Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 60, 95.0)
         );

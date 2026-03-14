@@ -1,18 +1,33 @@
 package com.siberalt.singularity.strategy.level.linear;
 
+import com.siberalt.singularity.entity.candle.TimePoint;
+
 import java.time.Instant;
 import java.util.function.Function;
 
 public interface StrengthCalculator {
     record LevelContext(
-        Instant timeFrom,
-        Instant timeTo,
-        long indexFrom,
-        long indexTo,
+        TimePoint pointFrom,
+        TimePoint pointTo,
         Function<Double, Double> function,
         double strength,
         int touchesCount
     ) {
+        public long indexFrom() {
+            return pointFrom.index();
+        }
+
+        public long indexTo() {
+            return pointTo.index();
+        }
+
+        public Instant timeFrom() {
+            return pointFrom.time();
+        }
+
+        public Instant timeTo() {
+            return pointTo.time();
+        }
     }
 
     /**

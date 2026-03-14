@@ -85,13 +85,12 @@ public class CandleFactory {
 
         candle = new Candle(
             instrumentUid,
-            time,
+            new TimePoint(startIndex++, time),
             openPrice,
             closePrice,
             highPrice,
             lowPrice,
-            volume,
-            startIndex++
+            volume
         );
 
         candleCache.put(time, candle);

@@ -177,28 +177,31 @@ public class CachingExtremeLocator implements ExtremeLocator {
 
         for (RangeExtremes rangeExtremes : locatedExtremes) {
             List<Candle> extremes = rangeExtremes.extremes();
-            ExtremeRange rangeToCache = rangeExtremes.extremeRange();
 
             if (!extremes.isEmpty()) {
-                ExtremeRange deleteRange = detectDeleteRange(rangeExtremes.extremeRange(), rangesToDelete);
-
-                if (deleteRange != null) {
-                    ExtremeRange partialCacheRange = rangeExtremes.extremeRange().subtract(deleteRange);
-
-                    if (partialCacheRange != null) {
-                        List<Candle> candlesToCache = extractRangeCandles(partialCacheRange, rangeExtremes.extremes());
-
-                        if (!candlesToCache.isEmpty()) {
-                            extremeRepository.saveBatch(partialCacheRange, candlesToCache);
-                        }
-                    }
-                } else {
-                    extremeRepository.saveBatch(rangeToCache, extremes);
-                }
+                processRangeExtremes(rangeExtremes, rangesToDelete, extremeRepository);
             }
         }
 
         return new CacheResult(adjustedWindowRange, locatedExtremes);
+    }
+
+    private void processRangeExtremes(RangeExtremes rangeExtremes, List<ExtremeRange> rangesToDelete, ExtremeRepository extremeRepository) {
+        ExtremeRange deleteRange = detectDeleteRange(rangeExtremes.extremeRange(), rangesToDelete);
+
+        if (deleteRange != null) {
+            ExtremeRange partialCacheRange = rangeExtremes.extremeRange().subtract(deleteRange);
+
+            if (partialCacheRange != null) {
+                List<Candle> candlesToCache = extractRangeCandles(partialCacheRange, rangeExtremes.extremes());
+
+                if (!candlesToCache.isEmpty()) {
+                    extremeRepository.saveBatch(partialCacheRange, candlesToCache);
+                }
+            }
+        } else {
+            extremeRepository.saveBatch(rangeExtremes.extremeRange(), rangeExtremes.extremes());
+        }
     }
 
     private ExtremeRange subtractEmptyEdgeRanges(List<RangeExtremes> allExtremes, ExtremeRange windowRange) {

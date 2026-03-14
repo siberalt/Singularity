@@ -27,12 +27,12 @@ public class ClusterLevelDetectorSimulation {
         ConcurrentFrameExtremeLocator minExtremeLocator = ConcurrentFrameExtremeLocator
             .builder(BaseExtremeLocator.createMinLocator(Candle::getTypicalPriceAsDouble))
             .setFrameSize(70)
-            .setExtremeVicinity(30)
+            .setExtremeVicinity(25)
             .build();
         ConcurrentFrameExtremeLocator maxExtremeLocator = ConcurrentFrameExtremeLocator
             .builder(BaseExtremeLocator.createMaxLocator(Candle::getTypicalPriceAsDouble))
             .setFrameSize(70)
-            .setExtremeVicinity(30)
+            .setExtremeVicinity(25)
             .build();
         PointSeriesProvider minPoints = new PointSeriesProvider("Minima");
         minPoints.setColor("#00FF00");

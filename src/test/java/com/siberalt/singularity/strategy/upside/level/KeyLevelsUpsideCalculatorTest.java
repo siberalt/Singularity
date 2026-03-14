@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.upside.level;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.selector.LevelPair;
@@ -19,8 +20,17 @@ import static org.mockito.Mockito.*;
 public class KeyLevelsUpsideCalculatorTest {
     @Test
     void calculatesUpsideWhenSupportAndResistanceAreDetectedWithDifferentValues() {
-        Level<Double> support = new Level<>(null, null, 20L, 20L, x -> 60.0, 0.0);
-        Level<Double> resistance = new Level<>(null, null, 25L, 25L, x -> 120.0, 0.0);
+        Level<Double> support = new Level<>(
+            new TimePoint(20L),
+            new TimePoint(20L),
+            x -> 60.0, 0.0
+        );
+        Level<Double> resistance = new Level<>(
+            new TimePoint(25L),
+            new TimePoint(25L),
+            x -> 120.0,
+            0.0
+        );
         Candle lastCandle = createCandle(90.0);
 
         LevelDetector supportDetector = mock(LevelDetector.class);
@@ -47,6 +57,7 @@ public class KeyLevelsUpsideCalculatorTest {
         assertEquals(0.7, result.signal(), 0.01);
         assertEquals(1.5, result.strength(), 0.01);
     }
+
     @Test
     void returnsZeroUpsideWhenNoSupportOrResistanceIsDetected() {
         Candle lastCandle = Candle.of(Instant.now(), 1000L, 75);

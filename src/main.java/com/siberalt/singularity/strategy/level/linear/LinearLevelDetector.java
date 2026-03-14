@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.level.linear;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.math.IncrementalLinearRegression;
 import com.siberalt.singularity.math.Point2D;
 import com.siberalt.singularity.strategy.extreme.BaseExtremeLocator;
@@ -112,11 +113,12 @@ public class LinearLevelDetector implements LevelDetector {
         long endLevelIndex,
         int touchesCount
     ) {
+        TimePoint startPoint = new TimePoint(startLevelIndex, startLevelTime);
+        TimePoint endPoint = new TimePoint(endLevelIndex, endLevelTime);
+
         StrengthCalculator.LevelContext context = new StrengthCalculator.LevelContext(
-            startLevelTime,
-            endLevelTime,
-            startLevelIndex,
-            endLevelIndex,
+            startPoint,
+            endPoint,
             linearModel.getLinearFunction(),
             0,
             touchesCount
@@ -124,14 +126,7 @@ public class LinearLevelDetector implements LevelDetector {
 
         double strength = strengthCalculator.calculate(context);
 
-        return new Level<>(
-            startLevelTime,
-            endLevelTime,
-            startLevelIndex,
-            endLevelIndex,
-            linearModel.getLinearFunction(),
-            strength
-        );
+        return new Level<>(startPoint, endPoint, linearModel.getLinearFunction(), strength);
     }
 
     public LinearLevelDetector setStrengthCalculator(StrengthCalculator strengthCalculator) {

@@ -1,5 +1,6 @@
 package com.siberalt.singularity.strategy.level.linear;
 
+import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.math.LinearFunction2D;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,7 +16,7 @@ class BasicStrengthCalculatorTest {
     @DisplayName("calculate returns 0.0 when touchesCount is less than or equal to 0")
     void calculateReturnsZeroWhenTouchesCountIsNonPositive() {
         StrengthCalculator.LevelContext context = new StrengthCalculator.LevelContext(
-            null, null, 0L, 10L, mock(LinearFunction2D.class), 0.0, 0
+            new TimePoint(0L), new TimePoint(10L), mock(LinearFunction2D.class), 0.0, 0
         );
 
         BasicStrengthCalculator calculator = new BasicStrengthCalculator();
@@ -28,7 +29,7 @@ class BasicStrengthCalculatorTest {
     @DisplayName("calculate returns 0.0 when linearFunction is null")
     void calculateReturnsZeroWhenLinearFunctionIsNull() {
         StrengthCalculator.LevelContext context = new StrengthCalculator.LevelContext(
-            null, null, 0L, 10L, null, 0.0,10
+            new TimePoint(0L), new TimePoint(10L), null, 0.0, 10
         );
 
         BasicStrengthCalculator calculator = new BasicStrengthCalculator();
@@ -41,7 +42,7 @@ class BasicStrengthCalculatorTest {
     @DisplayName("calculate returns 0.0 when fromIndex is negative")
     void calculateReturnsZeroWhenFromIndexIsNegative() {
         StrengthCalculator.LevelContext context = new StrengthCalculator.LevelContext(
-            null, null, -1L, 10L, mock(LinearFunction2D.class), 0.0,10
+            new TimePoint(-1L), new TimePoint(10L), mock(LinearFunction2D.class), 0.0, 10
         );
 
         BasicStrengthCalculator calculator = new BasicStrengthCalculator();
@@ -54,7 +55,7 @@ class BasicStrengthCalculatorTest {
     @DisplayName("calculate returns 0.0 when toIndex is less than fromIndex")
     void calculateReturnsZeroWhenToIndexIsLessThanFromIndex() {
         StrengthCalculator.LevelContext context = new StrengthCalculator.LevelContext(
-            null, null, 5L, 4L, mock(LinearFunction2D.class), 0.0,10
+            new TimePoint(5L), new TimePoint(4L), mock(LinearFunction2D.class), 0.0, 10
         );
 
         BasicStrengthCalculator calculator = new BasicStrengthCalculator();
@@ -70,7 +71,7 @@ class BasicStrengthCalculatorTest {
         when(linearFunction.getSlope()).thenReturn(0.5);
 
         StrengthCalculator.LevelContext context = new StrengthCalculator.LevelContext(
-            null, null, 0L, 10L, linearFunction, 0.0,10
+            new TimePoint(0L), new TimePoint(10L), linearFunction, 0.0, 10
         );
 
         BasicStrengthCalculator calculator = new BasicStrengthCalculator();
@@ -89,11 +90,11 @@ class BasicStrengthCalculatorTest {
         when(linearFunctionSlope0.getSlope()).thenReturn(0.0);
 
         StrengthCalculator.LevelContext contextSlope50 = new StrengthCalculator.LevelContext(
-            null, null, 0L, 10L, linearFunctionSlope50, 0.0,10
+            new TimePoint(0L), new TimePoint(10L), linearFunctionSlope50, 0.0, 10
         );
 
         StrengthCalculator.LevelContext contextSlope0 = new StrengthCalculator.LevelContext(
-            null, null, 0L, 10L, linearFunctionSlope0, 0.0, 10
+            new TimePoint(0L), new TimePoint(10L), linearFunctionSlope0, 0.0, 10
         );
 
         BasicStrengthCalculator calculator = new BasicStrengthCalculator();
