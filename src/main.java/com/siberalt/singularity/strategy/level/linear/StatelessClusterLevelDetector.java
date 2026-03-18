@@ -87,7 +87,7 @@ public class StatelessClusterLevelDetector implements LevelDetector {
     }
 
     public static StatelessClusterLevelDetector createDefault(double sensitivity, ExtremeLocator extremeLocator) {
-        return new StatelessClusterLevelDetector(extremeLocator, new ClusterAggregator(sensitivity));
+        return new StatelessClusterLevelDetector(extremeLocator, new ClusterAggregator(sensitivity, 3));
     }
 
     public static StatelessClusterLevelDetector createDefault(double sensitivity, ExtremeLocator extremeLocator, PriceExtractor priceExtractor) {

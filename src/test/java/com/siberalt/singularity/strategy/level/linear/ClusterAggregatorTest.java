@@ -37,7 +37,7 @@ class ClusterAggregatorTest {
     }
 
     @Test
-    void excludesSubsetClustersUsingAggregate() {
+    void aggregatesClustersWithEqualExtremes() {
         ClusterAggregator aggregator = new ClusterAggregator(0.1);
         List<Candle> extremes = List.of(
             candleFactory.createCommon("2024-01-01T00:00:00Z", 100.0),

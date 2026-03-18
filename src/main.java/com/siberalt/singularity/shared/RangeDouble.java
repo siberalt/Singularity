@@ -2,12 +2,26 @@ package com.siberalt.singularity.shared;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public record RangeDouble(double fromIndex, double toIndex) {
     public RangeDouble {
         if (fromIndex > toIndex) {
             throw new IllegalArgumentException("fromIndex cannot be greater than toIndex");
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        RangeDouble that = (RangeDouble) o;
+        return Double.compare(that.fromIndex, fromIndex) == 0 && Double.compare(that.toIndex, toIndex) == 0;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(fromIndex, toIndex);
     }
 
     public double length() {
@@ -38,9 +52,9 @@ public record RangeDouble(double fromIndex, double toIndex) {
         double newToIndex = this.toIndex;
 
         if (intersectedRange.fromIndex > this.fromIndex) {
-            newToIndex = intersectedRange.fromIndex - 1;
+            newToIndex = Math.nextDown(intersectedRange.fromIndex); // Use Math.nextDown for precision-safe subtraction
         } else if (intersectedRange.toIndex < this.toIndex) {
-            newFromIndex = intersectedRange.toIndex + 1;
+            newFromIndex = Math.nextUp(intersectedRange.toIndex); // Use Math.nextUp for precision-safe addition
         } else {
             // The intersected range completely covers this range, resulting in an empty range
             return null;

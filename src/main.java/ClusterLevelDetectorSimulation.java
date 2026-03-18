@@ -60,8 +60,8 @@ public class ClusterLevelDetectorSimulation {
             "TMOS",
             Candle::getTypicalPriceAsDouble
         );
-        LevelDetector supportDetector = StatelessClusterLevelDetector.createDefault(0.005, minExtremeLocator);
-        LevelDetector resistanceDetector = StatelessClusterLevelDetector.createDefault(0.005, maxExtremeLocator);
+        LevelDetector supportDetector = StatelessClusterLevelDetector.createDefault(0.004, minExtremeLocator);
+        LevelDetector resistanceDetector = StatelessClusterLevelDetector.createDefault(0.004, maxExtremeLocator);
         var supportLevels = supportDetector.detect(candles);
         var resistanceLevels = resistanceDetector.detect(candles);
         addLevelsToChart(priceChart, "Support Levels", supportLevels, "#00FFFA");
