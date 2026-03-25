@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.level.track;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 
@@ -10,7 +11,7 @@ import java.util.Optional;
 
 public class LevelDetectorTracker implements LevelDetector {
     private final LevelDetector wrappedDetector;
-    private final List<LevelsSnapshot> snapshots = new ArrayList<>();
+    private final List<SnapshotLevelGroup> snapshots = new ArrayList<>();
 
     public LevelDetectorTracker(LevelDetector wrappedDetector) {
         this.wrappedDetector = wrappedDetector;
@@ -22,21 +23,22 @@ public class LevelDetectorTracker implements LevelDetector {
         Candle firstCandle = candles.get(0);
         Candle lastCandle = candles.get(candles.size() - 1);
 
-        snapshots.add(new LevelsSnapshot(
-            firstCandle.getIndex(),
-            lastCandle.getIndex(),
-            firstCandle.getTime(),
-            lastCandle.getTime(),
-            levels
-        ));
+        snapshots.add(
+            new SnapshotLevelGroup(
+                new TimePoint(firstCandle.getIndex(), firstCandle.getTime()),
+                new TimePoint(lastCandle.getIndex(), lastCandle.getTime()),
+                levels
+            )
+        );
+
         return levels;
     }
 
-    public List<LevelsSnapshot> getSnapshots() {
+    public List<SnapshotLevelGroup> getSnapshots() {
         return snapshots;
     }
 
-    public Optional<LevelsSnapshot> getLastSnapshot() {
+    public Optional<SnapshotLevelGroup> getLastSnapshot() {
         if (snapshots.isEmpty()) {
             return Optional.empty();
         }

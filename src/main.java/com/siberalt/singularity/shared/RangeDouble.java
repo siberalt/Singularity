@@ -36,13 +36,6 @@ public record RangeDouble(double fromIndex, double toIndex) {
         return this.fromIndex >= other.fromIndex && this.toIndex <= other.toIndex;
     }
 
-    public boolean isEdgeSubsetOf(RangeDouble other) {
-        if (!this.isSubsetOf(other)) {
-            return false;
-        }
-        return this.fromIndex == other.fromIndex || this.toIndex == other.toIndex;
-    }
-
     public RangeDouble subtract(RangeDouble intersectedRange) {
         if (!this.isOverlapping(intersectedRange)) {
             return this; // No overlap, return the original range
@@ -100,17 +93,6 @@ public record RangeDouble(double fromIndex, double toIndex) {
         return result;
     }
 
-    public static RangeDouble average(List<RangeDouble> ranges) {
-        if (ranges.isEmpty()) {
-            throw new IllegalArgumentException("Cannot average empty range list");
-        }
-
-        double fromIndex = Math.round(ranges.stream().mapToDouble(RangeDouble::fromIndex).average().orElseThrow());
-        double toIndex = Math.round(ranges.stream().mapToDouble(RangeDouble::toIndex).average().orElseThrow());
-
-        return new RangeDouble(fromIndex, toIndex);
-    }
-
     public RangeDouble intersection(RangeDouble other) {
         if (!this.isOverlapping(other)) {
             return null; // No intersection
@@ -120,23 +102,5 @@ public record RangeDouble(double fromIndex, double toIndex) {
         double intersectToIndex = Math.min(this.toIndex(), other.toIndex());
 
         return new RangeDouble(intersectFromIndex, intersectToIndex);
-    }
-
-    public static RangeDouble unite(RangeDouble rangeA, RangeDouble rangeB) {
-        double fromIndex = Math.min(rangeA.fromIndex(), rangeB.fromIndex());
-        double toIndex = Math.max(rangeA.toIndex(), rangeB.toIndex());
-
-        return new RangeDouble(fromIndex, toIndex);
-    }
-
-    public static RangeDouble unite(List<RangeDouble> ranges) {
-        if (ranges.isEmpty()) {
-            throw new IllegalArgumentException("Cannot unite empty range list");
-        }
-
-        double fromIndex = ranges.stream().mapToDouble(RangeDouble::fromIndex).min().orElseThrow();
-        double toIndex = ranges.stream().mapToDouble(RangeDouble::toIndex).max().orElseThrow();
-
-        return new RangeDouble(fromIndex, toIndex);
     }
 }

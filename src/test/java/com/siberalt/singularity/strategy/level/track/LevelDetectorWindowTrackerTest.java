@@ -72,10 +72,10 @@ class LevelDetectorWindowTrackerTest {
         tracker.detect(window1);
         tracker.detect(window2);
 
-        List<LevelsSnapshot> snapshots = tracker.getSnapshots();
+        List<SnapshotLevelGroup> snapshots = tracker.getSnapshots();
         assertEquals(2, snapshots.size());
 
-        LevelsSnapshot snapshot = snapshots.get(0);
+        SnapshotLevelGroup snapshot = snapshots.get(0);
         assertEquals(0, snapshot.fromIndex());
         assertEquals(3, snapshot.toIndex());
         assertEquals(levels1, snapshot.levels());
@@ -121,7 +121,7 @@ class LevelDetectorWindowTrackerTest {
 
         tracker.detect(candles);
 
-        Optional<LevelsSnapshot> lastSnapshot = tracker.getLastSnapshot();
+        Optional<SnapshotLevelGroup> lastSnapshot = tracker.getLastSnapshot();
         assertTrue(lastSnapshot.isPresent());
         assertEquals(0, lastSnapshot.get().fromIndex());
         assertEquals(2, lastSnapshot.get().toIndex());
@@ -129,7 +129,7 @@ class LevelDetectorWindowTrackerTest {
 
     @Test
     void returnsEmptyOptionalWhenNoSnapshotsExist() {
-        Optional<LevelsSnapshot> lastSnapshot = tracker.getLastSnapshot();
+        Optional<SnapshotLevelGroup> lastSnapshot = tracker.getLastSnapshot();
 
         assertTrue(lastSnapshot.isEmpty());
     }

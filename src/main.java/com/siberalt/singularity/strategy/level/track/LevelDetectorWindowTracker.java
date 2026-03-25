@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.level.track;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.shared.RangeLong;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
@@ -12,7 +13,7 @@ import java.util.Optional;
 
 public class LevelDetectorWindowTracker implements LevelDetector {
     private final LevelDetector wrappedDetector;
-    private final List<LevelsSnapshot> snapshots = new ArrayList<>();
+    private final List<SnapshotLevelGroup> snapshots = new ArrayList<>();
     private RangeLong previousRange;
 
     public LevelDetectorWindowTracker(LevelDetector wrappedDetector) {
@@ -43,21 +44,16 @@ public class LevelDetectorWindowTracker implements LevelDetector {
         Instant timeTo = candles.get((int) (toIndex - newRange.fromIndex())).getTime();
 
         previousRange = newRange;
-        snapshots.add(new LevelsSnapshot(
-            fromIndex,
-            toIndex,
-            timeFrom,
-            timeTo,
-            levels
-        ));
+        snapshots.add(new SnapshotLevelGroup(new TimePoint(fromIndex, timeFrom), new TimePoint(toIndex, timeTo), levels));
+
         return levels;
     }
 
-    public List<LevelsSnapshot> getSnapshots() {
+    public List<SnapshotLevelGroup> getSnapshots() {
         return snapshots;
     }
 
-    public Optional<LevelsSnapshot> getLastSnapshot() {
+    public Optional<SnapshotLevelGroup> getLastSnapshot() {
         if (snapshots.isEmpty()) {
             return Optional.empty();
         }

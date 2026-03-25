@@ -36,8 +36,7 @@ import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.ClusterLevelDetector;
 import com.siberalt.singularity.strategy.level.selector.*;
-import com.siberalt.singularity.strategy.level.track.LevelDetectorWindowTracker;
-import com.siberalt.singularity.strategy.level.track.LevelsSnapshot;
+import com.siberalt.singularity.strategy.level.track.*;
 import com.siberalt.singularity.strategy.observer.Observer;
 import com.siberalt.singularity.strategy.upside.CompositeFactorUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
@@ -253,8 +252,8 @@ public class BasicTradeStrategySimulation {
     }
 
     private static void drawOrdersChart(
-        List<LevelsSnapshot> supportLevelsSnapshots,
-        List<LevelsSnapshot> resistanceLevelsSnapshots,
+        List<SnapshotLevelGroup> supportLevelsSnapshots,
+        List<SnapshotLevelGroup> resistanceLevelsSnapshots,
         List<Order> orders,
         ReadCandleRepository candleRepository,
         String instrumentUid,
@@ -315,13 +314,13 @@ public class BasicTradeStrategySimulation {
     private static void addLevelsToChart(
         PriceChart chart,
         String name,
-        List<LevelsSnapshot> levelsSnapshots,
+        List<SnapshotLevelGroup> levelsSnapshots,
         String color,
         List<List<Level<Double>>> selectedLevels,
         String selectedColor
     ) {
-        var levelsProvider = new FunctionGroupSeriesProvider(name);
-        var selectedLevelsProvider = new FunctionGroupSeriesProvider(name + " Selected");
+        FunctionGroupSeriesProvider levelsProvider = new FunctionGroupSeriesProvider(name);
+        FunctionGroupSeriesProvider selectedLevelsProvider = new FunctionGroupSeriesProvider(name + " Selected");
 
         Iterator<Map<String, Level<Double>>> iterator = selectedLevels.stream()
             .map(
@@ -331,24 +330,66 @@ public class BasicTradeStrategySimulation {
             )
             .iterator();
 
-        for (LevelsSnapshot snapshot : levelsSnapshots) {
-            long indexFrom = snapshot.fromIndex();
-            long indexTo = snapshot.toIndex();
+        List<SnapshotLevelGroup> unselectedSnapshots = new ArrayList<>();
+        List<SnapshotLevelGroup> selectedSnapshots = new ArrayList<>();
+
+        for (SnapshotLevelGroup snapshot : levelsSnapshots) {
             Map<String, Level<Double>> currentSelectedLevels = iterator.hasNext()
                 ? iterator.next()
                 : Collections.emptyMap();
 
+            List<Level<Double>> snapshotSelectedLevels = new ArrayList<>();
+            List<Level<Double>> snapshotUnselectedLevels = new ArrayList<>();
+
             for (Level<Double> level : snapshot.levels()) {
                 if (currentSelectedLevels.containsKey(level.id())) {
-                    selectedLevelsProvider.addFunction(indexFrom, indexTo, level.function());
+                    snapshotSelectedLevels.add(level);
                 } else {
-                    levelsProvider.addFunction(indexFrom, indexTo, level.function());
+                    snapshotUnselectedLevels.add(level);
                 }
             }
+
+            if (!snapshotUnselectedLevels.isEmpty()) {
+                unselectedSnapshots.add(
+                    new SnapshotLevelGroup(
+                        snapshot.fromPoint(),
+                        snapshot.toPoint(),
+                        snapshotUnselectedLevels
+                    )
+                );
+            }
+
+            if (!snapshotSelectedLevels.isEmpty()) {
+                selectedSnapshots.add(
+                    new SnapshotLevelGroup(
+                        snapshot.fromPoint(),
+                        snapshot.toPoint(),
+                        snapshotSelectedLevels
+                    )
+                );
+            }
         }
+
+        LevelTracer levelTracer = new LevelTracer(0.002);
+        flushLevelsToSeriesProvider(levelTracer.trace(unselectedSnapshots), levelsProvider);
+        flushLevelsToSeriesProvider(levelTracer.trace(selectedSnapshots), selectedLevelsProvider);
+
         levelsProvider.setColor(color);
         selectedLevelsProvider.setColor(selectedColor);
         chart.addSeriesProvider(levelsProvider);
         chart.addSeriesProvider(selectedLevelsProvider);
+    }
+
+    private static void flushLevelsToSeriesProvider(
+        LevelTraceGroup levelTraceGroup,
+        FunctionGroupSeriesProvider seriesProvider
+    ) {
+        for (LevelTrace levelTrace : levelTraceGroup.levelTraces()) {
+            seriesProvider.addFunction(
+                levelTrace.fromPoint().index(),
+                levelTrace.toPoint().index(),
+                levelTrace.function()
+            );
+        }
     }
 }
