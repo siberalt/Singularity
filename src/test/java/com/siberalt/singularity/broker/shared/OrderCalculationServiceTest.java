@@ -248,7 +248,7 @@ class OrderCalculationServiceTest {
                 List.of() // Assuming no transactions for simplicity
             ));
 
-        OrderCalculationService serviceWithExtraRatio = new OrderCalculationService(0.03); // 3% extra ratio
+        OrderCalculationService serviceWithExtraRatio = new OrderCalculationService(0.005); // Setting a small extra ratio to simulate the effect
 
         long result = serviceWithExtraRatio.calculatePossibleBuyQuantity(brokerMock, limit, request);
 

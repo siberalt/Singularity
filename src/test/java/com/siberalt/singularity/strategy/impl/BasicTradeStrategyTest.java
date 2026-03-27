@@ -2,6 +2,7 @@ package com.siberalt.singularity.strategy.impl;
 
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.events.NewCandleEvent;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
+import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
 import com.siberalt.singularity.broker.shared.EventSubscriptionBrokerFacade;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
@@ -67,12 +68,14 @@ class BasicTradeStrategyTest {
         when(event.getCandle()).thenReturn(candle1);
         when(candleRepository.findBeforeOrEqual(anyString(), any(), anyLong())).thenReturn(List.of(candle1));
         when(upsideCalculator.calculate(anyList())).thenReturn(new Upside(0.7, 1.0));
+        when(broker.getPossibleBuyQuantity("accountId", "instrumentId", OrderType.BEST_PRICE))
+            .thenReturn(100L);
 
         strategy.setBuyThreshold(0.6);
         strategy.setStep(1);
         strategy.handleNewCandle(event, subscription);
 
-        verify(broker).buyBestPriceFullBalance("accountId", "instrumentId");
+        verify(broker).buyBestPrice("accountId", "instrumentId",70);
     }
 
     @Test
@@ -89,7 +92,7 @@ class BasicTradeStrategyTest {
         strategy.setStep(1);
         strategy.handleNewCandle(event, subscription);
 
-        verify(broker).sellBestPrice("accountId", "instrumentId", 100L);
+        verify(broker).sellBestPrice("accountId", "instrumentId", 60L);
     }
 
     @Test

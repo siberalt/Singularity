@@ -120,36 +120,18 @@ public class BrokerFacade {
             .setDirection(OrderDirection.BUY));
     }
 
-    public PostOrderResponse buyLimitFullBalance(String accountId, String instrumentId, double price) throws AbstractException {
-        long possibleBuyQuantity = orderCalculationService.calculatePossibleBuyQuantity(broker, new BuyRequest(
-            accountId,
-            instrumentId,
-            OrderType.LIMIT
-        ));
-
-        return broker.getOrderService().post(new PostOrderRequest()
-            .setAccountId(accountId)
-            .setInstrumentId(instrumentId)
-            .setPrice(Quotation.of(price))
-            .setQuantity(possibleBuyQuantity)
-            .setOrderType(OrderType.LIMIT)
-            .setDirection(OrderDirection.BUY));
-    }
-
     public long getPossibleBuyQuantity(String accountId, String instrumentId, OrderType orderType) throws AbstractException {
-        return orderCalculationService.calculatePossibleBuyQuantity(broker, new BuyRequest(
-            accountId,
-            instrumentId,
-            orderType
-        ));
+        return orderCalculationService.calculatePossibleBuyQuantity(
+            broker,
+            new BuyRequest(accountId, instrumentId, orderType)
+        );
     }
 
-    public long buyBestPriceFullBalance(String accountId, String instrumentId) throws AbstractException {
-        long possibleBuyQuantity = orderCalculationService.calculatePossibleBuyQuantity(broker, new BuyRequest(
-            accountId,
-            instrumentId,
-            OrderType.BEST_PRICE
-        ));
+    public long buyFullBalance(String accountId, String instrumentId, OrderType orderType) throws AbstractException {
+        long possibleBuyQuantity = orderCalculationService.calculatePossibleBuyQuantity(
+            broker,
+            new BuyRequest(accountId, instrumentId, orderType)
+        );
 
         if (possibleBuyQuantity <= 0) {
             return possibleBuyQuantity;
@@ -159,10 +141,14 @@ public class BrokerFacade {
             .setAccountId(accountId)
             .setInstrumentId(instrumentId)
             .setQuantity(possibleBuyQuantity)
-            .setOrderType(OrderType.BEST_PRICE)
+            .setOrderType(orderType)
             .setDirection(OrderDirection.BUY));
 
         return possibleBuyQuantity;
+    }
+
+    public long buyBestPriceFullBalance(String accountId, String instrumentId) throws AbstractException {
+        return buyFullBalance(accountId, instrumentId, OrderType.BEST_PRICE);
     }
 
     public PostOrderResponse buyMarket(String accountId, String instrumentId, int amount) throws AbstractException {
@@ -188,7 +174,7 @@ public class BrokerFacade {
         );
     }
 
-    public PostOrderResponse buyBestPrice(String accountId, String instrumentId, int amount) throws AbstractException {
+    public PostOrderResponse buyBestPrice(String accountId, String instrumentId, long amount) throws AbstractException {
         return broker.getOrderService().post(
             new PostOrderRequest()
                 .setAccountId(accountId)

@@ -195,8 +195,8 @@ public class BasicTradeStrategySimulation {
             candleRepository
         );
         strategy.setBuyThreshold(0.4);
-        strategy.setSellThreshold(-0.5);
-        strategy.setStep(40);
+        strategy.setSellThreshold(-0.7);
+        strategy.setStep(10);
 
         return strategy;
     }
@@ -370,7 +370,7 @@ public class BasicTradeStrategySimulation {
             }
         }
 
-        LevelTracer levelTracer = new LevelTracer(0.002);
+        LevelTracer levelTracer = new LevelTracer(0.003);
         flushLevelsToSeriesProvider(levelTracer.trace(unselectedSnapshots), levelsProvider);
         flushLevelsToSeriesProvider(levelTracer.trace(selectedSnapshots), selectedLevelsProvider);
 

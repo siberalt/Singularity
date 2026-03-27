@@ -4,6 +4,7 @@ import com.siberalt.singularity.broker.contract.execution.EventSubscriptionBroke
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.events.NewCandleEvent;
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.subscriptions.NewCandleSubscriptionSpec;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
+import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
 import com.siberalt.singularity.broker.shared.EventSubscriptionBrokerFacade;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
@@ -97,7 +98,8 @@ public class BasicTradeStrategy implements StrategyInterface {
                     instrumentId,
                     event.getCandle().getTime(),
                     lookbackCandles
-                ));
+                )
+            );
         } else {
             lastCandles.add(event.getCandle());
         }
@@ -108,12 +110,18 @@ public class BasicTradeStrategy implements StrategyInterface {
 
             try {
                 if (upside.signal() >= buyThreshold) {
-                    broker.buyBestPriceFullBalance(accountId, instrumentId);
+                    long possibleToBuy = broker.getPossibleBuyQuantity(accountId, instrumentId, OrderType.BEST_PRICE);
+                    long quantityToBuy = (long) (possibleToBuy * upside.signal());
+
+                    if (quantityToBuy > 0) {
+                        broker.buyBestPrice(accountId, instrumentId, quantityToBuy);
+                    }
                 } else if (upside.signal() <= sellThreshold) {
                     long positionSize = broker.getPositionSize(accountId, instrumentId);
+                    long quantityToSell = (long) (positionSize * Math.abs(upside.signal()));
 
-                    if (positionSize > 0) {
-                        broker.sellBestPrice(accountId, instrumentId, positionSize);
+                    if (quantityToSell > 0) {
+                        broker.sellBestPrice(accountId, instrumentId, quantityToSell);
                     }
                 }
             } catch (AbstractException e) {
