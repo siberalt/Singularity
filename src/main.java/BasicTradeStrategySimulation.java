@@ -30,6 +30,7 @@ import com.siberalt.singularity.strategy.StrategyInterface;
 import com.siberalt.singularity.strategy.extreme.BaseExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.ConcurrentFrameExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.LastExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.cache.CachingExtremeLocator;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.level.Level;
@@ -96,7 +97,10 @@ public class BasicTradeStrategySimulation {
         LevelDetectorWindowTracker supportTracker = createLevelDetector(0.005, minimumLocator);
         LevelDetectorWindowTracker resistanceTracker = createLevelDetector(0.005, maximumLocator);
         LevelSelectorWindowTracker selectorTracker = new LevelSelectorWindowTracker(
-            new ExtremeBasedLevelSelector(minimumLocator, maximumLocator)
+            new ExtremeBasedLevelSelector(
+                LastExtremeLocator.ofMinimums(6, 1, Candle::getTypicalPriceAsDouble),
+                LastExtremeLocator.ofMaximums(6, 1, Candle::getTypicalPriceAsDouble)
+            )
         );
         StrategyInterface strategy = createLevelsStrategy(
             candleRepository,
@@ -178,12 +182,12 @@ public class BasicTradeStrategySimulation {
         LevelDetector supportDetector,
         LevelDetector resistanceDetector,
         LevelSelector selectorTracker
-    ){
+    ) {
         KeyLevelsUpsideCalculator upsideCalculator = new KeyLevelsUpsideCalculator(
             supportDetector,
             resistanceDetector,
-            //new ChannelLevelBasedUpsideCalculator()
-            new SimpleLevelBasedUpsideCalculator()
+            new ChannelLevelBasedUpsideCalculator()
+            //new SimpleLevelBasedUpsideCalculator()
         );
 
         upsideCalculator.setLevelSelector(selectorTracker);
@@ -205,7 +209,7 @@ public class BasicTradeStrategySimulation {
         return new CachingExtremeLocator(
             ConcurrentFrameExtremeLocator.builder(baseLocator)
                 .setFrameSize(frameSize)
-                .setExtremeVicinity(15)
+                .setExtremeVicinity(20)
                 .build()
         );
     }

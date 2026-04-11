@@ -3,13 +3,12 @@ import com.siberalt.singularity.entity.candle.cvs.CvsCandleRepository;
 import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory;
 import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.series.PointSeriesProvider;
-import com.siberalt.singularity.strategy.extreme.BaseExtremeLocator;
-import com.siberalt.singularity.strategy.extreme.ConcurrentFrameExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.LastExtremeLocator;
 
 import java.time.Instant;
 import java.util.List;
 
-public class ConcurrentFrameExtremesLocatorSimulator {
+public class LastExtremeLocatorSimulation {
     public static void main(String[] args) {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
@@ -20,34 +19,41 @@ public class ConcurrentFrameExtremesLocatorSimulator {
             "src/test/resources/entity.candle.cvs/TMOS"
         );
         List<Candle> candles = candleRepository.getPeriod("TMOS", startTime, endTime);
-        ConcurrentFrameExtremeLocator minExtremeLocator = ConcurrentFrameExtremeLocator
-            .builder(BaseExtremeLocator.createMinLocator(Candle::getTypicalPriceAsDouble))
-            .setFrameSize(100)
-            .setExtremeVicinity(50)
-            .build();
-        ConcurrentFrameExtremeLocator maxExtremeLocator = ConcurrentFrameExtremeLocator
-            .builder(BaseExtremeLocator.createMaxLocator(Candle::getTypicalPriceAsDouble))
-            .setFrameSize(100)
-            .setExtremeVicinity(50)
-            .build();
+        LastExtremeLocator minExtremeLocator = LastExtremeLocator.ofMinimums(
+            50, 1, Candle::getTypicalPriceAsDouble
+        );
+        LastExtremeLocator maxExtremeLocator = LastExtremeLocator.ofMaximums(
+            50, 1, Candle::getTypicalPriceAsDouble
+        );
+        int chunkSize = 2000;
+
         PointSeriesProvider minPoints = new PointSeriesProvider("Minima");
         minPoints.setColor("#00FF00");
-        minExtremeLocator.locate(candles)
-            .forEach(
-                minPoint -> minPoints.addPoint(
-                    minPoint.getIndex(),
-                    minPoint.getTypicalPriceAsDouble()
-                )
-            );
         PointSeriesProvider maxPoints = new PointSeriesProvider("Maxima");
         maxPoints.setColor("#FF0000");
-        maxExtremeLocator.locate(candles)
-            .forEach(
-                maxPoint -> maxPoints.addPoint(
-                    maxPoint.getIndex(),
-                    maxPoint.getTypicalPriceAsDouble()
-                )
-            );
+        PointSeriesProvider chunkPoints = new PointSeriesProvider("Chunk border");
+        chunkPoints.setColor("#FFFF00");
+
+        for (int i = 0; i < candles.size(); i += chunkSize) {
+            int toIndex = Math.min(i + chunkSize, candles.size());
+            List<Candle> chunk = candles.subList(i, toIndex);
+            Candle lastChunkCandle = chunk.get(chunk.size() - 1);
+            chunkPoints.addPoint(lastChunkCandle.getIndex(), lastChunkCandle.getTypicalPriceAsDouble());
+            minExtremeLocator.locate(chunk)
+                .forEach(
+                    minPoint -> minPoints.addPoint(
+                        minPoint.getIndex(),
+                        minPoint.getTypicalPriceAsDouble()
+                    )
+                );
+            maxExtremeLocator.locate(chunk)
+                .forEach(
+                    maxPoint -> maxPoints.addPoint(
+                        maxPoint.getIndex(),
+                        maxPoint.getTypicalPriceAsDouble()
+                    )
+                );
+        }
 
         PriceChart priceChart = new PriceChart(
             candleRepository,
@@ -56,6 +62,7 @@ public class ConcurrentFrameExtremesLocatorSimulator {
         );
         priceChart.addSeriesProvider(minPoints);
         priceChart.addSeriesProvider(maxPoints);
+        priceChart.addSeriesProvider(chunkPoints);
         priceChart.setStepInterval(1);
         // Render the chart (hypothetical method)
         priceChart.render(candles);

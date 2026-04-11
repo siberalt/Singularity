@@ -6,6 +6,7 @@ import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.market.PriceExtractor;
 
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 // TODO is not finished. Needs fixing tests
@@ -57,12 +58,23 @@ public class ExtremeBasedLevelSelector implements LevelSelector {
         Candle lastMinimum = minimums.get(minimums.size() - 1);
         Candle lastMaximum = maximums.get(maximums.size() - 1);
 
+        double lastMinimumPrice = priceExtractor.extract(lastMinimum).toDouble();
+        double lastMaximumPrice = priceExtractor.extract(lastMaximum).toDouble();
+
         List<Level<Double>> closestResistanceLevels = resistanceLevels.stream()
             .filter(level -> isWithinVicinity(level, lastMaximum, maximumVicinity))
+            .min(Comparator.comparingDouble(level ->
+                Math.abs(level.function().apply((double) lastMaximum.getIndex()) - lastMaximumPrice)
+            ))
+            .stream()
             .toList();
 
         List<Level<Double>> closestSupportLevels = supportLevels.stream()
             .filter(level -> isWithinVicinity(level, lastMinimum, minimumVicinity))
+            .min(Comparator.comparingDouble(level ->
+                Math.abs(level.function().apply((double) lastMinimum.getIndex()) - lastMinimumPrice)
+            ))
+            .stream()
             .toList();
 
         return closestSupportLevels.stream()
