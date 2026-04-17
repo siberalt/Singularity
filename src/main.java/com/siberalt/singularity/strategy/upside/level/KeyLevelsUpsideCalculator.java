@@ -64,11 +64,11 @@ public class KeyLevelsUpsideCalculator implements UpsideCalculator {
         List<LevelPair> selectedLevels = levelSelector.select(resistanceLevels, supportLevels, lastCandles);
 
         if (selectedLevels.isEmpty()) {
-            return new Upside(0, 0);
+            return levelBasedUpsideCalculator.calculate(LevelPair.EMPTY, lastCandles);
         } else if (selectedLevels.size() == 1) {
             LevelPair levelPair = selectedLevels.get(0);
 
-            return levelBasedUpsideCalculator.calculate(levelPair.resistance(), levelPair.support(), lastCandles);
+            return levelBasedUpsideCalculator.calculate(levelPair, lastCandles);
         }
 
         List<LevelPairUpside> upsides = selectedLevels.stream()
@@ -92,11 +92,7 @@ public class KeyLevelsUpsideCalculator implements UpsideCalculator {
     }
 
     private LevelPairUpside calculateLevelPairUpside(LevelPair levelPair, List<Candle> lastCandles) {
-        Upside upside = levelBasedUpsideCalculator.calculate(
-            levelPair.resistance(),
-            levelPair.support(),
-            lastCandles
-        );
+        Upside upside = levelBasedUpsideCalculator.calculate(levelPair, lastCandles);
 
         return new LevelPairUpside(
             levelPair,

@@ -42,7 +42,9 @@ public class KeyLevelsUpsideCalculatorTest {
             .thenReturn(List.of(new LevelPair(resistance, support)));
         doReturn(List.of(support)).when(supportDetector).detect(anyList());
         doReturn(List.of(resistance)).when(resistanceDetector).detect(anyList());
-        when(upsideCalculator.calculate(resistance, support, List.of(lastCandle)))
+
+        LevelPair levelPair = new LevelPair(resistance, support);
+        when(upsideCalculator.calculate(levelPair, List.of(lastCandle)))
             .thenReturn(new Upside(0.7, 1.5));
 
         KeyLevelsUpsideCalculator calculator = new KeyLevelsUpsideCalculator(
@@ -66,8 +68,11 @@ public class KeyLevelsUpsideCalculatorTest {
         LevelDetector resistanceDetector = mock(LevelDetector.class);
         LevelBasedUpsideCalculator upsideCalculator = mock(LevelBasedUpsideCalculator.class);
 
+        Upside expectedUpside = new Upside(0.5, 0.5);
+
         when(supportDetector.detect(anyList())).thenReturn(List.of());
         when(resistanceDetector.detect(anyList())).thenReturn(List.of());
+        when(upsideCalculator.calculate(LevelPair.EMPTY, List.of(lastCandle))).thenReturn(expectedUpside);
 
         KeyLevelsUpsideCalculator calculator = new KeyLevelsUpsideCalculator(
             supportDetector,
@@ -76,9 +81,7 @@ public class KeyLevelsUpsideCalculatorTest {
         );
         Upside result = calculator.calculate(List.of(lastCandle));
 
-        assertNotNull(result);
-        assertEquals(0.0, result.signal(), 0.01);
-        assertEquals(0.0, result.strength(), 0.01);
+        assertEquals(expectedUpside, result);
     }
 
     private Candle createCandle(double price) {

@@ -3,6 +3,7 @@ package com.siberalt.singularity.strategy.upside.level;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.strategy.level.Level;
+import com.siberalt.singularity.strategy.level.selector.LevelPair;
 import com.siberalt.singularity.strategy.upside.Upside;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 import org.junit.jupiter.api.Test;
@@ -26,16 +27,17 @@ class AdaptiveUpsideCalculatorTest {
 
         Level<Double> resistance = new Level<>(timePoint, timePoint, x -> 100.0, 0.0);
         Level<Double> support = new Level<>(timePoint, timePoint, x -> 90.0, 0.0);
+        LevelPair levelPair = new LevelPair(resistance, support);
         List<Candle> recentCandles = List.of(
             Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 60, 95.0)
         );
 
-        when(levelsCalculator.calculate(resistance, support, recentCandles))
+        when(levelsCalculator.calculate(levelPair, recentCandles))
             .thenReturn(new Upside(0.5, 0.7));
         when(volumeCalculator.calculate(recentCandles))
             .thenReturn(new Upside(0.3, 0.6));
 
-        Upside result = calculator.calculate(resistance, support, recentCandles);
+        Upside result = calculator.calculate(levelPair, recentCandles);
 
         assertEquals(0.42, result.signal(), 0.01);
         assertEquals(0.66, result.strength(), 0.01);
@@ -51,16 +53,17 @@ class AdaptiveUpsideCalculatorTest {
 
         Level<Double> resistance = new Level<>(timePoint, timePoint, x -> 100.0, 0.0);
         Level<Double> support = new Level<>(timePoint, timePoint, x -> 90.0, 0.0);
+        LevelPair levelPair = new LevelPair(resistance, support);
         List<Candle> recentCandles = List.of(
             Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 60, 100.5)
         );
 
-        when(levelsCalculator.calculate(resistance, support, recentCandles))
+        when(levelsCalculator.calculate(levelPair, recentCandles))
             .thenReturn(new Upside(0.5, 0.7));
         when(volumeCalculator.calculate(recentCandles))
             .thenReturn(new Upside(0.8, 0.9));
 
-        Upside result = calculator.calculate(resistance, support, recentCandles);
+        Upside result = calculator.calculate(levelPair, recentCandles);
 
         assertEquals(0.71, result.signal(), 0.01);
         assertEquals(0.84, result.strength(), 0.01);
@@ -76,16 +79,17 @@ class AdaptiveUpsideCalculatorTest {
 
         Level<Double> resistance = new Level<>(timePoint, timePoint, x -> 100.0, 0.0);
         Level<Double> support = new Level<>(timePoint, timePoint, x -> 90.0, 0.0);
+        LevelPair levelPair = new LevelPair(resistance, support);
         List<Candle> recentCandles = List.of(
             Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 60, 95.0)
         );
 
-        when(levelsCalculator.calculate(resistance, support, recentCandles))
+        when(levelsCalculator.calculate(levelPair, recentCandles))
             .thenReturn(new Upside(0.5, 0.7));
         when(volumeCalculator.calculate(recentCandles))
             .thenReturn(new Upside(-0.8, 0.9));
 
-        Upside result = calculator.calculate(resistance, support, recentCandles);
+        Upside result = calculator.calculate(levelPair, recentCandles);
 
         assertEquals(-0.34, result.signal(), 0.01);
         assertEquals(0.83, result.strength(), 0.01);

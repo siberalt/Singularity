@@ -40,6 +40,7 @@ import com.siberalt.singularity.strategy.level.selector.*;
 import com.siberalt.singularity.strategy.level.track.*;
 import com.siberalt.singularity.strategy.observer.Observer;
 import com.siberalt.singularity.strategy.upside.CompositeFactorUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.SubrangeUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 import com.siberalt.singularity.strategy.upside.WindowUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.level.*;
@@ -56,7 +57,7 @@ import java.util.stream.Collectors;
 public class BasicTradeStrategySimulation {
     public static void main(String[] args) throws AbstractException {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
-        Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
+        Instant endTime = Instant.parse("2021-01-06T00:00:00Z");
         CvsFileCandleRepositoryFactory factory = new CvsFileCandleRepositoryFactory();
         OrderRepository orderRepository = new InMemoryOrderRepository();
 
@@ -91,17 +92,18 @@ public class BasicTradeStrategySimulation {
         Quotation initialInvestment = Quotation.of(1000000.00);
         broker.getOperationsService().addMoney(account.getId(), Money.of("RUB", initialInvestment));
 
-        int tradePeriodCandles = 80;
+        int tradePeriodCandles = 60;
         ExtremeLocator maximumLocator = createExtremeLocator(tradePeriodCandles, BaseExtremeLocator.createMaxLocator());
         ExtremeLocator minimumLocator = createExtremeLocator(tradePeriodCandles, BaseExtremeLocator.createMinLocator());
         LevelDetectorWindowTracker supportTracker = createLevelDetector(0.005, minimumLocator);
         LevelDetectorWindowTracker resistanceTracker = createLevelDetector(0.005, maximumLocator);
-        LevelSelectorWindowTracker selectorTracker = new LevelSelectorWindowTracker(
-            new ExtremeBasedLevelSelector(
-                LastExtremeLocator.ofMinimums(6, 1, Candle::getTypicalPriceAsDouble),
-                LastExtremeLocator.ofMaximums(6, 1, Candle::getTypicalPriceAsDouble)
-            )
+        var levelSelector = new ExtremeBasedLevelSelector(
+            LastExtremeLocator.ofMinimums(6, 1, Candle::getTypicalPriceAsDouble),
+            LastExtremeLocator.ofMaximums(6, 1, Candle::getTypicalPriceAsDouble)
         );
+        levelSelector.setMinimumVicinity(0.005);
+        levelSelector.setMaximumVicinity(0.005);
+        LevelSelectorWindowTracker selectorTracker = new LevelSelectorWindowTracker(levelSelector);
         StrategyInterface strategy = createLevelsStrategy(
             candleRepository,
             broker,
@@ -183,11 +185,24 @@ public class BasicTradeStrategySimulation {
         LevelDetector resistanceDetector,
         LevelSelector selectorTracker
     ) {
+        UpsideCalculator compositeUpsideCalculator = new CompositeFactorUpsideCalculator(
+            List.of(
+                new CompositeFactorUpsideCalculator.WeightedCalculator(new MFIUpsideCalculator(), 0.6),
+                new CompositeFactorUpsideCalculator.WeightedCalculator(new VPTUpsideCalculator(), 0.4)
+            )
+        );
+
+        LevelBasedUpsideCalculator adaptiveUpsideCalculator = new AdaptiveUpsideCalculator(
+            new ChannelLevelBasedUpsideCalculator(),
+            SubrangeUpsideCalculator.ofLastN(30, compositeUpsideCalculator)
+        );
+
         KeyLevelsUpsideCalculator upsideCalculator = new KeyLevelsUpsideCalculator(
             supportDetector,
             resistanceDetector,
-            new ChannelLevelBasedUpsideCalculator()
+            //new ChannelLevelBasedUpsideCalculator()
             //new SimpleLevelBasedUpsideCalculator()
+            adaptiveUpsideCalculator
         );
 
         upsideCalculator.setLevelSelector(selectorTracker);
@@ -199,7 +214,7 @@ public class BasicTradeStrategySimulation {
             candleRepository
         );
         strategy.setBuyThreshold(0.4);
-        strategy.setSellThreshold(-0.7);
+        strategy.setSellThreshold(-0.5);
         strategy.setStep(10);
 
         return strategy;
@@ -300,7 +315,7 @@ public class BasicTradeStrategySimulation {
             selectedResistanceLevels,
             "#CC8400"
         );
-        priceChart.setStepInterval(3);
+        priceChart.setStepInterval(1);
         priceChart.render(candles);
     }
 

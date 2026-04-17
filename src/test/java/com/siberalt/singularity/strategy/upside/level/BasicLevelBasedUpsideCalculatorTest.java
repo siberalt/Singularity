@@ -3,6 +3,7 @@ package com.siberalt.singularity.strategy.upside.level;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.strategy.level.Level;
+import com.siberalt.singularity.strategy.level.selector.LevelPair;
 import com.siberalt.singularity.strategy.upside.Upside;
 import org.junit.jupiter.api.Test;
 
@@ -17,10 +18,11 @@ public class BasicLevelBasedUpsideCalculatorTest {
     void calculatesUpsideWhenCurrentPriceIsBetweenSupportAndResistance() {
         Level<Double> resistance = createLevel(10.0, 5.0, 100);
         Level<Double> support = createLevel(5.0, 3.0, 50);
+        LevelPair levelPair = new LevelPair(support, resistance);
         double currentPrice = 7.5;
 
         BasicLevelBasedUpsideCalculator calculator = new BasicLevelBasedUpsideCalculator();
-        Upside result = calculator.calculate(resistance, support, List.of(createCandle(currentPrice)));
+        Upside result = calculator.calculate(levelPair, List.of(createCandle(currentPrice)));
 
         assertNotNull(result);
         assertTrue(result.signal() >= -1);
@@ -31,10 +33,11 @@ public class BasicLevelBasedUpsideCalculatorTest {
     void calculatesUpsideWhenCurrentPriceIsEqualToWeightedPrice() {
         Level<Double> resistance = createLevel(10.0, 5.0, 100);
         Level<Double> support = createLevel(5.0, 3.0, 50);
+        LevelPair levelPair = new LevelPair(resistance, support);
         double currentPrice = 7.0; // Weighted price for these levels
 
         BasicLevelBasedUpsideCalculator calculator = new BasicLevelBasedUpsideCalculator();
-        Upside result = calculator.calculate(resistance, support, List.of(createCandle(currentPrice)));
+        Upside result = calculator.calculate(levelPair, List.of(createCandle(currentPrice)));
 
         assertNotNull(result);
         assertEquals(0, result.signal(), 0.1);
@@ -44,9 +47,10 @@ public class BasicLevelBasedUpsideCalculatorTest {
     void calculatesUpsideWhenCurrentPriceIsFarAboveResistance() {
         Level<Double> resistance = createLevel(10.0, 5.0, 100);
         Level<Double> support = createLevel(5.0, 3.0, 50);
+        LevelPair levelPair = new LevelPair(resistance, support);
 
         BasicLevelBasedUpsideCalculator calculator = new BasicLevelBasedUpsideCalculator();
-        Upside result = calculator.calculate(resistance, support, List.of(createCandle(15.0)));
+        Upside result = calculator.calculate(levelPair, List.of(createCandle(15.0)));
 
         assertNotNull(result);
         assertEquals(1.0, result.signal(), 1e-9);
@@ -56,9 +60,10 @@ public class BasicLevelBasedUpsideCalculatorTest {
     void calculatesUpsideWhenCurrentPriceIsFarBelowSupport() {
         Level<Double> resistance = createLevel(10.0, 5.0, 100);
         Level<Double> support = createLevel(5.0, 3.0, 50);
+        LevelPair levelPair = new LevelPair(resistance, support);
 
         BasicLevelBasedUpsideCalculator calculator = new BasicLevelBasedUpsideCalculator();
-        Upside result = calculator.calculate(resistance, support, List.of(createCandle(1.0)));
+        Upside result = calculator.calculate(levelPair, List.of(createCandle(1.0)));
 
         assertNotNull(result);
         assertEquals(-1.0, result.signal(), 1e-9);
@@ -68,9 +73,10 @@ public class BasicLevelBasedUpsideCalculatorTest {
     void calculatesUpsideWhenCurrentPriceIsJustBelowResistance() {
         Level<Double> resistance = createLevel(10.0, 5.0, 100);
         Level<Double> support = createLevel(5.0, 3.0, 50);
+        LevelPair levelPair = new LevelPair(resistance, support);
 
         BasicLevelBasedUpsideCalculator calculator = new BasicLevelBasedUpsideCalculator();
-        Upside result = calculator.calculate(resistance, support, List.of(createCandle(9.9)));
+        Upside result = calculator.calculate(levelPair, List.of(createCandle(9.9)));
 
         assertNotNull(result);
         assertTrue(result.signal() < 0);
@@ -81,9 +87,10 @@ public class BasicLevelBasedUpsideCalculatorTest {
     void calculatesUpsideWhenCurrentPriceIsJustAboveSupport() {
         Level<Double> resistance = createLevel(10.0, 5.0, 100);
         Level<Double> support = createLevel(5.0, 3.0, 50);
+        LevelPair levelPair = new LevelPair(resistance, support);
 
         BasicLevelBasedUpsideCalculator calculator = new BasicLevelBasedUpsideCalculator();
-        Upside result = calculator.calculate(resistance, support, List.of(createCandle(5.1)));
+        Upside result = calculator.calculate(levelPair, List.of(createCandle(5.1)));
 
         assertNotNull(result);
         assertTrue(result.signal() > 0);

@@ -1,7 +1,7 @@
 package com.siberalt.singularity.strategy.upside.level;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.strategy.level.Level;
+import com.siberalt.singularity.strategy.level.selector.LevelPair;
 import com.siberalt.singularity.strategy.upside.Upside;
 
 import java.util.List;
@@ -21,11 +21,10 @@ public class BasicLevelBasedUpsideCalculator implements LevelBasedUpsideCalculat
     }
 
     @Override
-    public Upside calculate(
-        Level<Double> resistance,
-        Level<Double> support,
-        List<Candle> recentCandles
-    ) {
+    public Upside calculate(LevelPair levelPair, List<Candle> recentCandles) {
+        var resistance = levelPair.resistance();
+        var support = levelPair.support();
+
         long currentIndex = recentCandles.get(recentCandles.size() - 1).getIndex();
         double resistancePrice = resistance.function().apply((double) currentIndex);
         double supportPrice = support.function().apply((double) currentIndex);
@@ -63,7 +62,7 @@ public class BasicLevelBasedUpsideCalculator implements LevelBasedUpsideCalculat
                 upside = 1 - (currentPrice - supportPrice) / (weightedNeutralPoint - supportPrice);
             } else {
                 // Между нейтральной точкой и сопротивлением
-                upside = - (currentPrice - weightedNeutralPoint) / (resistancePrice - weightedNeutralPoint);
+                upside = -(currentPrice - weightedNeutralPoint) / (resistancePrice - weightedNeutralPoint);
             }
         }
 

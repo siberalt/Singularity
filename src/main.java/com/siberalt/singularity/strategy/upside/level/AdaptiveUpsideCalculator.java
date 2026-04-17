@@ -2,6 +2,7 @@ package com.siberalt.singularity.strategy.upside.level;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.Level;
+import com.siberalt.singularity.strategy.level.selector.LevelPair;
 import com.siberalt.singularity.strategy.upside.Upside;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 
@@ -26,17 +27,18 @@ public class AdaptiveUpsideCalculator implements LevelBasedUpsideCalculator {
     }
 
     @Override
-    public Upside calculate(
-        Level<Double> resistance,
-        Level<Double> support,
-        List<Candle> recentCandles
-    ) {
-        Upside levelsUpside = levelsCalculator.calculate(resistance, support, recentCandles);
+    public Upside calculate(LevelPair levelPair, List<Candle> recentCandles) {
         Upside volumeUpside = volumeCalculator.calculate(recentCandles);
+
+        if (LevelPair.EMPTY.equals(levelPair)) {
+            return volumeUpside;
+        }
+
+        Upside levelsUpside = levelsCalculator.calculate(levelPair, recentCandles);
 
         // 3. Динамически адаптируем веса на основе контекста
         WeightFactors weightFactors = calculateAdaptiveWeights(
-            levelsUpside, volumeUpside, recentCandles, resistance, support
+            levelsUpside, volumeUpside, recentCandles, levelPair
         );
 
         // 4. Комбинируем сигналы
@@ -64,9 +66,12 @@ public class AdaptiveUpsideCalculator implements LevelBasedUpsideCalculator {
         Upside levels,
         Upside volume,
         List<Candle> recentCandles,
-        Level<Double> resistance,
-        Level<Double> support
+        LevelPair levelPair
     ) {
+        // Инициализация базовых значений
+        var resistance = levelPair.resistance();
+        var support = levelPair.support();
+
         double levelsWeight = BASE_LEVELS_WEIGHT;
         double volumeWeight = BASE_VOLUME_WEIGHT;
 
