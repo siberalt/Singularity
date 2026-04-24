@@ -43,8 +43,12 @@ import com.siberalt.singularity.strategy.upside.CompositeFactorUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.SubrangeUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 import com.siberalt.singularity.strategy.upside.WindowUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.*;
-import com.siberalt.singularity.strategy.upside.volume.MFIUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.extreme.MaximinUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.level.AdaptiveUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.level.ChannelLevelBasedUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.level.KeyLevelsUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.level.LevelBasedUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.volume.NetVolumeUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.volume.VPTUpsideCalculator;
 
 import java.math.BigDecimal;
@@ -57,7 +61,7 @@ import java.util.stream.Collectors;
 public class BasicTradeStrategySimulation {
     public static void main(String[] args) throws AbstractException {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
-        Instant endTime = Instant.parse("2021-01-06T00:00:00Z");
+        Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
         CvsFileCandleRepositoryFactory factory = new CvsFileCandleRepositoryFactory();
         OrderRepository orderRepository = new InMemoryOrderRepository();
 
@@ -82,6 +86,7 @@ public class BasicTradeStrategySimulation {
             orderRepository,
             clock
         );
+        broker.getOrderService().setCommissionRatio(0.0005);
         EventSimulator simulator = new EventSimulator(clock);
         Account account = broker.getUserService().openAccount(
             "Account",
@@ -110,7 +115,9 @@ public class BasicTradeStrategySimulation {
             account,
             supportTracker,
             resistanceTracker,
-            selectorTracker
+            selectorTracker,
+            maximumLocator,
+            minimumLocator
         );
 
         Observer observer = new Observer();
@@ -118,8 +125,10 @@ public class BasicTradeStrategySimulation {
         simulator.addSimulationUnit(broker.getSubscriptionManager());
         simulator.addInitializableUnit((from, to) -> strategy.run(observer));
 
+        Instant strategyBeginTime = Instant.now();
         simulator.run(startTime, endTime);
-        System.out.println("Simulation completed.");
+        Duration duration = Duration.between(Instant.now(), strategyBeginTime);
+        System.out.println("Simulation completed. Time elapsed: " + duration);
         Quotation profit = Quotation.ZERO;
 
         System.out.println("----------------------------");
@@ -183,18 +192,20 @@ public class BasicTradeStrategySimulation {
         Account account,
         LevelDetector supportDetector,
         LevelDetector resistanceDetector,
-        LevelSelector selectorTracker
+        LevelSelector selectorTracker,
+        ExtremeLocator maximaBaseLocator,
+        ExtremeLocator minimaBaseLocator
     ) {
-        UpsideCalculator compositeUpsideCalculator = new CompositeFactorUpsideCalculator(
+        UpsideCalculator volumeUpsideCalculator = new CompositeFactorUpsideCalculator(
             List.of(
-                new CompositeFactorUpsideCalculator.WeightedCalculator(new MFIUpsideCalculator(), 0.6),
-                new CompositeFactorUpsideCalculator.WeightedCalculator(new VPTUpsideCalculator(), 0.4)
+                //new CompositeFactorUpsideCalculator.WeightedCalculator(new NetVolumeUpsideCalculator(), 0.7),
+                new CompositeFactorUpsideCalculator.WeightedCalculator(new VPTUpsideCalculator(), 1)
             )
         );
 
         LevelBasedUpsideCalculator adaptiveUpsideCalculator = new AdaptiveUpsideCalculator(
             new ChannelLevelBasedUpsideCalculator(),
-            SubrangeUpsideCalculator.ofLastN(30, compositeUpsideCalculator)
+            SubrangeUpsideCalculator.ofLastN(60, volumeUpsideCalculator)
         );
 
         KeyLevelsUpsideCalculator upsideCalculator = new KeyLevelsUpsideCalculator(
@@ -206,14 +217,24 @@ public class BasicTradeStrategySimulation {
         );
 
         upsideCalculator.setLevelSelector(selectorTracker);
+        var maximinUpsideCalculator = new MaximinUpsideCalculator(maximaBaseLocator, minimaBaseLocator);
+        var subrangeUpsideCalculator = SubrangeUpsideCalculator.ofLastN(60, new NetVolumeUpsideCalculator());
+
+        CompositeFactorUpsideCalculator compositeUpsideCalculator = new CompositeFactorUpsideCalculator(
+            List.of(
+                new CompositeFactorUpsideCalculator.WeightedCalculator(SubrangeUpsideCalculator.ofLastN(60, new NetVolumeUpsideCalculator()), 0.9),
+                new CompositeFactorUpsideCalculator.WeightedCalculator(SubrangeUpsideCalculator.ofLastN(60 * 24, maximinUpsideCalculator), 0.1)
+                    //new CompositeFactorUpsideCalculator.WeightedCalculator(subrangeUpsideCalculator, 0.05)
+                )
+            );
         BasicTradeStrategy strategy = new BasicTradeStrategy(
             broker,
             "TMOS",
             account.getId(),
-            new WindowUpsideCalculator(upsideCalculator, 10080),
+            new WindowUpsideCalculator(compositeUpsideCalculator, 10080),
             candleRepository
         );
-        strategy.setBuyThreshold(0.4);
+        strategy.setBuyThreshold(0.5);
         strategy.setSellThreshold(-0.5);
         strategy.setStep(10);
 
@@ -227,47 +248,6 @@ public class BasicTradeStrategySimulation {
                 .setExtremeVicinity(20)
                 .build()
         );
-    }
-
-    private static StrategyInterface createStrategy(
-        ReadCandleRepository candleRepository,
-        EventSubscriptionBroker broker,
-        Account account,
-        LevelDetector supportDetector,
-        LevelDetector resistanceDetector,
-        LevelSelectorTracker selectorTracker
-    ) {
-        UpsideCalculator compositeUpsideCalculator = new CompositeFactorUpsideCalculator(
-            List.of(
-                new CompositeFactorUpsideCalculator.WeightedCalculator(new MFIUpsideCalculator(), 0.6),
-                new CompositeFactorUpsideCalculator.WeightedCalculator(new VPTUpsideCalculator(), 0.4)
-            )
-        );
-
-        LevelBasedUpsideCalculator adaptiveUpsideCalculator = new AdaptiveUpsideCalculator(
-            new BasicLevelBasedUpsideCalculator(-0.3, 0.3),
-            compositeUpsideCalculator
-        );
-
-        KeyLevelsUpsideCalculator upsideCalculator = new KeyLevelsUpsideCalculator(
-            supportDetector,
-            resistanceDetector,
-            adaptiveUpsideCalculator
-        );
-        upsideCalculator.setLevelSelector(selectorTracker);
-
-        BasicTradeStrategy strategy = new BasicTradeStrategy(
-            broker,
-            "TMOS",
-            account.getId(),
-            upsideCalculator,
-            candleRepository
-        );
-        strategy.setBuyThreshold(0.4);
-        strategy.setSellThreshold(-0.5);
-        strategy.setStep(80);
-
-        return strategy;
     }
 
     private static void drawOrdersChart(
@@ -315,7 +295,7 @@ public class BasicTradeStrategySimulation {
             selectedResistanceLevels,
             "#CC8400"
         );
-        priceChart.setStepInterval(1);
+        priceChart.setStepInterval(3);
         priceChart.render(candles);
     }
 

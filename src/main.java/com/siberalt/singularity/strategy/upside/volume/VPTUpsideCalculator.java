@@ -21,7 +21,7 @@ public class VPTUpsideCalculator implements UpsideCalculator {
     @Override
     public Upside calculate(List<Candle> lastCandles) {
         if (lastCandles.size() < 2) {
-            return new Upside(0, 0); // Недостаточно данных для расчета
+            return Upside.NEUTRAL; // Недостаточно данных для расчета
         }
 
         double vpt = 0;

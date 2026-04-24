@@ -5,4 +5,5 @@ import com.siberalt.singularity.entity.candle.TimePoint;
 import java.util.List;
 
 public record LevelTraceGroup(TimePoint fromPoint, TimePoint toPoint, List<LevelTrace> levelTraces) {
+    public static final LevelTraceGroup EMPTY = new LevelTraceGroup(null, null, List.of());
 }

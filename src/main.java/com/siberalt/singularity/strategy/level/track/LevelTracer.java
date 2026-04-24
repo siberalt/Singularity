@@ -15,7 +15,7 @@ public class LevelTracer {
 
     public LevelTraceGroup trace(List<SnapshotLevelGroup> snapshots) {
         if (snapshots.isEmpty()) {
-            return null;
+            return LevelTraceGroup.EMPTY;
         }
 
         List<LevelTraceBuilder> resultTraceBuilders = new ArrayList<>();
