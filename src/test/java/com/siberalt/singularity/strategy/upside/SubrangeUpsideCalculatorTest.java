@@ -97,7 +97,7 @@ class SubrangeUpsideCalculatorTest {
         @DisplayName("Должен выбирать все свечи, если N больше размера списка")
         void shouldSelectAllWhenNExceedsSize() {
             Candle candle1 = candles.get(0);
-            SubrangeUpsideCalculator calculator = SubrangeUpsideCalculator.ofLastN(5, mockBaseCalculator);
+            SubrangeUpsideCalculator calculator = SubrangeUpsideCalculator.ofLastN(5, mockBaseCalculator, true);
             when(mockBaseCalculator.calculate(any())).thenReturn(new Upside(0.7, 0.8));
 
             calculator.calculate(candles);
@@ -137,7 +137,7 @@ class SubrangeUpsideCalculatorTest {
         @DisplayName("Должен выбирать все свечи, если N больше размера списка")
         void shouldSelectAllWhenNExceedsSize() {
             Candle candle1 = candles.get(0);
-            SubrangeUpsideCalculator calculator = SubrangeUpsideCalculator.ofFirstN(5, mockBaseCalculator);
+            SubrangeUpsideCalculator calculator = SubrangeUpsideCalculator.ofFirstN(5, mockBaseCalculator, true);
             when(mockBaseCalculator.calculate(any())).thenReturn(new Upside(0.8, 0.9));
 
             calculator.calculate(candles);

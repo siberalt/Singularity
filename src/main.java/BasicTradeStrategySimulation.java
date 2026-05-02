@@ -1,8 +1,6 @@
 import com.siberalt.singularity.broker.contract.execution.EventSubscriptionBroker;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.instrument.common.InstrumentType;
-import com.siberalt.singularity.broker.contract.service.market.request.GetCurrentPriceRequest;
-import com.siberalt.singularity.broker.contract.service.market.response.GetCurrentPriceResponse;
 import com.siberalt.singularity.broker.contract.service.user.AccessLevel;
 import com.siberalt.singularity.broker.contract.service.user.Account;
 import com.siberalt.singularity.broker.contract.service.user.AccountType;
@@ -39,23 +37,19 @@ import com.siberalt.singularity.strategy.level.linear.ClusterLevelDetector;
 import com.siberalt.singularity.strategy.level.selector.*;
 import com.siberalt.singularity.strategy.level.track.*;
 import com.siberalt.singularity.strategy.observer.Observer;
-import com.siberalt.singularity.strategy.upside.CompositeFactorUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.SubrangeUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.UpsideCalculator;
-import com.siberalt.singularity.strategy.upside.WindowUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.*;
 import com.siberalt.singularity.strategy.upside.extreme.MaximinUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.AdaptiveUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.ChannelLevelBasedUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.KeyLevelsUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.LevelBasedUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.volume.NetVolumeUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.volume.VPTUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.level.*;
+import com.siberalt.singularity.strategy.upside.subrange.CalendarPeriodFilterDecorator;
+import com.siberalt.singularity.strategy.upside.volume.VWAPUpsideCalculator;
 
+import java.awt.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public class BasicTradeStrategySimulation {
@@ -97,17 +91,17 @@ public class BasicTradeStrategySimulation {
         Quotation initialInvestment = Quotation.of(1000000.00);
         broker.getOperationsService().addMoney(account.getId(), Money.of("RUB", initialInvestment));
 
-        int tradePeriodCandles = 60;
+        int tradePeriodCandles = 80;
         ExtremeLocator maximumLocator = createExtremeLocator(tradePeriodCandles, BaseExtremeLocator.createMaxLocator());
         ExtremeLocator minimumLocator = createExtremeLocator(tradePeriodCandles, BaseExtremeLocator.createMinLocator());
         LevelDetectorWindowTracker supportTracker = createLevelDetector(0.005, minimumLocator);
         LevelDetectorWindowTracker resistanceTracker = createLevelDetector(0.005, maximumLocator);
         var levelSelector = new ExtremeBasedLevelSelector(
-            LastExtremeLocator.ofMinimums(6, 1, Candle::getTypicalPriceAsDouble),
-            LastExtremeLocator.ofMaximums(6, 1, Candle::getTypicalPriceAsDouble)
+            LastExtremeLocator.ofMinimums(6, 2, Candle::getTypicalPriceAsDouble),
+            LastExtremeLocator.ofMaximums(6, 2, Candle::getTypicalPriceAsDouble)
         );
-        levelSelector.setMinimumVicinity(0.005);
-        levelSelector.setMaximumVicinity(0.005);
+        levelSelector.setMinimumVicinity(0.003);
+        levelSelector.setMaximumVicinity(0.003);
         LevelSelectorWindowTracker selectorTracker = new LevelSelectorWindowTracker(levelSelector);
         StrategyInterface strategy = createLevelsStrategy(
             candleRepository,
@@ -127,9 +121,6 @@ public class BasicTradeStrategySimulation {
 
         Instant strategyBeginTime = Instant.now();
         simulator.run(startTime, endTime);
-        Duration duration = Duration.between(Instant.now(), strategyBeginTime);
-        System.out.println("Simulation completed. Time elapsed: " + duration);
-        Quotation profit = Quotation.ZERO;
 
         System.out.println("----------------------------");
 
@@ -146,28 +137,29 @@ public class BasicTradeStrategySimulation {
             System.out.println("Quantity: " + order.getLotsExecuted());
             System.out.println("Created at: " + order.getCreatedTime());
             System.out.println("----------------------------");
-
-            profit = profit.add(order.getBalanceChange());
         }
 
         BrokerFacade brokerFacade = BrokerFacade.of(broker);
 
         long instrumentCount = brokerFacade.getPositionSize(account.getId(), "TMOS");
         clock.syncCurrentTime(endTime);
-        GetCurrentPriceResponse response = broker.getMarketDataService()
-            .getCurrentPrice(new GetCurrentPriceRequest("TMOS"));
-        Quotation instrumentPrice = response.getPrice();
 
-        profit = profit.add(instrumentPrice.multiply(instrumentCount));
+        if (instrumentCount > 0) {
+            brokerFacade.sellMarket(account.getId(), "TMOS", instrumentCount);
+        }
+
+        Quotation balance = broker.getOperationsService().getAvailableMoney(account.getId(), "RUB").getQuotation();
+        Quotation profit = balance.subtract(initialInvestment);
         Quotation profitPercent = profit.divide(initialInvestment).multiply(100);
 
+        Duration duration = Duration.between(Instant.now(), strategyBeginTime);
+        System.out.println("Simulation completed. Time elapsed: " + duration);
         System.out.println("Period days: " + Duration.between(startTime, endTime).toDays());
         System.out.printf("Absolute profit: %.2f\n", profit.toDouble());
         System.out.printf("Total profit percent: %.2f%%\n", profitPercent.toDouble());
         System.out.println("Total orders: " + orders.size());
         System.out.printf("Initial investment: %.2f\n", initialInvestment.toDouble());
-        System.out.printf("Result balance: %.2f\n", profit.add(initialInvestment).toDouble());
-        System.out.println("Instrument position size: " + instrumentCount + " (price: " + instrumentPrice + ")");
+        System.out.printf("Result balance: %.2f\n", balance.toDouble());
         BigDecimal apy = profitPercent
             .divide(BigDecimal.valueOf(Duration.between(startTime, endTime).toDays()), RoundingMode.HALF_UP)
             .multiply(BigDecimal.valueOf(365L));
@@ -196,37 +188,57 @@ public class BasicTradeStrategySimulation {
         ExtremeLocator maximaBaseLocator,
         ExtremeLocator minimaBaseLocator
     ) {
-        UpsideCalculator volumeUpsideCalculator = new CompositeFactorUpsideCalculator(
+//        UpsideCalculator volumeUpsideCalculator = new CompositeFactorUpsideCalculator(
+//            List.of(
+//                //new CompositeFactorUpsideCalculator.WeightedCalculator(new NetVolumeUpsideCalculator(), 0.7),
+//                new CompositeFactorUpsideCalculator.WeightedCalculator(new VPTUpsideCalculator(), 1)
+//            )
+//        );
+//
+//        LevelBasedUpsideCalculator adaptiveUpsideCalculator = new AdaptiveUpsideCalculator(
+//            new ChannelLevelBasedUpsideCalculator(),
+//            SubrangeUpsideCalculator.ofLastN(60, volumeUpsideCalculator)
+//        );
+//
+//        upsideCalculator.setLevelSelector(selectorTracker);
+        var maximinUpsideCalculator = new MaximinUpsideCalculator(
+            LastExtremeLocator.ofMaximums(10, Candle::getClosePriceAsDouble),
+            LastExtremeLocator.ofMinimums(10, Candle::getClosePriceAsDouble)
+        );
+        var volumeUpsideCalculator = new CompositeFactorUpsideCalculator(
             List.of(
-                //new CompositeFactorUpsideCalculator.WeightedCalculator(new NetVolumeUpsideCalculator(), 0.7),
-                new CompositeFactorUpsideCalculator.WeightedCalculator(new VPTUpsideCalculator(), 1)
+//                CompositeFactorUpsideCalculator.newWeightedCalculator(
+//                    SubrangeUpsideCalculator.ofLastN(60, new NetVolumeUpsideCalculator()), 0.2
+//                ),
+                CompositeFactorUpsideCalculator.newWeightedCalculator(
+                    CalendarPeriodFilterDecorator.ofLastDays(1, new VWAPUpsideCalculator()), 1
+                )
             )
         );
 
         LevelBasedUpsideCalculator adaptiveUpsideCalculator = new AdaptiveUpsideCalculator(
-            new ChannelLevelBasedUpsideCalculator(),
-            SubrangeUpsideCalculator.ofLastN(60, volumeUpsideCalculator)
+            new ChannelLevelBasedUpsideCalculator(), volumeUpsideCalculator
         );
 
-        KeyLevelsUpsideCalculator upsideCalculator = new KeyLevelsUpsideCalculator(
+        KeyLevelsUpsideCalculator levelUpsideCalculator = new KeyLevelsUpsideCalculator(
             supportDetector,
             resistanceDetector,
             //new ChannelLevelBasedUpsideCalculator()
-            //new SimpleLevelBasedUpsideCalculator()
-            adaptiveUpsideCalculator
+            new SimpleLevelBasedUpsideCalculator()
         );
-
-        upsideCalculator.setLevelSelector(selectorTracker);
-        var maximinUpsideCalculator = new MaximinUpsideCalculator(maximaBaseLocator, minimaBaseLocator);
-        var subrangeUpsideCalculator = SubrangeUpsideCalculator.ofLastN(60, new NetVolumeUpsideCalculator());
+        levelUpsideCalculator.setLevelSelector(selectorTracker);
 
         CompositeFactorUpsideCalculator compositeUpsideCalculator = new CompositeFactorUpsideCalculator(
             List.of(
-                new CompositeFactorUpsideCalculator.WeightedCalculator(SubrangeUpsideCalculator.ofLastN(60, new NetVolumeUpsideCalculator()), 0.9),
-                new CompositeFactorUpsideCalculator.WeightedCalculator(SubrangeUpsideCalculator.ofLastN(60 * 24, maximinUpsideCalculator), 0.1)
-                    //new CompositeFactorUpsideCalculator.WeightedCalculator(subrangeUpsideCalculator, 0.05)
-                )
-            );
+                 //CompositeFactorUpsideCalculator.newWeightedCalculator(levelUpsideCalculator, 1)
+                CompositeFactorUpsideCalculator.newWeightedCalculator(volumeUpsideCalculator, 0.8),
+                CompositeFactorUpsideCalculator.newWeightedCalculator(SubrangeUpsideCalculator.ofLastN(60 * 24, maximinUpsideCalculator), 0.2)
+                // CompositeFactorUpsideCalculator.newWeightedCalculator(volumeUpsideCalculator, 1)
+
+                //CompositeFactorUpsideCalculator.newWeightedCalculator(maximinUpsideCalculator, 0.1)
+                //new CompositeFactorUpsideCalculator.WeightedCalculator(subrangeUpsideCalculator, 0.05)
+            )
+        );
         BasicTradeStrategy strategy = new BasicTradeStrategy(
             broker,
             "TMOS",
@@ -245,7 +257,7 @@ public class BasicTradeStrategySimulation {
         return new CachingExtremeLocator(
             ConcurrentFrameExtremeLocator.builder(baseLocator)
                 .setFrameSize(frameSize)
-                .setExtremeVicinity(20)
+                .setExtremeVicinity(40)
                 .build()
         );
     }
@@ -295,8 +307,9 @@ public class BasicTradeStrategySimulation {
             selectedResistanceLevels,
             "#CC8400"
         );
-        priceChart.setStepInterval(3);
+        priceChart.setStepInterval(1);
         priceChart.render(candles);
+        Toolkit.getDefaultToolkit().beep();
     }
 
     private static LevelDetectorWindowTracker createLevelDetector(double sensitivity, ExtremeLocator baseLocator) {

@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public record RangeLong(long fromIndex, long toIndex) {
+    public static RangeLong EMPTY = new RangeLong(0L, 0L);
+
     public RangeLong {
         if (fromIndex > toIndex) {
             throw new IllegalArgumentException("fromIndex cannot be greater than toIndex");

@@ -5,7 +5,8 @@ import com.siberalt.singularity.entity.candle.Candle;
 import java.util.List;
 
 public class CompositeFactorUpsideCalculator implements UpsideCalculator {
-    public record WeightedCalculator(UpsideCalculator calculator, double weight) {}
+    public record WeightedCalculator(UpsideCalculator calculator, double weight) {
+    }
 
     private final List<WeightedCalculator> weightedCalculators;
 
@@ -40,9 +41,13 @@ public class CompositeFactorUpsideCalculator implements UpsideCalculator {
         }
 
         if (Math.abs(totalWeight) < 1e-10) {
-            return new Upside(0, 0);
+            return Upside.NEUTRAL;
         }
 
         return new Upside(totalSignal / totalWeight, totalStrength / totalWeight);
+    }
+
+    public static WeightedCalculator newWeightedCalculator(UpsideCalculator upsideCalculator, double weight) {
+        return new WeightedCalculator(upsideCalculator, weight);
     }
 }

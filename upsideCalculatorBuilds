@@ -1,0 +1,32 @@
+Range: 2021-01-01T00:00:00Z - 2021-02-02T00:00:00Z
+instrument: TMOS
+
+1. APY: 9,89%
+
+        var maximinUpsideCalculator = new MaximinUpsideCalculator(maximaBaseLocator, minimaBaseLocator);
+        var volumeUpsideCalculator = SubrangeUpsideCalculator.ofLastN(60, new NetVolumeUpsideCalculator()):
+
+        CompositeFactorUpsideCalculator compositeUpsideCalculator = new CompositeFactorUpsideCalculator(
+            List.of(
+                CompositeFactorUpsideCalculator.newWeightedCalculator(volumeUpsideCalculator, 0.9),
+                CompositeFactorUpsideCalculator.newWeightedCalculator(SubrangeUpsideCalculator.ofLastN(60 * 24, maximinUpsideCalculator), 0.1)
+            )
+        );
+
+2. APY: 48,23%
+
+        var volumeUpsideCalculator = CalendarPeriodFilterDecorator.ofLastDays(1, new VWAPCalculator())
+
+3. APY: 56,25%
+
+        var maximinUpsideCalculator = new MaximinUpsideCalculator(
+            LastExtremeLocator.ofMaximums(10, Candle::getClosePriceAsDouble),
+            LastExtremeLocator.ofMinimums(10, Candle::getClosePriceAsDouble)
+        );
+        var volumeUpsideCalculator = CalendarPeriodFilterDecorator.ofLastDays(1, new VWAPCalculator())
+        CompositeFactorUpsideCalculator compositeUpsideCalculator = new CompositeFactorUpsideCalculator(
+            List.of(
+                CompositeFactorUpsideCalculator.newWeightedCalculator(volumeUpsideCalculator, 0.8),
+                CompositeFactorUpsideCalculator.newWeightedCalculator(SubrangeUpsideCalculator.ofLastN(60 * 24, maximinUpsideCalculator), 0.2)
+            )
+        );

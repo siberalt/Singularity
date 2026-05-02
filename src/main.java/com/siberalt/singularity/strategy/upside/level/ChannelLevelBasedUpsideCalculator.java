@@ -25,6 +25,10 @@ public class ChannelLevelBasedUpsideCalculator implements LevelBasedUpsideCalcul
 
     @Override
     public Upside calculate(LevelPair levelPair, List<Candle> recentCandles) {
+        if (levelPair.equals(LevelPair.EMPTY)) {
+            return Upside.NEUTRAL;
+        }
+
         var resistance = levelPair.resistance();
         var support   = levelPair.support();
 

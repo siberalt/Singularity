@@ -39,7 +39,6 @@ public class FasterXmlRenderer implements DataRenderer {
         rootNode.set("data", createDataNode(objectMapper, seriesChunk));
 
         writeJsonToFile(objectMapper, rootNode);
-        openHtmlFileInBrowser();
     }
 
     private ArrayNode createColumnsNode(ObjectMapper objectMapper, SeriesChunk seriesChunk) {
@@ -91,18 +90,6 @@ public class FasterXmlRenderer implements DataRenderer {
             objectMapper.writeValue(new File(outputFilePath), rootNode);
         } catch (IOException e) {
             throw new RuntimeException("Failed to write JSON file", e);
-        }
-    }
-
-    private void openHtmlFileInBrowser() {
-        try {
-            if (java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
-                java.awt.Desktop.getDesktop().browse(new File(htmlFile).toURI());
-            } else {
-                System.out.println("Desktop is not supported or browse action is unavailable. Please open the HTML file manually: " + htmlFile);
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to open HTML file in browser", e);
         }
     }
 

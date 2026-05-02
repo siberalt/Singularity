@@ -44,8 +44,8 @@ function drawChart() {
                     title: 'Price Chart',
                     subtitle: 'Prices over time'
                 },
-                width: 1800,
-                height: 900,
+                width: 2700,
+                height: 1400,
                 series: jsonData['options']['series'],
 
                 // Настройки категориальной оси

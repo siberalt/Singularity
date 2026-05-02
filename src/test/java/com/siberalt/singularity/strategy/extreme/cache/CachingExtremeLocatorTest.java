@@ -268,6 +268,38 @@ class CachingExtremeLocatorTest {
     }
 
     @Test
+    void locateCachesEmptyListWhenNoExtremesFoundWithIntersection() {
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
+        ExtremeRangeRepository rangeRepository = mock(ExtremeRangeRepository.class);
+        ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
+
+        CachingExtremeLocator locator = new CachingExtremeLocator(baseLocator, rangeRepository, extremeRepository);
+
+        List<Candle> candles = List.of(
+            candleFactory.createCommon("2024-01-01T00:00:00Z", 110),
+            candleFactory.createCommon("2024-01-01T00:01:00Z", 110),
+            candleFactory.createCommon("2024-01-01T00:02:00Z", 110),
+            candleFactory.createCommon("2024-01-01T00:03:00Z", 110),
+            candleFactory.createCommon("2024-01-01T00:04:00Z", 110),
+            candleFactory.createCommon("2024-01-01T00:05:00Z", 110),
+            candleFactory.createCommon("2024-01-01T00:06:00Z", 110),
+            candleFactory.createCommon("2024-01-01T00:07:00Z", 110)
+        );
+
+        ExtremeRange outerRange = createOuterRange(0, 7);
+
+        when(rangeRepository.getIntersects(outerRange, RangeType.OUTER)).thenReturn(List.of(createOuterRange(9, 12)));
+        when(rangeRepository.getNeighbors(outerRange, RangeType.OUTER)).thenReturn(List.of());
+        when(baseLocator.locate(candles)).thenReturn(List.of());
+
+        List<Candle> result = locator.locate(candles);
+
+        assertEquals(List.of(), result);
+        verify(extremeRepository, never()).saveBatch(any(), any());
+        verify(rangeRepository, atMostOnce()).saveBatch(any());
+    }
+
+    @Test
     void locateHandlesLeftIntersectAndRightNeighbor() {
         ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         ExtremeRangeRepository rangeRepository = mock(ExtremeRangeRepository.class);

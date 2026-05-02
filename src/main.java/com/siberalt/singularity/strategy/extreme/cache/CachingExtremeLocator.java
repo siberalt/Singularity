@@ -273,7 +273,13 @@ public class CachingExtremeLocator implements ExtremeLocator {
 
     private void updateRange(ExtremeRange newOuterRange, List<ExtremeRange> oldRanges) {
         ExtremeRange newInnerRange = extremeRepository.getInnerRange(newOuterRange);
-        rangeRepository.saveBatch(List.of(newOuterRange, newInnerRange));
+
+        if (null == newInnerRange) {
+            rangeRepository.saveBatch(List.of(newOuterRange));
+        } else {
+            rangeRepository.saveBatch(List.of(newOuterRange, newInnerRange));
+        }
+
         rangeRepository.deleteBatch(oldRanges);
     }
 

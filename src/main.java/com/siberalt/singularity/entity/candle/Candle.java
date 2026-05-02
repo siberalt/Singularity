@@ -106,6 +106,10 @@ public class Candle {
         return closePrice;
     }
 
+    public double getClosePriceAsDouble() {
+        return closePrice.toDouble();
+    }
+
     public Candle setClosePrice(Quotation closePrice) {
         this.closePrice = closePrice;
         return this;
