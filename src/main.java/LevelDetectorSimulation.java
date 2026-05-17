@@ -4,8 +4,8 @@ import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory
 import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.series.FunctionGroupSeriesProvider;
 import com.siberalt.singularity.presenter.google.series.PointSeriesProvider;
-import com.siberalt.singularity.strategy.extreme.BaseExtremeLocator;
-import com.siberalt.singularity.strategy.extreme.ConcurrentFrameExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetector;
@@ -13,7 +13,7 @@ import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetec
 import java.time.Instant;
 import java.util.List;
 
-public class ClusterLevelDetectorSimulation {
+public class LevelDetectorSimulation {
     public static void main(String[] args) {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
@@ -24,16 +24,13 @@ public class ClusterLevelDetectorSimulation {
             "src/test/resources/entity.candle.cvs/TMOS"
         );
         List<Candle> candles = candleRepository.getPeriod("TMOS", startTime, endTime);
-        ConcurrentFrameExtremeLocator minExtremeLocator = ConcurrentFrameExtremeLocator
-            .builder(BaseExtremeLocator.createMinLocator(Candle::getTypicalPriceAsDouble))
-            .setFrameSize(70)
-            .setExtremeVicinity(25)
-            .build();
-        ConcurrentFrameExtremeLocator maxExtremeLocator = ConcurrentFrameExtremeLocator
-            .builder(BaseExtremeLocator.createMaxLocator(Candle::getTypicalPriceAsDouble))
-            .setFrameSize(70)
-            .setExtremeVicinity(25)
-            .build();
+        ExtremeLocator minExtremeLocator = PivotPointExtremeLocator.ofMinimums(50);
+        ExtremeLocator maxExtremeLocator = PivotPointExtremeLocator.ofMaximums(50);
+        LevelDetector supportDetector = StatelessClusterLevelDetector.createDefault(1.4, minExtremeLocator);
+        LevelDetector resistanceDetector = StatelessClusterLevelDetector.createDefault(1.4, maxExtremeLocator);
+        var supportLevels = supportDetector.detect(candles);
+        var resistanceLevels = resistanceDetector.detect(candles);
+
         PointSeriesProvider minPoints = new PointSeriesProvider("Minima");
         minPoints.setColor("#00FF00");
         minPoints.setSize(5);
@@ -41,7 +38,7 @@ public class ClusterLevelDetectorSimulation {
             .forEach(
                 minPoint -> minPoints.addPoint(
                     minPoint.getIndex(),
-                    minPoint.getTypicalPriceAsDouble()
+                    minPoint.getClosePriceAsDouble()
                 )
             );
         PointSeriesProvider maxPoints = new PointSeriesProvider("Maxima");
@@ -51,19 +48,15 @@ public class ClusterLevelDetectorSimulation {
             .forEach(
                 maxPoint -> maxPoints.addPoint(
                     maxPoint.getIndex(),
-                    maxPoint.getTypicalPriceAsDouble()
+                    maxPoint.getClosePriceAsDouble()
                 )
             );
 
         PriceChart priceChart = new PriceChart(
             candleRepository,
             "TMOS",
-            Candle::getTypicalPriceAsDouble
+            Candle::getClosePriceAsDouble
         );
-        LevelDetector supportDetector = StatelessClusterLevelDetector.createDefault(0.004, minExtremeLocator);
-        LevelDetector resistanceDetector = StatelessClusterLevelDetector.createDefault(0.004, maxExtremeLocator);
-        var supportLevels = supportDetector.detect(candles);
-        var resistanceLevels = resistanceDetector.detect(candles);
         addLevelsToChart(priceChart, "Support Levels", supportLevels, "#00FFFA");
         addLevelsToChart(priceChart, "Resistance Levels", resistanceLevels, "#FFBB00");
         priceChart.addSeriesProvider(minPoints);

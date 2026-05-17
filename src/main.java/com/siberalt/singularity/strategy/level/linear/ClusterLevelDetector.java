@@ -31,9 +31,6 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
     private final Duration levelTTL = Duration.ofDays(30);
     private int maxLevels = MAX_LEVELS;
 
-    // Статистика для адаптивной чувствительности
-    private double priceVolatility = 0.0;
-
     public ClusterLevelDetector(double sensitivity, ExtremeLocator extremeLocator) {
         this.sensitivity = sensitivity;
         this.extremeLocator = extremeLocator;
@@ -59,9 +56,6 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         // Очищаем устаревшие уровни перед обработкой новых данных
         cleanupOldLevels(candles.get(candles.size() - 1).getTime());
 
-        // Обновляем статистику волатильности
-        updateMarketStatistics(candles);
-
         // Обрабатываем только новые экстремумы
         List<Candle> newExtremes = extremeLocator.locate(candles);
         Map<Double, List<Candle>> levelsNewExtremes = new TreeMap<>();
@@ -70,8 +64,7 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
             double price = extreme.getTypicalPriceAsDouble();
 
             // Адаптивная чувствительность на основе волатильности
-            double adaptiveSensitivity = calculateAdaptiveSensitivity(price);
-            double sensitivityRange = price * adaptiveSensitivity;
+            double sensitivityRange = price * sensitivity;
 
             Optional<Map.Entry<Double, LevelDetails>> closestLevel = findClosestLevel(price, sensitivityRange);
 
@@ -186,38 +179,6 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         return levelDetails.touchesCount() > 1;
     }
 
-    /**
-     * Адаптивная чувствительность на основе текущей волатильности рынка
-     */
-    private double calculateAdaptiveSensitivity(double currentPrice) {
-        return sensitivity;
-//        if (priceVolatility == 0.0) {
-//            return sensitivity;
-//        }
-//
-//        // Увеличиваем чувствительность в периоды высокой волатильности
-//        double volatilityFactor = Math.min(2.0, priceVolatility / (currentPrice * 0.01));
-//        return sensitivity * volatilityFactor;
-    }
-
-    /**
-     * Обновляет статистику рынка для адаптивной настройки
-     */
-    private void updateMarketStatistics(List<Candle> candles) {
-        if (candles.size() < 2) {
-            return;
-        }
-
-        // Вычисляем волатильность как среднее отклонение цен
-        double sumDeviations = 0.0;
-        for (int i = 1; i < candles.size(); i++) {
-            double change = Math.abs(candles.get(i).getTypicalPriceAsDouble() -
-                candles.get(i - 1).getTypicalPriceAsDouble());
-            sumDeviations += change;
-        }
-        this.priceVolatility = sumDeviations / (candles.size() - 1);
-    }
-
     private void removeWeakestLevels(int countToRemove) {
         levelDetails.entrySet().stream()
             .sorted(Comparator.comparingDouble(entry -> entry.getValue().level.strength()))
@@ -241,6 +202,5 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
     public void reset() {
         levelDetails.clear();
         functionsCache.clear();
-        priceVolatility = 0.0;
     }
 }

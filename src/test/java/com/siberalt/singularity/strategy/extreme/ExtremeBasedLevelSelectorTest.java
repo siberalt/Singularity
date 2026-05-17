@@ -4,6 +4,7 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.selector.ExtremeBasedLevelSelector;
 import com.siberalt.singularity.strategy.level.selector.LevelPair;
+import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -18,23 +19,28 @@ class ExtremeBasedLevelSelectorTest {
     void selectsClosestLevelsWithinVicinity() {
         ExtremeLocator minimumLocator = Mockito.mock(ExtremeLocator.class);
         ExtremeLocator maximumLocator = Mockito.mock(ExtremeLocator.class);
+        VolatilityCalculator volCalcMock = Mockito.mock(VolatilityCalculator.class);
 
         Candle lastMinimum = Candle.of(Instant.parse("2021-01-01T00:00:00Z"),100.0);
         Candle lastMaximum = Candle.of(Instant.parse("2021-01-02T00:00:00Z"),200.0);
 
         when(minimumLocator.locate(Mockito.anyList())).thenReturn(List.of(lastMinimum));
         when(maximumLocator.locate(Mockito.anyList())).thenReturn(List.of(lastMaximum));
+        when(volCalcMock.calculate(Mockito.anyList())).thenReturn(1.);
 
         Level<Double> resistanceLevel = new Level<>(0, 10, index -> 199.0);
         Level<Double> supportLevel = new Level<>(0, 10, index -> 101.0);
 
-        ExtremeBasedLevelSelector selector = new ExtremeBasedLevelSelector(minimumLocator, maximumLocator);
-        selector.setMinimumVicinity(0.02).setMaximumVicinity(0.02);
+        ExtremeBasedLevelSelector selector = new ExtremeBasedLevelSelector(minimumLocator, maximumLocator, volCalcMock);
+        selector.setVicinityMultiplier(1);
 
         List<LevelPair> result = selector.select(
             List.of(resistanceLevel),
             List.of(supportLevel),
-            List.of()
+            List.of(
+                lastMaximum,
+                lastMinimum
+            )
         );
 
         assertEquals(1, result.size());
@@ -57,7 +63,7 @@ class ExtremeBasedLevelSelectorTest {
         Level<Double> supportLevel = new Level<>(0, 10, index -> 180.0);
 
         ExtremeBasedLevelSelector selector = new ExtremeBasedLevelSelector(minimumLocator, maximumLocator);
-        selector.setMinimumVicinity(0.02).setMaximumVicinity(0.02);
+        selector.setVicinityMultiplier(0.02);
 
         List<LevelPair> result = selector.select(List.of(resistanceLevel), List.of(supportLevel), List.of());
 

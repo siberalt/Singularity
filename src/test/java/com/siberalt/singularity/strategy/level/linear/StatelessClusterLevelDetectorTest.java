@@ -71,7 +71,7 @@ class StatelessClusterLevelDetectorTest {
         );
         when(extremeLocator.locate(candles)).thenReturn(candles);
 
-        StatelessClusterLevelDetector detector =  StatelessClusterLevelDetector.createDefault(0.01, extremeLocator, 3);
+        StatelessClusterLevelDetector detector =  StatelessClusterLevelDetector.createDefault(extremeLocator, 2);
         List<Level<Double>> result = detector.detect(candles);
 
         assertEquals(2, result.size());

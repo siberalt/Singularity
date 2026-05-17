@@ -9,12 +9,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
 
-class ClusterAggregatorTest {
+class BaseClusterAggregatorTest {
     private final CandleFactory candleFactory = new CandleFactory("TEST");
 
     @Test
     void aggregatesClustersWithMultipleExtremes() {
-        ClusterAggregator aggregator = new ClusterAggregator(0.1);
+        BaseClusterAggregator aggregator = new BaseClusterAggregator(0.1);
         List<Candle> extremes = List.of(
             candleFactory.createCommon("2024-01-01T00:00:00Z", 100.0),
             candleFactory.createCommon("2024-01-01T00:01:00Z", 101.0),
@@ -23,7 +23,7 @@ class ClusterAggregatorTest {
             candleFactory.createCommon("2024-01-01T00:04:00Z", 201.0)
         );
 
-        List<Cluster> resultClusters = aggregator.aggregate(extremes);
+        List<Cluster> resultClusters = aggregator.aggregate(extremes, 0.0);
 
         assertEquals(2, resultClusters.size());
 
@@ -38,13 +38,13 @@ class ClusterAggregatorTest {
 
     @Test
     void aggregatesClustersWithEqualExtremes() {
-        ClusterAggregator aggregator = new ClusterAggregator(0.1);
+        BaseClusterAggregator aggregator = new BaseClusterAggregator(0.1);
         List<Candle> extremes = List.of(
             candleFactory.createCommon("2024-01-01T00:00:00Z", 100.0),
             candleFactory.createCommon("2024-01-01T00:01:00Z", 100.0)
         );
 
-        List<Cluster> result = aggregator.aggregate(extremes);
+        List<Cluster> result = aggregator.aggregate(extremes, 0.0);
 
         assertClustersEquals(
             List.of(
@@ -56,17 +56,17 @@ class ClusterAggregatorTest {
 
     @Test
     void handlesEmptyExtremesList() {
-        ClusterAggregator aggregator = new ClusterAggregator(0.1);
+        BaseClusterAggregator aggregator = new BaseClusterAggregator(0.1);
         List<Candle> extremes = Collections.emptyList();
 
-        List<Cluster> clusters = aggregator.aggregate(extremes);
+        List<Cluster> clusters = aggregator.aggregate(extremes, 0.0);
 
         assertTrue(clusters.isEmpty());
     }
 
     @Test
     void handlesClustersWithNoSubsetRelationsUsingAggregate() {
-        ClusterAggregator aggregator = new ClusterAggregator(0.1);
+        BaseClusterAggregator aggregator = new BaseClusterAggregator(0.1);
         List<Candle> extremes = List.of(
             candleFactory.createCommon("2024-01-01T00:00:00Z", 100.0),
             candleFactory.createCommon("2024-01-01T00:01:00Z", 200.0),
@@ -74,7 +74,7 @@ class ClusterAggregatorTest {
             candleFactory.createCommon("2024-01-01T00:03:00Z", 200.0)
         );
 
-        List<Cluster> result = aggregator.aggregate(extremes);
+        List<Cluster> result = aggregator.aggregate(extremes, 0.0);
 
         assertEquals(2, result.size());
         assertClustersEquals(

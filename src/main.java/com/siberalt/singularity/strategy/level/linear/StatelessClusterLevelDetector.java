@@ -7,6 +7,8 @@ import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.market.PriceExtractor;
+import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
+import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 
 import java.util.*;
 import java.util.function.Function;
@@ -17,6 +19,7 @@ public class StatelessClusterLevelDetector implements LevelDetector {
     private final ExtremeLocator extremeLocator;
     private StrengthCalculator strengthCalculator = new BasicStrengthCalculator();
     private final ClusterAggregator clusterAggregator;
+    private VolatilityCalculator volatilityCalculator = new ATRVolatilityCalculator();
 
     // Параметры для управления "забыванием" старых уровней
     private int maxLevels = MAX_LEVELS;
@@ -24,6 +27,16 @@ public class StatelessClusterLevelDetector implements LevelDetector {
     public StatelessClusterLevelDetector(ExtremeLocator extremeLocator, ClusterAggregator clusterAggregator) {
         this.extremeLocator = extremeLocator;
         this.clusterAggregator = clusterAggregator;
+    }
+
+    public StatelessClusterLevelDetector(
+        ExtremeLocator extremeLocator,
+        ClusterAggregator clusterAggregator,
+        VolatilityCalculator volatilityCalculator
+    ) {
+        this.extremeLocator = extremeLocator;
+        this.clusterAggregator = Objects.requireNonNull(clusterAggregator);
+        this.volatilityCalculator = Objects.requireNonNull(volatilityCalculator);
     }
 
     public StatelessClusterLevelDetector(ExtremeLocator extremeLocator, ClusterAggregator clusterAggregator, int maxLevels) {
@@ -45,7 +58,13 @@ public class StatelessClusterLevelDetector implements LevelDetector {
 
         // Обрабатываем только новые экстремумы
         List<Candle> extremes = extremeLocator.locate(candles);
-        List<Cluster> clusters = clusterAggregator.aggregate(extremes);
+
+        if (extremes.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        double volatility = volatilityCalculator.calculate(candles);
+        List<Cluster> clusters = clusterAggregator.aggregate(extremes, volatility);
 
         List<Level<Double>> levels = new ArrayList<>();
 
@@ -86,21 +105,21 @@ public class StatelessClusterLevelDetector implements LevelDetector {
         return levels;
     }
 
-    public static StatelessClusterLevelDetector createDefault(double sensitivity, ExtremeLocator extremeLocator) {
-        return new StatelessClusterLevelDetector(extremeLocator, new ClusterAggregator(sensitivity, 3));
+    public static StatelessClusterLevelDetector createDefault(double multiplier, ExtremeLocator extremeLocator) {
+        return new StatelessClusterLevelDetector(extremeLocator, new DBSCANClusterAggregator(multiplier, 2));
     }
 
-    public static StatelessClusterLevelDetector createDefault(double sensitivity, ExtremeLocator extremeLocator, PriceExtractor priceExtractor) {
+    public static StatelessClusterLevelDetector createDefault(ExtremeLocator extremeLocator, PriceExtractor priceExtractor) {
         return new StatelessClusterLevelDetector(
             extremeLocator,
-            new ClusterAggregator(priceExtractor, new RobustMedianCalculator(), sensitivity)
+            new DBSCANClusterAggregator(0.01, 2, priceExtractor, new RobustMedianCalculator())
         );
     }
 
-    public static StatelessClusterLevelDetector createDefault(double sensitivity, ExtremeLocator extremeLocator, int maxLevels) {
+    public static StatelessClusterLevelDetector createDefault(ExtremeLocator extremeLocator, int maxLevels) {
         return new StatelessClusterLevelDetector(
             extremeLocator,
-            new ClusterAggregator(sensitivity),
+            new DBSCANClusterAggregator(0.01, 2),
             maxLevels
         );
     }

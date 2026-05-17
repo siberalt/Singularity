@@ -103,4 +103,8 @@ public record RangeDouble(double fromIndex, double toIndex) {
 
         return new RangeDouble(intersectFromIndex, intersectToIndex);
     }
+
+    public boolean contains(double value) {
+        return fromIndex <= value && value <= toIndex;
+    }
 }
