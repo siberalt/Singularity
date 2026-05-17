@@ -11,7 +11,7 @@ import java.util.List;
 
 public class MFIUpsideCalculator implements UpsideCalculator {
     private static final double MINIMUM_FLOW_THRESHOLD = 1e-10;
-    private PriceExtractor priceExtractor = Candle::getTypicalPrice;
+    private PriceExtractor priceExtractor = Candle::getTypical;
 
     public MFIUpsideCalculator() {
     }

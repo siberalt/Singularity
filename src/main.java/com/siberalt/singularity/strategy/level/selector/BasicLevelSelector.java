@@ -23,7 +23,7 @@ public class BasicLevelSelector implements LevelSelector {
         List<Candle> recentCandles
     ) {
         Candle currentCandle = recentCandles.get(recentCandles.size() - 1);
-        double currentPrice = currentCandle.getTypicalPrice().toDouble();
+        double currentPrice = currentCandle.getTypicalAsDouble();
         long currentIndex = currentCandle.getIndex();
 
         List<Level<Double>> closestResistanceLevels = resistanceLevels.stream()

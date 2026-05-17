@@ -31,7 +31,7 @@ class LinearLevelDetectorTest {
         );
 
         LinearLevelDetector calculator = LinearLevelDetector.createSupport(
-            3, 0.1, this::getClosePrice
+            3, 0.1, Candle::getCloseAsDouble
         );
         calculator.setStrengthCalculator(strengthCalculator);
 
@@ -71,7 +71,7 @@ class LinearLevelDetectorTest {
         );
 
         LinearLevelDetector calculator = LinearLevelDetector.createSupport(
-            1, 0.1, this::getClosePrice
+            1, 0.1, Candle::getCloseAsDouble
         );
         calculator.setStrengthCalculator(strengthCalculator);
         // Mock the strength calculation
@@ -111,7 +111,7 @@ class LinearLevelDetectorTest {
         );
 
         LinearLevelDetector calculator = LinearLevelDetector.createSupport(
-            2, 0.1, this::getClosePrice
+            2, 0.1, Candle::getCloseAsDouble
         );
         calculator.setStrengthCalculator(strengthCalculator);
         // Mock the strength calculation
@@ -138,7 +138,7 @@ class LinearLevelDetectorTest {
             candleFactory.createCommon("2023-01-01T00:08:00Z", 11.0)
         );
 
-        LinearLevelDetector calculator = LinearLevelDetector.createResistance(3, 0.1, this::getClosePrice);
+        LinearLevelDetector calculator = LinearLevelDetector.createResistance(3, 0.1, Candle::getCloseAsDouble);
         calculator.setStrengthCalculator(strengthCalculator);
         // Mock the strength calculation
         // Assuming strength is calculated as the square of the number of candles in the frame
@@ -167,7 +167,7 @@ class LinearLevelDetectorTest {
         List<Candle> candles = List.of();
 
         LinearLevelDetector calculator = LinearLevelDetector.createSupport(
-            2, 0.1, this::getClosePrice
+            2, 0.1, Candle::getCloseAsDouble
         );
         calculator.setStrengthCalculator(strengthCalculator);
         verify(strengthCalculator, never()).calculate(any());
@@ -197,7 +197,7 @@ class LinearLevelDetectorTest {
         );
 
         LinearLevelDetector detector = LinearLevelDetector.createSupport(
-            2, 0.1, this::getClosePrice
+            2, 0.1, Candle::getCloseAsDouble
         );
         StrengthCalculator strengthCalculator = mock(StrengthCalculator.class);
         detector.setStrengthCalculator(strengthCalculator);
@@ -250,7 +250,7 @@ class LinearLevelDetectorTest {
         );
 
         LinearLevelDetector detector = LinearLevelDetector.createSupport(
-            2, 0.1, this::getClosePrice
+            2, 0.1, Candle::getCloseAsDouble
         );
         StrengthCalculator strengthCalculator = mock(StrengthCalculator.class);
         detector.setStrengthCalculator(strengthCalculator);
@@ -283,10 +283,6 @@ class LinearLevelDetectorTest {
             9, // indexTo
             45.0 // strength
         );
-    }
-
-    private double getClosePrice(Candle candle) {
-        return candle.getClosePrice().toDouble();
     }
 
     private void assertLevel(

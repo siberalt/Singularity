@@ -61,7 +61,7 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
         Map<Double, List<Candle>> levelsNewExtremes = new TreeMap<>();
 
         for (Candle extreme : newExtremes) {
-            double price = extreme.getTypicalPriceAsDouble();
+            double price = extreme.getTypicalAsDouble();
 
             // Адаптивная чувствительность на основе волатильности
             double sensitivityRange = price * sensitivity;
@@ -88,7 +88,7 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
 
             double updatedPrice = medianCalculator.calculateMedian(
                 new ArrayList<>(levelExtremes.stream()
-                    .map(Candle::getTypicalPriceAsDouble)
+                    .map(Candle::getTypicalAsDouble)
                     .collect(Collectors.toList()))
             );
 
@@ -160,7 +160,7 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
     }
 
     private void createNewLevel(Candle candle) {
-        double price = candle.getTypicalPriceAsDouble();
+        double price = candle.getTypicalAsDouble();
         Instant time = candle.getTime();
         long index = candle.getIndex();
 

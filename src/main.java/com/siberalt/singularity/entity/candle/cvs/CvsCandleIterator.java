@@ -47,10 +47,10 @@ class CvsCandleIterator implements Iterator<Candle> {
             return new Candle()
                 .setInstrumentUid(instrumentUid == null ? data[0] : instrumentUid)
                 .setTimePoint(new TimePoint(currentIndex, currentTime))
-                .setOpenPrice(Quotation.of(data[2]))
-                .setClosePrice(Quotation.of(data[3]))
-                .setHighPrice(Quotation.of(data[4]))
-                .setLowPrice(Quotation.of(data[5]))
+                .setOpen(Quotation.of(data[2]))
+                .setClose(Quotation.of(data[3]))
+                .setHigh(Quotation.of(data[4]))
+                .setLow(Quotation.of(data[5]))
                 .setVolume(Long.parseLong(data[6]));
         } catch (DateTimeParseException exception) {
             System.out.println("Invalid date format in line: " + line);

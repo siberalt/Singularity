@@ -60,10 +60,10 @@ public class NetVolumeUpsideCalculator implements UpsideCalculator {
                 continue; // Пропускаем свечи с нулевым объёмом
             }
 
-            double high = candle.getHighPrice().toDouble();
-            double low = candle.getLowPrice().toDouble();
-            double open = candle.getOpenPrice().toDouble();
-            double close = candle.getClosePrice().toDouble();
+            double high = candle.getHighAsDouble();
+            double low = candle.getLowAsDouble();
+            double open = candle.getOpenAsDouble();
+            double close = candle.getCloseAsDouble();
 
             double range = high - low;
             if (range == 0) continue;

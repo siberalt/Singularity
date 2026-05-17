@@ -58,7 +58,7 @@ public class LinearLevelDetector implements LevelDetector {
 
         for (Candle extreme : extremes) {
             long extremeIndex = extreme.getIndex();
-            Point2D<Double> point = new Point2D<>((double) extremeIndex, extreme.getTypicalPrice().toDouble());
+            Point2D<Double> point = new Point2D<>((double) extremeIndex, extreme.getTypicalAsDouble());
 
             if (linearModel.addPoint(point)) {
                 lastPoint = point;
@@ -141,7 +141,7 @@ public class LinearLevelDetector implements LevelDetector {
         return new LinearLevelDetector(
             neighbourhoodRatio,
             new FrameExtremeLocator(
-                frameSize, BaseExtremeLocator.createMinLocator(candle -> candle.getTypicalPrice().toDouble())
+                frameSize, BaseExtremeLocator.createMinLocator(Candle::getTypicalAsDouble)
             )
         );
     }
@@ -166,7 +166,7 @@ public class LinearLevelDetector implements LevelDetector {
         return new LinearLevelDetector(
             neighbourhoodRatio,
             new FrameExtremeLocator(
-                frameSize, BaseExtremeLocator.createMaxLocator(candle -> candle.getTypicalPrice().toDouble())
+                frameSize, BaseExtremeLocator.createMaxLocator(Candle::getTypicalAsDouble)
             )
         );
     }

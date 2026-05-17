@@ -131,10 +131,10 @@ public class LastExtremeLocator implements ExtremeLocator {
     }
 
     public static LastExtremeLocator ofMinimums() {
-        return ofMinimums(Candle::getTypicalPriceAsDouble);
+        return ofMinimums(Candle::getTypicalAsDouble);
     }
 
     public static LastExtremeLocator ofMaximums() {
-        return ofMaximums(Candle::getTypicalPriceAsDouble);
+        return ofMaximums(Candle::getTypicalAsDouble);
     }
 }

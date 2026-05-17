@@ -38,7 +38,7 @@ public class LevelDetectorSimulation {
             .forEach(
                 minPoint -> minPoints.addPoint(
                     minPoint.getIndex(),
-                    minPoint.getClosePriceAsDouble()
+                    minPoint.getCloseAsDouble()
                 )
             );
         PointSeriesProvider maxPoints = new PointSeriesProvider("Maxima");
@@ -48,14 +48,14 @@ public class LevelDetectorSimulation {
             .forEach(
                 maxPoint -> maxPoints.addPoint(
                     maxPoint.getIndex(),
-                    maxPoint.getClosePriceAsDouble()
+                    maxPoint.getCloseAsDouble()
                 )
             );
 
         PriceChart priceChart = new PriceChart(
             candleRepository,
             "TMOS",
-            Candle::getClosePriceAsDouble
+            Candle::getCloseAsDouble
         );
         addLevelsToChart(priceChart, "Support Levels", supportLevels, "#00FFFA");
         addLevelsToChart(priceChart, "Resistance Levels", resistanceLevels, "#FFBB00");

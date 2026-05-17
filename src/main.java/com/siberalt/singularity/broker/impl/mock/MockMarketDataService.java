@@ -64,7 +64,7 @@ public class MockMarketDataService implements MarketDataService {
                     currentTime
             );
             candles.stream()
-                    .map(x -> LastPrice.of(instrumentUid, x.getTime(), x.getOpenPrice()))
+                    .map(x -> LastPrice.of(instrumentUid, x.getTime(), x.getOpen()))
                     .forEach(lastPrices::add);
         }
 
@@ -83,7 +83,7 @@ public class MockMarketDataService implements MarketDataService {
         }
 
         Candle candle = candleList.get(0);
-        Quotation price = candle.getOpenPrice();
+        Quotation price = candle.getOpen();
 
         return new GetCurrentPriceResponse()
             .setInstrumentUid(instrumentUid)
@@ -139,10 +139,10 @@ public class MockMarketDataService implements MarketDataService {
         long volumeAvg = 0;
 
         for (var uniteCandle : uniteCandles) {
-            openAvg = openAvg.add(uniteCandle.getOpenPrice());
-            closeAvg = closeAvg.add(uniteCandle.getClosePrice());
-            highAvg = highAvg.add(uniteCandle.getHighPrice());
-            lowAvg = lowAvg.add(uniteCandle.getLowPrice());
+            openAvg = openAvg.add(uniteCandle.getOpen());
+            closeAvg = closeAvg.add(uniteCandle.getClose());
+            highAvg = highAvg.add(uniteCandle.getHigh());
+            lowAvg = lowAvg.add(uniteCandle.getLow());
             volumeAvg += uniteCandle.getVolume();
         }
 
@@ -154,10 +154,10 @@ public class MockMarketDataService implements MarketDataService {
         var firstCandle = uniteCandles.stream().findFirst().orElseThrow();
 
         return new Candle()
-                .setOpenPrice(openAvg)
-                .setClosePrice(closeAvg)
-                .setHighPrice(highAvg)
-                .setLowPrice(lowAvg)
+                .setOpen(openAvg)
+                .setClose(closeAvg)
+                .setHigh(highAvg)
+                .setLow(lowAvg)
                 .setVolume(volumeAvg)
                 .setInstrumentUid(firstCandle.getInstrumentUid())
                 .setTime(firstCandle.getTime());

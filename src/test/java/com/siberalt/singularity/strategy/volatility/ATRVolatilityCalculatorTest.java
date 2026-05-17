@@ -156,9 +156,9 @@ class ATRVolatilityCalculatorTest {
             candles.add(gapUp);
 
             // True Range = max(high - low, |high - prevClose|, |low - prevClose|)
-            double range1 = gapUp.getHighPrice().toDouble() - gapUp.getLowPrice().toDouble(); // 10.0
-            double range2 = Math.abs(gapUp.getHighPrice().toDouble() - prev.getClosePriceAsDouble()); // |120 - 95| = 25.0
-            double range3 = Math.abs(gapUp.getLowPrice().toDouble() - prev.getClosePriceAsDouble()); // |110 - 95| = 15.0
+            double range1 = gapUp.getHighAsDouble() - gapUp.getLowAsDouble(); // 10.0
+            double range2 = Math.abs(gapUp.getHighAsDouble() - prev.getCloseAsDouble()); // |120 - 95| = 25.0
+            double range3 = Math.abs(gapUp.getLowAsDouble() - prev.getCloseAsDouble()); // |110 - 95| = 15.0
 
             double tr = Math.max(range1, Math.max(range2, range3)); // → max(10, 25, 15) = 25.0
 
@@ -194,9 +194,9 @@ class ATRVolatilityCalculatorTest {
 
 
     private double calculateTrueRange(Candle current, Candle previous) {
-        double highLow = current.getHighPrice().toDouble() - current.getLowPrice().toDouble();
-        double highPrevClose = Math.abs(current.getHighPrice().toDouble() - previous.getClosePriceAsDouble());
-        double lowPrevClose = Math.abs(current.getLowPrice().toDouble() - previous.getClosePriceAsDouble());
+        double highLow = current.getHighAsDouble() - current.getLowAsDouble();
+        double highPrevClose = Math.abs(current.getHighAsDouble() - previous.getCloseAsDouble());
+        double lowPrevClose = Math.abs(current.getLowAsDouble() - previous.getCloseAsDouble());
 
         return Math.max(highLow, Math.max(highPrevClose, lowPrevClose));
     }

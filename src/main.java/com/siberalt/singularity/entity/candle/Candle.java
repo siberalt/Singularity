@@ -12,10 +12,10 @@ public class Candle {
 
     private String instrumentUid;
     private TimePoint timePoint;
-    private Quotation openPrice;
-    private Quotation closePrice;
-    private Quotation highPrice;
-    private Quotation lowPrice;
+    private Quotation open;
+    private Quotation close;
+    private Quotation high;
+    private Quotation low;
     private long volume;
 
     public Candle() {
@@ -32,10 +32,10 @@ public class Candle {
     ) {
         this.instrumentUid = instrumentUid;
         this.timePoint = timePoint;
-        this.openPrice = openPrice;
-        this.closePrice = closePrice;
-        this.highPrice = highPrice;
-        this.lowPrice = lowPrice;
+        this.open = openPrice;
+        this.close = closePrice;
+        this.high = highPrice;
+        this.low = lowPrice;
         this.volume = volume;
     }
 
@@ -47,10 +47,10 @@ public class Candle {
         return volume == candle.volume &&
             Objects.equals(instrumentUid, candle.instrumentUid) &&
             Objects.equals(timePoint, candle.timePoint) &&
-            Objects.equals(openPrice, candle.openPrice) &&
-            Objects.equals(closePrice, candle.closePrice) &&
-            Objects.equals(highPrice, candle.highPrice) &&
-            Objects.equals(lowPrice, candle.lowPrice);
+            Objects.equals(open, candle.open) &&
+            Objects.equals(close, candle.close) &&
+            Objects.equals(high, candle.high) &&
+            Objects.equals(low, candle.low);
     }
 
     @Override
@@ -58,10 +58,10 @@ public class Candle {
         return Objects.hash(
             instrumentUid,
             timePoint.toString(),
-            openPrice.toString(),
-            closePrice.toString(),
-            highPrice.toString(),
-            lowPrice.toString(),
+            open.toString(),
+            close.toString(),
+            high.toString(),
+            low.toString(),
             volume
         );
     }
@@ -93,60 +93,72 @@ public class Candle {
         return this;
     }
 
-    public Quotation getOpenPrice() {
-        return openPrice;
+    public Quotation getOpen() {
+        return open;
     }
 
-    public Candle setOpenPrice(Quotation openPrice) {
-        this.openPrice = openPrice;
+    public double getOpenAsDouble(){
+        return this.getOpen().toDouble();
+    }
+
+    public Candle setOpen(Quotation open) {
+        this.open = open;
         return this;
     }
 
-    public Quotation getClosePrice() {
-        return closePrice;
+    public Quotation getClose() {
+        return close;
     }
 
-    public double getClosePriceAsDouble() {
-        return closePrice.toDouble();
+    public double getCloseAsDouble() {
+        return close.toDouble();
     }
 
-    public Candle setClosePrice(Quotation closePrice) {
-        this.closePrice = closePrice;
+    public Candle setClose(Quotation close) {
+        this.close = close;
         return this;
     }
 
-    public double getTypicalPriceAsDouble() {
-        Quotation typicalPrice = getTypicalPrice();
+    public double getTypicalAsDouble() {
+        Quotation typicalPrice = getTypical();
         return typicalPrice != null ? typicalPrice.toDouble() : Double.NaN;
     }
 
-    public Quotation getTypicalPrice() {
-        if (closePrice == null || highPrice == null || lowPrice == null) {
+    public Quotation getTypical() {
+        if (close == null || high == null || low == null) {
             return null;
         }
         return Quotation.of(
-            closePrice
-                .add(highPrice.toBigDecimal())
-                .add(lowPrice.toBigDecimal())
+            close
+                .add(high.toBigDecimal())
+                .add(low.toBigDecimal())
                 .divide(BigDecimal.valueOf(3), RoundingMode.HALF_EVEN)
         );
     }
 
-    public Quotation getHighPrice() {
-        return highPrice;
+    public Quotation getHigh() {
+        return high;
     }
 
-    public Candle setHighPrice(Quotation highPrice) {
-        this.highPrice = highPrice;
+    public double getHighAsDouble() {
+        return this.getHigh().toDouble();
+    }
+
+    public Candle setHigh(Quotation high) {
+        this.high = high;
         return this;
     }
 
-    public Quotation getLowPrice() {
-        return lowPrice;
+    public Quotation getLow() {
+        return low;
     }
 
-    public Candle setLowPrice(Quotation lowPrice) {
-        this.lowPrice = lowPrice;
+    public double getLowAsDouble(){
+        return this.getLow().toDouble();
+    }
+
+    public Candle setLow(Quotation low) {
+        this.low = low;
         return this;
     }
 
@@ -173,15 +185,15 @@ public class Candle {
         return new Candle()
             .setInstrumentUid(instrumentUid)
             .setTimePoint(timePoint)
-            .setOpenPrice(openPrice)
-            .setClosePrice(closePrice)
-            .setHighPrice(highPrice)
-            .setLowPrice(lowPrice)
+            .setOpen(open)
+            .setClose(close)
+            .setHigh(high)
+            .setLow(low)
             .setVolume(volume);
     }
 
     public boolean isEmpty() {
-        return openPrice == null && closePrice == null && highPrice == null && lowPrice == null && volume == 0;
+        return open == null && close == null && high == null && low == null && volume == 0;
     }
 
     public static Candle of(Instant time, String instrumentUid, long volume, double repeatedValue) {
@@ -205,20 +217,20 @@ public class Candle {
             .setInstrumentUid(instrumentUid)
             .setTimePoint(timePoint)
             .setVolume(volume)
-            .setOpenPrice(Quotation.of(open))
-            .setHighPrice(Quotation.of(high))
-            .setLowPrice(Quotation.of(low))
-            .setClosePrice(Quotation.of(close));
+            .setOpen(Quotation.of(open))
+            .setHigh(Quotation.of(high))
+            .setLow(Quotation.of(low))
+            .setClose(Quotation.of(close));
     }
 
     public static Candle of(TimePoint timePoint, long volume, double open, double high, double low, double close) {
         return new Candle()
             .setTimePoint(timePoint)
             .setVolume(volume)
-            .setOpenPrice(Quotation.of(open))
-            .setHighPrice(Quotation.of(high))
-            .setLowPrice(Quotation.of(low))
-            .setClosePrice(Quotation.of(close));
+            .setOpen(Quotation.of(open))
+            .setHigh(Quotation.of(high))
+            .setLow(Quotation.of(low))
+            .setClose(Quotation.of(close));
     }
 
     public static Candle of(Instant time, String instrumentUid, long volume, double open, double high, double low, double close) {
@@ -226,10 +238,10 @@ public class Candle {
             .setInstrumentUid(instrumentUid)
             .setTime(time)
             .setVolume(volume)
-            .setOpenPrice(Quotation.of(open))
-            .setHighPrice(Quotation.of(high))
-            .setLowPrice(Quotation.of(low))
-            .setClosePrice(Quotation.of(close));
+            .setOpen(Quotation.of(open))
+            .setHigh(Quotation.of(high))
+            .setLow(Quotation.of(low))
+            .setClose(Quotation.of(close));
     }
 
     public static Candle of(Instant time, String instrumentUid, long volume, Quotation open, Quotation high, Quotation low, Quotation close) {
@@ -237,20 +249,20 @@ public class Candle {
             .setInstrumentUid(instrumentUid)
             .setTime(time)
             .setVolume(volume)
-            .setOpenPrice(open)
-            .setHighPrice(high)
-            .setLowPrice(low)
-            .setClosePrice(close);
+            .setOpen(open)
+            .setHigh(high)
+            .setLow(low)
+            .setClose(close);
     }
 
     public static Candle of(Instant time, long volume, double open, double high, double low, double close) {
         return new Candle()
             .setTime(time)
             .setVolume(volume)
-            .setOpenPrice(Quotation.of(open))
-            .setHighPrice(Quotation.of(high))
-            .setLowPrice(Quotation.of(low))
-            .setClosePrice(Quotation.of(close));
+            .setOpen(Quotation.of(open))
+            .setHigh(Quotation.of(high))
+            .setLow(Quotation.of(low))
+            .setClose(Quotation.of(close));
     }
 
     public static CandleBuilder builder() {

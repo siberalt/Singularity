@@ -20,10 +20,10 @@ public class LastExtremeLocatorSimulation {
         );
         List<Candle> candles = candleRepository.getPeriod("TMOS", startTime, endTime);
         LastExtremeLocator minExtremeLocator = LastExtremeLocator.ofMinimums(
-            50, 1, Candle::getTypicalPriceAsDouble
+            50, 1, Candle::getTypicalAsDouble
         );
         LastExtremeLocator maxExtremeLocator = LastExtremeLocator.ofMaximums(
-            50, 1, Candle::getTypicalPriceAsDouble
+            50, 1, Candle::getTypicalAsDouble
         );
         int chunkSize = 2000;
 
@@ -38,19 +38,19 @@ public class LastExtremeLocatorSimulation {
             int toIndex = Math.min(i + chunkSize, candles.size());
             List<Candle> chunk = candles.subList(i, toIndex);
             Candle lastChunkCandle = chunk.get(chunk.size() - 1);
-            chunkPoints.addPoint(lastChunkCandle.getIndex(), lastChunkCandle.getTypicalPriceAsDouble());
+            chunkPoints.addPoint(lastChunkCandle.getIndex(), lastChunkCandle.getTypicalAsDouble());
             minExtremeLocator.locate(chunk)
                 .forEach(
                     minPoint -> minPoints.addPoint(
                         minPoint.getIndex(),
-                        minPoint.getTypicalPriceAsDouble()
+                        minPoint.getTypicalAsDouble()
                     )
                 );
             maxExtremeLocator.locate(chunk)
                 .forEach(
                     maxPoint -> maxPoints.addPoint(
                         maxPoint.getIndex(),
-                        maxPoint.getTypicalPriceAsDouble()
+                        maxPoint.getTypicalAsDouble()
                     )
                 );
         }
@@ -58,7 +58,7 @@ public class LastExtremeLocatorSimulation {
         PriceChart priceChart = new PriceChart(
             candleRepository,
             "TMOS",
-            Candle::getTypicalPriceAsDouble
+            Candle::getTypicalAsDouble
         );
         priceChart.addSeriesProvider(minPoints);
         priceChart.addSeriesProvider(maxPoints);

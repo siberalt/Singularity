@@ -58,10 +58,10 @@ public class CandleBuilder {
         return new Candle()
             .setInstrumentUid(instrumentUid)
             .setTimePoint(new TimePoint(index, time))
-            .setOpenPrice(openPrice)
-            .setClosePrice(closePrice)
-            .setHighPrice(highPrice)
-            .setLowPrice(lowPrice)
+            .setOpen(openPrice)
+            .setClose(closePrice)
+            .setHigh(highPrice)
+            .setLow(lowPrice)
             .setVolume(volume);
     }
 }

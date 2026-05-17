@@ -17,7 +17,7 @@ import java.util.function.Function;
 public class PriceChart {
     private String instrumentUid;
     private ReadCandleRepository candleRepository;
-    private Function<Candle, Double> priceExtractor = c -> c.getClosePrice().toDouble();
+    private Function<Candle, Double> priceExtractor = Candle::getCloseAsDouble;
     private int stepInterval = 30; // Default step interval for rendering
     private DataRenderer dataRenderer = new FasterXmlRenderer();
     private boolean useCandleIndexRange = true;

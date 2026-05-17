@@ -92,8 +92,8 @@ public class BasicTradeStrategySimulation {
         LevelDetectorWindowTracker supportTracker = createLevelDetector(0.005, minimumLocator);
         LevelDetectorWindowTracker resistanceTracker = createLevelDetector(0.005, maximumLocator);
         var levelSelector = new ExtremeBasedLevelSelector(
-            LastExtremeLocator.ofMinimums(6, 2, Candle::getClosePriceAsDouble),
-            LastExtremeLocator.ofMaximums(6, 2, Candle::getClosePriceAsDouble)
+            LastExtremeLocator.ofMinimums(6, 2, Candle::getCloseAsDouble),
+            LastExtremeLocator.ofMaximums(6, 2, Candle::getCloseAsDouble)
         );
         levelSelector.setVicinityMultiplier(10);
         LevelSelectorWindowTracker selectorTracker = new LevelSelectorWindowTracker(levelSelector);
@@ -196,8 +196,8 @@ public class BasicTradeStrategySimulation {
 //
 //        upsideCalculator.setLevelSelector(selectorTracker);
         var maximinUpsideCalculator = new MaximinUpsideCalculator(
-            LastExtremeLocator.ofMaximums(10, Candle::getClosePriceAsDouble),
-            LastExtremeLocator.ofMinimums(10, Candle::getClosePriceAsDouble)
+            LastExtremeLocator.ofMaximums(10, Candle::getCloseAsDouble),
+            LastExtremeLocator.ofMinimums(10, Candle::getCloseAsDouble)
         );
         var volumeUpsideCalculator = new CompositeFactorUpsideCalculator(
             List.of(
@@ -266,7 +266,7 @@ public class BasicTradeStrategySimulation {
         PriceChart priceChart = new PriceChart(
             candleRepository,
             instrumentUid,
-            Candle::getClosePriceAsDouble
+            Candle::getCloseAsDouble
         );
         priceChart.addSeriesProvider(orderSeriesProvider);
         List<List<Level<Double>>> selectedSupportLevels = levelPairsSnapshots.stream()

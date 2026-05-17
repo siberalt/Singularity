@@ -113,15 +113,15 @@ class MaximinUpsideCalculatorTest {
             highCandle = mock(Candle.class);
             currentCandle = mock(Candle.class);
 
-            when(lowCandle.getTypicalPriceAsDouble()).thenReturn(100.0);
-            when(highCandle.getTypicalPriceAsDouble()).thenReturn(150.0);
+            when(lowCandle.getTypicalAsDouble()).thenReturn(100.0);
+            when(highCandle.getTypicalAsDouble()).thenReturn(150.0);
         }
 
         @Test
         @DisplayName("Должен вернуть +1.0, если цена у минимального экстремума")
         void shouldReturnMaxPositiveWhenPriceAtMinimum() {
             // Цена у минимума
-            when(currentCandle.getTypicalPriceAsDouble()).thenReturn(100.0);
+            when(currentCandle.getTypicalAsDouble()).thenReturn(100.0);
 
             when(mockMaxLocator.locate(any())).thenReturn(List.of(highCandle));
             when(mockMinLocator.locate(any())).thenReturn(List.of(lowCandle));
@@ -136,7 +136,7 @@ class MaximinUpsideCalculatorTest {
         @DisplayName("Должен вернуть -1.0, если цена у максимального экстремума")
         void shouldReturnMaxNegativeWhenPriceAtMaximum() {
             // Цена у максимума
-            when(currentCandle.getTypicalPriceAsDouble()).thenReturn(150.0);
+            when(currentCandle.getTypicalAsDouble()).thenReturn(150.0);
 
             when(mockMaxLocator.locate(any())).thenReturn(List.of(highCandle));
             when(mockMinLocator.locate(any())).thenReturn(List.of(lowCandle));
@@ -151,7 +151,7 @@ class MaximinUpsideCalculatorTest {
         @DisplayName("Должен вернуть 0.0, если цена в середине диапазона")
         void shouldReturnZeroWhenPriceInMiddle() {
             // Цена посередине: (100 + 150) / 2 = 125
-            when(currentCandle.getTypicalPriceAsDouble()).thenReturn(125.0);
+            when(currentCandle.getTypicalAsDouble()).thenReturn(125.0);
 
             when(mockMaxLocator.locate(any())).thenReturn(List.of(highCandle));
             when(mockMinLocator.locate(any())).thenReturn(List.of(lowCandle));
@@ -171,7 +171,7 @@ class MaximinUpsideCalculatorTest {
         @DisplayName("Должен вернуть NEUTRAL при NaN в экстремумах")
         void shouldReturnNeutralOnNaNExtremes() {
             Candle extreme = mock(Candle.class);
-            when(extreme.getTypicalPriceAsDouble()).thenReturn(Double.NaN);
+            when(extreme.getTypicalAsDouble()).thenReturn(Double.NaN);
 
             when(mockMaxLocator.locate(any())).thenReturn(List.of(extreme));
             when(mockMinLocator.locate(any())).thenReturn(List.of(extreme));
@@ -188,8 +188,8 @@ class MaximinUpsideCalculatorTest {
             Candle min = mock(Candle.class);
             Candle max = mock(Candle.class);
 
-            when(min.getTypicalPriceAsDouble()).thenReturn(100.0);
-            when(max.getTypicalPriceAsDouble()).thenReturn(100.0); // max == min
+            when(min.getTypicalAsDouble()).thenReturn(100.0);
+            when(max.getTypicalAsDouble()).thenReturn(100.0); // max == min
 
             when(mockMaxLocator.locate(any())).thenReturn(List.of(max));
             when(mockMinLocator.locate(any())).thenReturn(List.of(min));

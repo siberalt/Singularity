@@ -157,7 +157,7 @@ public class StrategySimulator {
         PriceChart priceChart = new PriceChart(
             candleRepository,
             instrumentUid,
-            c -> c.getClosePrice().toDouble()
+            c -> c.getClose().toDouble()
         );
         priceChart.setStepInterval(10);
         priceChart.addSeriesProvider(orderSeriesProvider);

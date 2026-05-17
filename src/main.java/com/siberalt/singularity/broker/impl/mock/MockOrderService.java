@@ -320,16 +320,16 @@ public class MockOrderService implements OrderService {
         orderType = Objects.requireNonNullElse(orderType, OrderType.LIMIT);
 
         return switch (orderType) {
-            case UNSPECIFIED, LIMIT, MARKET -> currentCandle.getOpenPrice();
+            case UNSPECIFIED, LIMIT, MARKET -> currentCandle.getOpen();
             case BEST_PRICE -> calculateBestPrice(currentCandle, bestPriceRatio);
         };
     }
 
     protected Quotation calculateBestPrice(Candle candle, double bestPriceRatio) {
-        Quotation priceRange = candle.getHighPrice().subtract(candle.getLowPrice());
+        Quotation priceRange = candle.getHigh().subtract(candle.getLow());
 
         return candle
-            .getLowPrice()
+            .getLow()
             .add(priceRange.multiply(BigDecimal.valueOf(bestPriceRatio)));
     }
 

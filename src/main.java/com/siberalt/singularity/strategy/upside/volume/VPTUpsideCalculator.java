@@ -9,7 +9,7 @@ import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 import java.util.List;
 
 public class VPTUpsideCalculator implements UpsideCalculator {
-    private PriceExtractor priceExtractor = Candle::getTypicalPrice;
+    private PriceExtractor priceExtractor = Candle::getTypical;
 
     public VPTUpsideCalculator() {
     }

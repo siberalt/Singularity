@@ -19,7 +19,7 @@ public class ExtremeBasedLevelSelector implements LevelSelector {
 
     private final ExtremeLocator minimumLocator;
     private final ExtremeLocator maximumLocator;
-    private PriceExtractor priceExtractor = Candle::getTypicalPrice;
+    private PriceExtractor priceExtractor = Candle::getTypical;
     private int numberOfPairs = DEFAULT_NUMBER_OF_PAIRS;
     private final VolatilityCalculator volatilityCalculator;
     private double vicinityMultiplier = DEFAULT_VICINITY_MULTIPLIER;   // сколько волатильностей допускать

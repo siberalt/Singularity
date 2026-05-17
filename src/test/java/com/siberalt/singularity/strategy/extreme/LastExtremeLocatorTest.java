@@ -34,7 +34,7 @@ class LastExtremeLocatorTest {
                 candleFactory.createCommon("2024-01-01T06:00:00Z", 105)
             );
 
-            var locator = LastExtremeLocator.ofMaximums(2, Candle::getTypicalPriceAsDouble);
+            var locator = LastExtremeLocator.ofMaximums(2, Candle::getTypicalAsDouble);
             var result = locator.locate(localCandles);
 
             assertEquals(1, result.size());
@@ -46,7 +46,7 @@ class LastExtremeLocatorTest {
         void shouldNotFindUnconfirmedMinimum() {
             CandleFactory candleFactory = new CandleFactory("TEST-PAIR");
             // vicinity=3, но слева от кандидата (индекс 3) только 3 свечи, а справа — 5, но нужно по 3
-            var locator = new LastExtremeLocator(3, Comparator.comparing(Candle::getTypicalPriceAsDouble));
+            var locator = new LastExtremeLocator(3, Comparator.comparing(Candle::getTypicalAsDouble));
             List<Candle> candles = List.of(
                 candleFactory.createCommon("2024-01-01T01:00:00Z", 105.0), // 1
                 candleFactory.createCommon("2024-01-01T02:00:00Z", 103.0), // 2 — минимум?
@@ -66,7 +66,7 @@ class LastExtremeLocatorTest {
         @Test
         @DisplayName("С vicinity=0 должен вернуть последнюю свечу")
         void shouldReturnLastCandleWhenVicinityIsZero() {
-            var locator = new LastExtremeLocator(0, Comparator.comparing(Candle::getTypicalPriceAsDouble));
+            var locator = new LastExtremeLocator(0, Comparator.comparing(Candle::getTypicalAsDouble));
             CandleFactory candleFactory = new CandleFactory("TEST");
 
             List<Candle> candles = List.of(
@@ -102,7 +102,7 @@ class LastExtremeLocatorTest {
                 candleFactory.createCommon("2024-01-01T06:00:00Z", 105)
             );
 
-            var locator = LastExtremeLocator.ofMaximums(2, Candle::getTypicalPriceAsDouble);
+            var locator = LastExtremeLocator.ofMaximums(2, Candle::getTypicalAsDouble);
             var result = locator.locate(localCandles);
 
             assertEquals(1, result.size());
@@ -121,7 +121,7 @@ class LastExtremeLocatorTest {
                 candleFactory.createCommon("2024-01-01T03:00:00Z", 102)
             );
 
-            var locator = LastExtremeLocator.ofMinimums(1, 1, Candle::getTypicalPriceAsDouble);
+            var locator = LastExtremeLocator.ofMinimums(1, 1, Candle::getTypicalAsDouble);
             var result = locator.locate(testCandles);
 
             assertEquals(1, result.size());
@@ -140,7 +140,7 @@ class LastExtremeLocatorTest {
                 candleFactory.createCommon("2024-01-01T03:00:00Z", 100)  // ещё одна — уже перебор
             );
 
-            var locator = LastExtremeLocator.ofMinimums(2, 1, Candle::getTypicalPriceAsDouble);
+            var locator = LastExtremeLocator.ofMinimums(2, 1, Candle::getTypicalAsDouble);
             var result = locator.locate(testCandles);
 
             assertTrue(result.isEmpty());
@@ -158,7 +158,7 @@ class LastExtremeLocatorTest {
                 candleFactory.createCommon("2024-01-01T03:00:00Z", 98)
             );
 
-            var locator = LastExtremeLocator.ofMaximums(1, 1, Candle::getTypicalPriceAsDouble);
+            var locator = LastExtremeLocator.ofMaximums(1, 1, Candle::getTypicalAsDouble);
             var result = locator.locate(testCandles);
 
             assertEquals(1, result.size());
@@ -169,7 +169,7 @@ class LastExtremeLocatorTest {
         @DisplayName("Должен игнорировать экстремум, если maxAllowedEqualPeers < 0")
         void shouldThrowOnNegativeMaxAllowedEqualPeers() {
             assertThrows(IllegalArgumentException.class, () ->
-                new LastExtremeLocator(2, -1, Comparator.comparing(Candle::getTypicalPriceAsDouble))
+                new LastExtremeLocator(2, -1, Comparator.comparing(Candle::getTypicalAsDouble))
             );
         }
 
@@ -177,7 +177,7 @@ class LastExtremeLocatorTest {
         @DisplayName("Должен игнорировать экстремум, если maxAllowedEqualPeers > extremeVicinity")
         void shouldThrowOnMaxAllowedEqualPeersExceedingVicinity() {
             assertThrows(IllegalArgumentException.class, () ->
-                new LastExtremeLocator(2, 3, Comparator.comparing(Candle::getTypicalPriceAsDouble))
+                new LastExtremeLocator(2, 3, Comparator.comparing(Candle::getTypicalAsDouble))
             );
         }
 
@@ -194,7 +194,7 @@ class LastExtremeLocatorTest {
                 candleFactory.createCommon("2024-01-01T04:00:00Z", 97)
             );
 
-            var locator = LastExtremeLocator.ofMinimums(2, 2, Candle::getTypicalPriceAsDouble);
+            var locator = LastExtremeLocator.ofMinimums(2, 2, Candle::getTypicalAsDouble);
             var result = locator.locate(testCandles);
 
             assertEquals(1, result.size());
@@ -224,7 +224,7 @@ class LastExtremeLocatorTest {
                 candleFactory.createCommon("2024-01-01T02:00:00Z", 95)
             );
 
-            var locator = new LastExtremeLocator(2, Comparator.comparing(Candle::getTypicalPriceAsDouble));
+            var locator = new LastExtremeLocator(2, Comparator.comparing(Candle::getTypicalAsDouble));
             var result = locator.locate(few);
 
             assertTrue(result.isEmpty());
@@ -234,7 +234,7 @@ class LastExtremeLocatorTest {
         @DisplayName("Должен запрещать отрицательную vicinity")
         void shouldRejectNegativeVicinity() {
             assertThrows(IllegalArgumentException.class, () ->
-                new LastExtremeLocator(-1, Comparator.comparing(Candle::getTypicalPriceAsDouble))
+                new LastExtremeLocator(-1, Comparator.comparing(Candle::getTypicalAsDouble))
             );
         }
 
@@ -251,7 +251,7 @@ class LastExtremeLocatorTest {
                 candleFactory.createCommon("2024-01-01T05:00:00Z", 100)
             );
 
-            var locator = LastExtremeLocator.ofMaximums(2, Candle::getTypicalPriceAsDouble);
+            var locator = LastExtremeLocator.ofMaximums(2, Candle::getTypicalAsDouble);
             var result = locator.locate(candles);
 
             assertTrue(result.isEmpty()); // из-за равных значений — не подтверждён
@@ -265,7 +265,7 @@ class LastExtremeLocatorTest {
         @Test
         @DisplayName("ofMinimums() должен использовать typicalPrice по умолчанию")
         void ofMinimumsShouldUseTypicalPrice() {
-            LastExtremeLocator locator = LastExtremeLocator.ofMinimums(1, Candle::getTypicalPriceAsDouble);
+            LastExtremeLocator locator = LastExtremeLocator.ofMinimums(1, Candle::getTypicalAsDouble);
             CandleFactory candleFactory = new CandleFactory("TEST");
 
             // Просто проверяем, что объект создан

@@ -174,7 +174,7 @@ class DBSCANClusterAggregatorTest {
                 candle(100.1)
             );
 
-            PriceExtractor extractor = c -> Quotation.of(String.valueOf(c.getClosePriceAsDouble() + 10.0));
+            PriceExtractor extractor = c -> Quotation.of(String.valueOf(c.getCloseAsDouble() + 10.0));
             DBSCANClusterAggregator aggregator = new DBSCANClusterAggregator(0.5, 2, extractor, new RobustMedianCalculator());
 
             List<Cluster> clusters = aggregator.aggregate(extremes, 1.0);
@@ -191,7 +191,7 @@ class DBSCANClusterAggregatorTest {
             MedianCalculator mockMedian = mock(MedianCalculator.class);
             when(mockMedian.calculateMedian(any())).thenReturn(999.9);
 
-            DBSCANClusterAggregator aggregator = new DBSCANClusterAggregator(0.5, 2, Candle::getClosePrice, mockMedian);
+            DBSCANClusterAggregator aggregator = new DBSCANClusterAggregator(0.5, 2, Candle::getClose, mockMedian);
             List<Candle> extremes = List.of(
                 candle(100.0),
                 candle(100.0)

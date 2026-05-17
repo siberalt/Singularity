@@ -97,10 +97,10 @@ public class HistoricCandle {
         return new HistoricCandle()
                 .setTime(candle.getTime())
                 .setVolume(candle.getVolume())
-                .setLow(candle.getLowPrice())
-                .setHigh(candle.getHighPrice())
-                .setClose(candle.getClosePrice())
-                .setOpen(candle.getOpenPrice())
+                .setLow(candle.getLow())
+                .setHigh(candle.getHigh())
+                .setClose(candle.getClose())
+                .setOpen(candle.getOpen())
                 .setComplete(true);
     }
 }

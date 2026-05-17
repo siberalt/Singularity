@@ -42,10 +42,10 @@ public class CvsCandleRepositoryTest {
                 new Candle()
                     .setInstrumentUid(instrumentUid)
                     .setTime(Instant.parse("2020-12-10T09:45:00Z"))
-                    .setOpenPrice(Quotation.of(5.436))
-                    .setClosePrice(Quotation.of(5.436))
-                    .setHighPrice(Quotation.of(5.436))
-                    .setLowPrice(Quotation.of(5.434))
+                    .setOpen(Quotation.of(5.436))
+                    .setClose(Quotation.of(5.436))
+                    .setHigh(Quotation.of(5.436))
+                    .setLow(Quotation.of(5.434))
                     .setVolume(1588)
                 ,
                 candleStorage.getAt(instrumentUid, Instant.parse("2020-12-10T09:45:00Z"))
@@ -56,10 +56,10 @@ public class CvsCandleRepositoryTest {
                 new Candle()
                     .setInstrumentUid(instrumentUid)
                     .setTime(Instant.parse("2020-12-10T10:40:00Z"))
-                    .setOpenPrice(Quotation.of(5.44))
-                    .setClosePrice(Quotation.of(5.436))
-                    .setHighPrice(Quotation.of(5.44))
-                    .setLowPrice(Quotation.of(5.436))
+                    .setOpen(Quotation.of(5.44))
+                    .setClose(Quotation.of(5.436))
+                    .setHigh(Quotation.of(5.44))
+                    .setLow(Quotation.of(5.436))
                     .setVolume(1750)
                 ,
                 candleStorage.getAt(instrumentUid, Instant.parse("2020-12-10T10:40:00Z"))
@@ -70,10 +70,10 @@ public class CvsCandleRepositoryTest {
                 new Candle()
                     .setInstrumentUid(instrumentUid)
                     .setTime(Instant.parse("2020-12-10T11:33:00Z"))
-                    .setOpenPrice(Quotation.of(5.44))
-                    .setClosePrice(Quotation.of(5.442))
-                    .setHighPrice(Quotation.of(5.442))
-                    .setLowPrice(Quotation.of(5.44))
+                    .setOpen(Quotation.of(5.44))
+                    .setClose(Quotation.of(5.442))
+                    .setHigh(Quotation.of(5.442))
+                    .setLow(Quotation.of(5.44))
                     .setVolume(785)
                 ,
                 candleStorage.getAt(instrumentUid, Instant.parse("2020-12-10T11:33:00Z"))
@@ -94,37 +94,37 @@ public class CvsCandleRepositoryTest {
                 new Candle()
                     .setInstrumentUid(instrumentUid)
                     .setTime(Instant.parse("2020-09-02T07:00:00Z"))
-                    .setOpenPrice(Quotation.of(4.97))
-                    .setClosePrice(Quotation.of(4.968))
-                    .setHighPrice(Quotation.of(4.97))
-                    .setLowPrice(Quotation.of(4.948))
+                    .setOpen(Quotation.of(4.97))
+                    .setClose(Quotation.of(4.968))
+                    .setHigh(Quotation.of(4.97))
+                    .setLow(Quotation.of(4.948))
                     .setVolume(255),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-09-02T07:11:00Z;4.968;4.968;4.968;4.966;8572;
                 new Candle()
                     .setInstrumentUid(instrumentUid)
                     .setTime(Instant.parse("2020-09-02T07:11:00Z"))
-                    .setOpenPrice(Quotation.of(4.968))
-                    .setClosePrice(Quotation.of(4.968))
-                    .setHighPrice(Quotation.of(4.968))
-                    .setLowPrice(Quotation.of(4.966))
+                    .setOpen(Quotation.of(4.968))
+                    .setClose(Quotation.of(4.968))
+                    .setHigh(Quotation.of(4.968))
+                    .setLow(Quotation.of(4.966))
                     .setVolume(8572),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-09-02T11:59:00Z;4.99;4.99;4.99;4.99;584;
                 new Candle()
                     .setInstrumentUid(instrumentUid)
                     .setTime(Instant.parse("2020-09-02T11:59:00Z"))
-                    .setOpenPrice(Quotation.of(4.99))
-                    .setClosePrice(Quotation.of(4.99))
-                    .setHighPrice(Quotation.of(4.99))
-                    .setLowPrice(Quotation.of(4.99))
+                    .setOpen(Quotation.of(4.99))
+                    .setClose(Quotation.of(4.99))
+                    .setHigh(Quotation.of(4.99))
+                    .setLow(Quotation.of(4.99))
                     .setVolume(584),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-09-02T15:40:00Z;4.916;4.918;4.918;4.91;710;
                 new Candle()
                     .setInstrumentUid(instrumentUid)
                     .setTime(Instant.parse("2020-09-02T15:40:00Z"))
-                    .setOpenPrice(Quotation.of(4.916))
-                    .setClosePrice(Quotation.of(4.918))
-                    .setHighPrice(Quotation.of(4.918))
-                    .setLowPrice(Quotation.of(4.91))
+                    .setOpen(Quotation.of(4.916))
+                    .setClose(Quotation.of(4.918))
+                    .setHigh(Quotation.of(4.918))
+                    .setLow(Quotation.of(4.91))
                     .setVolume(710)
             );
 
@@ -144,37 +144,37 @@ public class CvsCandleRepositoryTest {
                 new Candle()
                     .setInstrumentUid(instrumentUid)
                     .setTime(Instant.parse("2020-12-25T07:00:00Z"))
-                    .setOpenPrice(Quotation.of(5.466))
-                    .setClosePrice(Quotation.of(5.464))
-                    .setHighPrice(Quotation.of(5.466))
-                    .setLowPrice(Quotation.of(5.454))
+                    .setOpen(Quotation.of(5.466))
+                    .setClose(Quotation.of(5.464))
+                    .setHigh(Quotation.of(5.466))
+                    .setLow(Quotation.of(5.454))
                     .setVolume(570),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-25T08:11:00Z;5.454;5.452;5.454;5.452;4373;
                 new Candle()
                     .setInstrumentUid(instrumentUid)
                     .setTime(Instant.parse("2020-12-25T08:11:00Z"))
-                    .setOpenPrice(Quotation.of(5.454))
-                    .setClosePrice(Quotation.of(5.452))
-                    .setHighPrice(Quotation.of(5.454))
-                    .setLowPrice(Quotation.of(5.452))
+                    .setOpen(Quotation.of(5.454))
+                    .setClose(Quotation.of(5.452))
+                    .setHigh(Quotation.of(5.454))
+                    .setLow(Quotation.of(5.452))
                     .setVolume(4373),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-25T09:41:00Z;5.454;5.454;5.454;5.454;104;
                 new Candle()
                     .setInstrumentUid(instrumentUid)
                     .setTime(Instant.parse("2020-12-25T09:41:00Z"))
-                    .setOpenPrice(Quotation.of(5.454))
-                    .setClosePrice(Quotation.of(5.454))
-                    .setHighPrice(Quotation.of(5.454))
-                    .setLowPrice(Quotation.of(5.454))
+                    .setOpen(Quotation.of(5.454))
+                    .setClose(Quotation.of(5.454))
+                    .setHigh(Quotation.of(5.454))
+                    .setLow(Quotation.of(5.454))
                     .setVolume(104),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-25T15:44:00Z;5.48;5.482;5.482;5.48;343;
                 new Candle()
                     .setInstrumentUid(instrumentUid)
                     .setTime(Instant.parse("2020-12-25T15:44:00Z"))
-                    .setOpenPrice(Quotation.of(5.48))
-                    .setClosePrice(Quotation.of(5.482))
-                    .setHighPrice(Quotation.of(5.482))
-                    .setLowPrice(Quotation.of(5.48))
+                    .setOpen(Quotation.of(5.48))
+                    .setClose(Quotation.of(5.482))
+                    .setHigh(Quotation.of(5.482))
+                    .setLow(Quotation.of(5.48))
                     .setVolume(343)
             );
 
@@ -267,7 +267,7 @@ public class CvsCandleRepositoryTest {
             Assertions.assertTrue(candleTime.compareTo(findPriceParams.from()) >= 0);
             Assertions.assertTrue(candleTime.compareTo(findPriceParams.to()) <= 0);
             Assertions.assertTrue(
-                candle.getOpenPrice().compare(
+                candle.getOpen().compare(
                     findPriceParams.price(),
                     findPriceParams.comparisonOperator()
                 )
@@ -329,10 +329,10 @@ public class CvsCandleRepositoryTest {
     void assertCandleEquals(Candle actual, Candle expected) {
         Assertions.assertEquals(actual.getInstrumentUid(), expected.getInstrumentUid());
         Assertions.assertEquals(actual.getTime(), expected.getTime());
-        Assertions.assertEquals(actual.getOpenPrice(), expected.getOpenPrice());
-        Assertions.assertEquals(actual.getClosePrice(), expected.getClosePrice());
-        Assertions.assertEquals(actual.getHighPrice(), expected.getHighPrice());
-        Assertions.assertEquals(actual.getLowPrice(), expected.getLowPrice());
+        Assertions.assertEquals(actual.getOpen(), expected.getOpen());
+        Assertions.assertEquals(actual.getClose(), expected.getClose());
+        Assertions.assertEquals(actual.getHigh(), expected.getHigh());
+        Assertions.assertEquals(actual.getLow(), expected.getLow());
         Assertions.assertEquals(actual.getVolume(), expected.getVolume());
     }
 }

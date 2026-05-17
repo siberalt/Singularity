@@ -12,7 +12,7 @@ import java.util.function.Function;
  * на основе статистического отклонения от VWAP (в сигмах).
  */
 public class VWAPUpsideCalculator implements UpsideCalculator {
-    private Function<Candle, Double> priceExtractor = Candle::getClosePriceAsDouble;
+    private Function<Candle, Double> priceExtractor = Candle::getCloseAsDouble;
 
     public VWAPUpsideCalculator(Function<Candle, Double> priceExtractor) {
         this.priceExtractor = priceExtractor;

@@ -31,7 +31,7 @@ public class FunctionGroupSeriesProviderSimulator {
         PriceChart priceChart = new PriceChart(
             candleRepository,
             "TMOS",
-            Candle::getTypicalPriceAsDouble
+            Candle::getTypicalAsDouble
         );
         priceChart.setStepInterval(10);
         priceChart.addSeriesProvider(blueLinesGroup);

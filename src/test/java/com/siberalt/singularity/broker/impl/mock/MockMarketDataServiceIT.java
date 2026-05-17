@@ -219,10 +219,10 @@ class MockMarketDataServiceIT {
         Candle candle = marketDataService.findClosestBefore(config.getInstrument().getUid(), time).orElseThrow();
 
         assertEquals(Instant.parse("2020-12-30T15:15:00Z"), candle.getTime());
-        assertEquals(Quotation.of(5.558), candle.getOpenPrice());
-        assertEquals(Quotation.of(5.56), candle.getClosePrice());
-        assertEquals(Quotation.of(5.56), candle.getHighPrice());
-        assertEquals(Quotation.of(5.556), candle.getLowPrice());
+        assertEquals(Quotation.of(5.558), candle.getOpen());
+        assertEquals(Quotation.of(5.56), candle.getClose());
+        assertEquals(Quotation.of(5.56), candle.getHigh());
+        assertEquals(Quotation.of(5.556), candle.getLow());
         assertEquals(35532, candle.getVolume());
     }
 
@@ -267,7 +267,7 @@ class MockMarketDataServiceIT {
 
         // each candle has close price more than 5.554
         for (Candle candle : result) {
-            assertTrue(candle.getClosePrice().isGreaterThan(Quotation.of(5.554)));
+            assertTrue(candle.getClose().isGreaterThan(Quotation.of(5.554)));
         }
 
         // Assert correctness of time sequence
@@ -291,10 +291,10 @@ class MockMarketDataServiceIT {
 
         assertNotNull(candle);
         assertEquals(Instant.parse("2020-12-30T15:15:00Z"), candle.getTime());
-        assertEquals(Quotation.of(5.558), candle.getOpenPrice());
-        assertEquals(Quotation.of(5.56), candle.getClosePrice());
-        assertEquals(Quotation.of(5.56), candle.getHighPrice());
-        assertEquals(Quotation.of(5.556), candle.getLowPrice());
+        assertEquals(Quotation.of(5.558), candle.getOpen());
+        assertEquals(Quotation.of(5.56), candle.getClose());
+        assertEquals(Quotation.of(5.56), candle.getHigh());
+        assertEquals(Quotation.of(5.556), candle.getLow());
         assertEquals(35532, candle.getVolume());
     }
 
@@ -363,10 +363,10 @@ class MockMarketDataServiceIT {
         long volumeAvg = 0;
 
         for (var uniteCandle : uniteCandles) {
-            openAvg = openAvg.add(uniteCandle.getOpenPrice());
-            closeAvg = closeAvg.add(uniteCandle.getClosePrice());
-            highAvg = highAvg.add(uniteCandle.getHighPrice());
-            lowAvg = lowAvg.add(uniteCandle.getLowPrice());
+            openAvg = openAvg.add(uniteCandle.getOpen());
+            closeAvg = closeAvg.add(uniteCandle.getClose());
+            highAvg = highAvg.add(uniteCandle.getHigh());
+            lowAvg = lowAvg.add(uniteCandle.getLow());
             volumeAvg += uniteCandle.getVolume();
         }
 

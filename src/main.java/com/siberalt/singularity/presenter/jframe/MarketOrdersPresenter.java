@@ -87,7 +87,7 @@ public class MarketOrdersPresenter extends JFrame {
         XYSeries sellOrders = new XYSeries("Sell Orders");
 
         for (Candle candle : candleRepository.getPeriod(instrumentUid, from, to)) {
-            double price = candle.getClosePrice().toDouble();
+            double price = candle.getCloseAsDouble();
             stockPrices.add((double) candle.getTime().getEpochSecond() * 1000, price);
         }
 

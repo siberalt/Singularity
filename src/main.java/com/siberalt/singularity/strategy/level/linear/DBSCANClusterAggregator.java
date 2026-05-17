@@ -15,7 +15,7 @@ import static java.util.stream.Collectors.toSet;
 public class DBSCANClusterAggregator implements ClusterAggregator {
     private final double multiplier; // максимальное расстояние между точками в одном кластере (в ценах)
     private final int minPoints; // минимальное количество точек для формирования кластера
-    private PriceExtractor priceExtractor = Candle::getClosePrice;
+    private PriceExtractor priceExtractor = Candle::getClose;
     private MedianCalculator medianCalculator = new RobustMedianCalculator();
 
     public DBSCANClusterAggregator(double multiplier, int minPoints) {

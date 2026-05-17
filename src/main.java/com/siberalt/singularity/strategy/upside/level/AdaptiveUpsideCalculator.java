@@ -54,7 +54,7 @@ public class AdaptiveUpsideCalculator implements LevelBasedUpsideCalculator {
     private boolean isNearKeyLevel(Candle currentCandle, long currentCandleIndex, Level<Double> level) {
         double levelPrice = level.function().apply((double) currentCandleIndex);
         double threshold = levelPrice * 0.005; // 0.5% threshold
-        return Math.abs(currentCandle.getTypicalPrice().toDouble() - levelPrice) <= threshold;
+        return Math.abs(currentCandle.getTypicalAsDouble() - levelPrice) <= threshold;
     }
 
     private boolean hasStrongDivergence(Upside levelsUpside, Upside volumeUpside) {

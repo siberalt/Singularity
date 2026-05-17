@@ -143,9 +143,9 @@ public abstract class MockOrderServiceTest {
         assertNotNull(response.transactionTemplates());
         assertEquals(10, response.quantity());
 
-        Quotation expectedBalanceChange = testCandle.getOpenPrice()
+        Quotation expectedBalanceChange = testCandle.getOpen()
             .multiply(10)
-            .add(testCandle.getOpenPrice().multiply(10).multiply(commissionRatio))
+            .add(testCandle.getOpen().multiply(10).multiply(commissionRatio))
             .multiply(-1);
 
         assertEquals(expectedBalanceChange, response.totalBalanceChange());
@@ -256,16 +256,16 @@ public abstract class MockOrderServiceTest {
         assertThrowsWithErrorCode(
             InvalidRequestException.class,
             ErrorCode.INSUFFICIENT_BALANCE,
-            () -> assertBuyOrder(testCandle, OrderType.MARKET, 10, testCandle.getOpenPrice())
+            () -> assertBuyOrder(testCandle, OrderType.MARKET, 10, testCandle.getOpen())
         );
 
-        addMoney(testCandle.getOpenPrice().multiply(100));
-        assertBuyOrder(testCandle, OrderType.MARKET, 12, testCandle.getOpenPrice());
+        addMoney(testCandle.getOpen().multiply(100));
+        assertBuyOrder(testCandle, OrderType.MARKET, 12, testCandle.getOpen());
 
         assertThrowsWithErrorCode(
             InvalidRequestException.class,
             ErrorCode.QUANTITY_MUST_BE_POSITIVE,
-            () -> assertBuyOrder(testCandle, OrderType.MARKET, -10, testCandle.getOpenPrice())
+            () -> assertBuyOrder(testCandle, OrderType.MARKET, -10, testCandle.getOpen())
         );
 
         assertThrowsWithErrorCode(
@@ -279,7 +279,7 @@ public abstract class MockOrderServiceTest {
         assertThrowsWithErrorCode(
             NotFoundException.class,
             ErrorCode.INSTRUMENT_NOT_FOUND,
-            () -> assertBuyOrder(testCandle, OrderType.MARKET, 10, testCandle.getOpenPrice())
+            () -> assertBuyOrder(testCandle, OrderType.MARKET, 10, testCandle.getOpen())
         );
 
         verify(candleStorage, atLeastOnce()).findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1);
@@ -291,9 +291,9 @@ public abstract class MockOrderServiceTest {
             currentTime, 10, 15, 5, 10, 100
         );
 
-        addMoney(validCandle.getOpenPrice().multiply(100));
+        addMoney(validCandle.getOpen().multiply(100));
 
-        assertBuyOrder(validCandle, OrderType.LIMIT, 10, validCandle.getOpenPrice());
+        assertBuyOrder(validCandle, OrderType.LIMIT, 10, validCandle.getOpen());
 
         Candle buySignalCandle = createCandle(
             currentTime, 10, 15, 5, 9, 100
@@ -338,7 +338,7 @@ public abstract class MockOrderServiceTest {
             currentTime, 10, 15, 5, 10, 100
         );
 
-        addMoney(validCandle.getOpenPrice().multiply(100));
+        addMoney(validCandle.getOpen().multiply(100));
 
         assertBuyOrder(validCandle, OrderType.BEST_PRICE, 10, Quotation.of(5));
         verify(candleStorage, atLeastOnce()).findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1);
@@ -352,7 +352,7 @@ public abstract class MockOrderServiceTest {
         );
 
         var operationsService = broker.getOperationsService();
-        var openPrice = validCandle.getOpenPrice();
+        var openPrice = validCandle.getOpen();
 
         operationsService.addToPosition(testAccount.getId(), instrumentConfig.getUid(), 100);
         assertSellOrder(validCandle, OrderType.MARKET, 15, openPrice);
@@ -376,7 +376,7 @@ public abstract class MockOrderServiceTest {
 
         addInstruments(80);
 
-        assertSellOrder(validCandle, OrderType.LIMIT, 10, validCandle.getOpenPrice());
+        assertSellOrder(validCandle, OrderType.LIMIT, 10, validCandle.getOpen());
 
         // Test limit sell order on delayed execution
         Candle sellSignalCandle = createCandle(
@@ -417,9 +417,9 @@ public abstract class MockOrderServiceTest {
             currentTime, 10, 15, 5, 10, 100
         );
 
-        addMoney(validCandle.getOpenPrice().multiply(100));
+        addMoney(validCandle.getOpen().multiply(100));
 
-        var postResponse = assertBuyOrder(validCandle, OrderType.MARKET, 10, validCandle.getOpenPrice());
+        var postResponse = assertBuyOrder(validCandle, OrderType.MARKET, 10, validCandle.getOpen());
 
         var state = orderService.getState(
             new GetOrderStateRequest()
@@ -500,10 +500,10 @@ public abstract class MockOrderServiceTest {
 
         return new Candle()
             .setTime(time)
-            .setClosePrice(Quotation.of(closePrice))
-            .setHighPrice(Quotation.of(highPrice))
-            .setLowPrice(Quotation.of(lowPrice))
-            .setOpenPrice(Quotation.of(openPrice))
+            .setClose(Quotation.of(closePrice))
+            .setHigh(Quotation.of(highPrice))
+            .setLow(Quotation.of(lowPrice))
+            .setOpen(Quotation.of(openPrice))
             .setVolume(volume)
             .setInstrumentUid(instrumentConfig.getUid());
     }
@@ -514,13 +514,13 @@ public abstract class MockOrderServiceTest {
         double bestPriceRatio
     ) {
         return switch (orderType) {
-            case MARKET, LIMIT -> priceCandle.getOpenPrice();
+            case MARKET, LIMIT -> priceCandle.getOpen();
             case BEST_PRICE -> priceCandle
-                .getLowPrice()
+                .getLow()
                 .add(
                     priceCandle
-                        .getHighPrice()
-                        .subtract(priceCandle.getLowPrice())
+                        .getHigh()
+                        .subtract(priceCandle.getLow())
                         .multiply(bestPriceRatio)
                 );
             default -> throw new IllegalArgumentException("Unexpected value: " + orderType);
@@ -547,7 +547,7 @@ public abstract class MockOrderServiceTest {
         MockOperationsService operationsService = broker.getOperationsService();
         boolean isDelayedLimitOrder = orderType == OrderType.LIMIT
             && priceLimit != null
-            && priceLimit.isGreaterThan(priceCandle.getOpenPrice());
+            && priceLimit.isGreaterThan(priceCandle.getOpen());
 
         when(candleStorage.findBeforeOrEqual(instrumentConfig.getUid(), priceCandle.getTime(), 1))
             .thenReturn(List.of(priceCandle));
@@ -629,7 +629,7 @@ public abstract class MockOrderServiceTest {
         var operationsService = broker.getOperationsService();
         var isDelayedLimitOrder = orderType == OrderType.LIMIT
             && priceLimit != null
-            && priceLimit.isLessThan(priceCandle.getOpenPrice());
+            && priceLimit.isLessThan(priceCandle.getOpen());
 
         when(candleStorage.findBeforeOrEqual(instrumentConfig.getUid(), priceCandle.getTime(), 1))
             .thenReturn(List.of(priceCandle));

@@ -20,9 +20,9 @@ public record ATRVolatilityCalculator(int period) implements VolatilityCalculato
         for (int i = 1; i < candles.size(); i++) {
             Candle curr = candles.get(i);
             Candle prev = candles.get(i - 1);
-            double hl = curr.getHighPrice().toDouble() - curr.getLowPrice().toDouble();
-            double hc = Math.abs(curr.getHighPrice().toDouble() - prev.getClosePriceAsDouble());
-            double lc = Math.abs(curr.getLowPrice().toDouble() - prev.getClosePriceAsDouble());
+            double hl = curr.getHighAsDouble() - curr.getLowAsDouble();
+            double hc = Math.abs(curr.getHighAsDouble() - prev.getCloseAsDouble());
+            double lc = Math.abs(curr.getLowAsDouble() - prev.getCloseAsDouble());
             tr[i] = Math.max(hl, Math.max(hc, lc));
         }
 

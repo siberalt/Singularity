@@ -12,7 +12,7 @@ class BaseExtremesLocatorTest {
 
     @Test
     void locateReturnsEmptyListWhenCandlesIsEmpty() {
-        BaseExtremeLocator locator = BaseExtremeLocator.createMaxLocator(x -> x.getClosePrice().toDouble());
+        BaseExtremeLocator locator = BaseExtremeLocator.createMaxLocator(Candle::getCloseAsDouble);
 
         List<Candle> result = locator.locate(List.of());
 
@@ -21,7 +21,7 @@ class BaseExtremesLocatorTest {
 
     @Test
     void locateFindsMaximumCorrectly() {
-        BaseExtremeLocator locator = BaseExtremeLocator.createMaxLocator(x -> x.getClosePrice().toDouble());
+        BaseExtremeLocator locator = BaseExtremeLocator.createMaxLocator(Candle::getCloseAsDouble);
         Candle extremeCandle = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 20);
 
         List<Candle> result = locator.locate(
@@ -38,7 +38,7 @@ class BaseExtremesLocatorTest {
 
     @Test
     void locateFindsMinimumCorrectly() {
-        BaseExtremeLocator locator = BaseExtremeLocator.createMinLocator(x -> x.getClosePrice().toDouble());
+        BaseExtremeLocator locator = BaseExtremeLocator.createMinLocator(Candle::getCloseAsDouble);
         Candle extremeCandle = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 12);
 
         List<Candle> result = locator.locate(
@@ -56,7 +56,7 @@ class BaseExtremesLocatorTest {
     @Test
     void locateHandlesSingleCandleCorrectly() {
         Candle candle = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 10, 10);
-        BaseExtremeLocator locator = BaseExtremeLocator.createMaxLocator(x -> x.getClosePrice().toDouble());
+        BaseExtremeLocator locator = BaseExtremeLocator.createMaxLocator(Candle::getCloseAsDouble);
 
         List<Candle> result = locator.locate(List.of(candle));
 

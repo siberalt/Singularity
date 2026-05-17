@@ -14,7 +14,7 @@ public class LinearLevelCalculatorSimulator {
     public static void main(String[] args) {
         var factory = new CvsFileCandleRepositoryFactory();
         var candleRepository = factory.create("TMOS", "src/test/resources/entity.candle.cvs/TMOS");
-        var priceExtractor = (Function<Candle, Double>) c -> c.getClosePrice().toDouble();
+        var priceExtractor = (Function<Candle, Double>) Candle::getCloseAsDouble;
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
 

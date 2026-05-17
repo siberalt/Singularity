@@ -2,6 +2,7 @@ package com.siberalt.singularity.strategy.upside.level;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.selector.LevelPair;
+import com.siberalt.singularity.strategy.market.PriceExtractor;
 import com.siberalt.singularity.strategy.upside.Upside;
 
 import java.util.List;
@@ -23,6 +24,15 @@ public class ChannelLevelBasedUpsideCalculator implements LevelBasedUpsideCalcul
 
     private static final Logger logger = Logger.getLogger(ChannelLevelBasedUpsideCalculator.class.getName());
 
+    private PriceExtractor priceExtractor = Candle::getClose;
+
+    public ChannelLevelBasedUpsideCalculator(PriceExtractor priceExtractor) {
+        this.priceExtractor = priceExtractor;
+    }
+
+    public ChannelLevelBasedUpsideCalculator() {
+    }
+
     @Override
     public Upside calculate(LevelPair levelPair, List<Candle> recentCandles) {
         if (levelPair.equals(LevelPair.EMPTY)) {
@@ -42,7 +52,7 @@ public class ChannelLevelBasedUpsideCalculator implements LevelBasedUpsideCalcul
 
         Candle lastCandle = recentCandles.get(recentCandles.size() - 1);
         long currentIndex = lastCandle.getIndex();
-        double currentPrice = lastCandle.getTypicalPrice().toDouble();
+        double currentPrice = priceExtractor.extract(lastCandle).toDouble();
 
         double resistancePrice = resistance.function().apply((double) currentIndex);
         double supportPrice = support.function().apply((double) currentIndex);

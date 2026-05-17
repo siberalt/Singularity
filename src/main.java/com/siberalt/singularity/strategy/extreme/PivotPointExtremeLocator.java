@@ -112,11 +112,11 @@ public class PivotPointExtremeLocator implements ExtremeLocator {
     }
 
     public static PivotPointExtremeLocator ofMinimums(int leftVicinity, int rightVicinity) {
-        return new PivotPointExtremeLocator(Comparator.comparingDouble(Candle::getClosePriceAsDouble), leftVicinity, rightVicinity);
+        return new PivotPointExtremeLocator(Comparator.comparingDouble(Candle::getCloseAsDouble), leftVicinity, rightVicinity);
     }
 
     public static PivotPointExtremeLocator ofMinimums() {
-        return new PivotPointExtremeLocator(Comparator.comparingDouble(Candle::getClosePriceAsDouble));
+        return new PivotPointExtremeLocator(Comparator.comparingDouble(Candle::getCloseAsDouble));
     }
 
     public static PivotPointExtremeLocator ofMaximums(int vicinity) {
@@ -124,10 +124,10 @@ public class PivotPointExtremeLocator implements ExtremeLocator {
     }
 
     public static PivotPointExtremeLocator ofMaximums(int leftVicinity, int rightVicinity) {
-        return new PivotPointExtremeLocator(Comparator.comparingDouble(Candle::getClosePriceAsDouble).reversed(), leftVicinity, rightVicinity);
+        return new PivotPointExtremeLocator(Comparator.comparingDouble(Candle::getCloseAsDouble).reversed(), leftVicinity, rightVicinity);
     }
 
     public static PivotPointExtremeLocator ofMaximums() {
-        return new PivotPointExtremeLocator(Comparator.comparingDouble(Candle::getClosePriceAsDouble).reversed());
+        return new PivotPointExtremeLocator(Comparator.comparingDouble(Candle::getCloseAsDouble).reversed());
     }
 }

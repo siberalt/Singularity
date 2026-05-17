@@ -115,7 +115,7 @@ class StatelessClusterLevelDetectorTest {
         for (SortedSet<Candle> extremes : clusterExtremes) {
             double price = extremes
                 .stream()
-                .reduce(0.0, (sum, candle) -> sum + candle.getTypicalPriceAsDouble(), Double::sum) / extremes.size();
+                .reduce(0.0, (sum, candle) -> sum + candle.getTypicalAsDouble(), Double::sum) / extremes.size();
             levels.add(
                 new Level<>(
                     extremes.first().getTimePoint(),

@@ -19,7 +19,7 @@ public class SimpleLevelBasedUpsideCalculator implements LevelBasedUpsideCalcula
         long currentIndex = recentCandles.get(recentCandles.size() - 1).getIndex();
         double resistancePrice = resistance.function().apply((double) currentIndex);
         double supportPrice = support.function().apply((double) currentIndex);
-        double currentPrice = recentCandles.get(recentCandles.size() - 1).getTypicalPrice().toDouble();
+        double currentPrice = recentCandles.get(recentCandles.size() - 1).getTypicalAsDouble();
 
         if (currentPrice > resistancePrice || currentPrice < supportPrice) {
             // Log a warning and return a neutral Upside

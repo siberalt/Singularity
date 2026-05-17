@@ -116,7 +116,7 @@ public class KeyLevelsUpsideCalculator implements UpsideCalculator {
         double supportNeighborhoodRatio,
         LevelBasedUpsideCalculator levelBasedUpsideCalculator
     ) {
-        Function<Candle, Double> priceExtractor = c -> c.getClosePrice().toDouble();
+        Function<Candle, Double> priceExtractor = Candle::getCloseAsDouble;
 
         return createLinear(
             frameSize,

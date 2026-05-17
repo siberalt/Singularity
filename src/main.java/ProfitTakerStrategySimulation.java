@@ -145,7 +145,7 @@ public class ProfitTakerStrategySimulation {
         PriceChart priceChart = new PriceChart(
             candleRepository,
             instrumentUid,
-            c -> c.getClosePrice().toDouble()
+            Candle::getCloseAsDouble
         );
         priceChart.setStepInterval(10);
         priceChart.addSeriesProvider(orderSeriesProvider);
