@@ -33,7 +33,7 @@ public class VPTUpsideCalculator implements UpsideCalculator {
 
             double priceChange = currentPrice.toDouble() - previousPrice.toDouble();
             double priceChangeRatio = priceChange / previousPrice.toDouble();
-            vpt += priceChangeRatio * current.getVolume();
+            vpt += priceChangeRatio * current.volume();
         }
 
         // Нормализация VPT для получения сигнала в диапазоне [-1, 1]

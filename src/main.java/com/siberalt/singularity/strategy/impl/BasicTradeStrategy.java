@@ -86,7 +86,7 @@ public class BasicTradeStrategy implements StrategyInterface {
     }
 
     public void handleNewCandle(NewCandleEvent event, Subscription subscription) {
-        if (!event.getCandle().getInstrumentUid().equals(instrumentId)) {
+        if (!event.getCandle().instrumentUid().equals(instrumentId)) {
             return;
         }
 

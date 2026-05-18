@@ -100,7 +100,7 @@ public class FrameExtremesLocatorTest {
 
         FrameExtremeLocator locator = new FrameExtremeLocator(3, baseLocator);
 
-        List<Candle> candles = List.of(new Candle(), new Candle(), new Candle());
+        List<Candle> candles = List.of(Candle.EMPTY, Candle.EMPTY, Candle.EMPTY);
 
         assertThrows(RuntimeException.class, () -> locator.locate(candles));
     }

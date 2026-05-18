@@ -35,7 +35,7 @@ public class MFIUpsideCalculator implements UpsideCalculator {
             Quotation currentPrice = priceExtractor.extract(current);
             Quotation previousPrice = priceExtractor.extract(previous);
 
-            double moneyFlow = currentPrice.toDouble() * current.getVolume();
+            double moneyFlow = currentPrice.toDouble() * current.volume();
             double priceDifference = currentPrice.toDouble() - previousPrice.toDouble();
 
             if (priceDifference > 0) {

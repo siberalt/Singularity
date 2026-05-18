@@ -44,14 +44,15 @@ class CvsCandleIterator implements Iterator<Candle> {
             String[] data = line.split(";");
             currentTime = Instant.parse(data[1]);
 
-            return new Candle()
-                .setInstrumentUid(instrumentUid == null ? data[0] : instrumentUid)
-                .setTimePoint(new TimePoint(currentIndex, currentTime))
-                .setOpen(Quotation.of(data[2]))
-                .setClose(Quotation.of(data[3]))
-                .setHigh(Quotation.of(data[4]))
-                .setLow(Quotation.of(data[5]))
-                .setVolume(Long.parseLong(data[6]));
+            return new Candle(
+                instrumentUid == null ? data[0] : instrumentUid,
+                new TimePoint(currentIndex, currentTime),
+                Quotation.of(data[2]),
+                Quotation.of(data[3]),
+                Quotation.of(data[4]),
+                Quotation.of(data[5]),
+                Long.parseLong(data[6])
+            );
         } catch (DateTimeParseException exception) {
             System.out.println("Invalid date format in line: " + line);
             return this.next();

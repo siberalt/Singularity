@@ -145,7 +145,7 @@ class StdDevVolatilityCalculatorTest {
                 candle(106, 110, 104, 109)  // high = 110
             );
 
-            PriceExtractor highExtractor = Candle::getHigh;
+            PriceExtractor highExtractor = Candle::high;
             StdDevVolatilityCalculator calc = new StdDevVolatilityCalculator(3, highExtractor);
 
             double result = calc.calculate(candles);
@@ -166,7 +166,7 @@ class StdDevVolatilityCalculatorTest {
                 candle(106, 110, 104, 109)
             );
 
-            PriceExtractor lowExtractor = Candle::getLow;
+            PriceExtractor lowExtractor = Candle::low;
             StdDevVolatilityCalculator calc = new StdDevVolatilityCalculator(3, lowExtractor);
 
             double result = calc.calculate(candles);
@@ -193,7 +193,7 @@ class StdDevVolatilityCalculatorTest {
             );
 
             StdDevVolatilityCalculator defaultCalc = new StdDevVolatilityCalculator(3);
-            StdDevVolatilityCalculator explicitCalc = new StdDevVolatilityCalculator(3, Candle::getClose);
+            StdDevVolatilityCalculator explicitCalc = new StdDevVolatilityCalculator(3, Candle::close);
 
             double result1 = defaultCalc.calculate(candles);
             double result2 = explicitCalc.calculate(candles);

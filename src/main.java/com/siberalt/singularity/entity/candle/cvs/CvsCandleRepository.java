@@ -111,7 +111,7 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
         var resultCandles = new ArrayList<Candle>();
 
         for (Candle candle : iterator) {
-            if (candle.getOpen().compare(params.price(), params.comparisonOperator())) {
+            if (candle.open().compare(params.price(), params.comparisonOperator())) {
                 resultCandles.add(candle);
 
                 if (params.maxCount() <= resultCandles.size()) {

@@ -24,7 +24,7 @@ public class ChannelLevelBasedUpsideCalculator implements LevelBasedUpsideCalcul
 
     private static final Logger logger = Logger.getLogger(ChannelLevelBasedUpsideCalculator.class.getName());
 
-    private PriceExtractor priceExtractor = Candle::getClose;
+    private PriceExtractor priceExtractor = Candle::close;
 
     public ChannelLevelBasedUpsideCalculator(PriceExtractor priceExtractor) {
         this.priceExtractor = priceExtractor;

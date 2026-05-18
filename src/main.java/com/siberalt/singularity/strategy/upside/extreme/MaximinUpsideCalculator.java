@@ -23,7 +23,7 @@ public class MaximinUpsideCalculator implements UpsideCalculator {
 
     private final ExtremeLocator maxExtremeLocator;
     private final ExtremeLocator minExtremeLocator;
-    private Function<Candle, Double> priceExtractor = Candle::getTypicalAsDouble;
+    private Function<Candle, Double> priceExtractor = Candle::getCloseAsDouble;
 
     public MaximinUpsideCalculator(ExtremeLocator maxExtremeLocator, ExtremeLocator minExtremeLocator) {
         this.maxExtremeLocator = maxExtremeLocator;

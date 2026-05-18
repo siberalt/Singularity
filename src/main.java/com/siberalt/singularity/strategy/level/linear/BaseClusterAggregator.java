@@ -39,7 +39,7 @@ public class BaseClusterAggregator implements ClusterAggregator  {
 
     public static final int DEFAULT_CLUSTER_SIZE = 2;
 
-    private PriceExtractor priceExtractor = Candle::getClose;
+    private PriceExtractor priceExtractor = Candle::close;
     private MedianCalculator medianCalculator = new RobustMedianCalculator();
     private int minClusterSize = DEFAULT_CLUSTER_SIZE;
     private final double sensitivity;

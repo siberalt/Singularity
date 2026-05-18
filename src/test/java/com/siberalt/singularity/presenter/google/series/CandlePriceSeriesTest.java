@@ -92,7 +92,7 @@ class CandlePriceSeriesTest {
         );
 
         CandlePriceSeriesProvider series = new CandlePriceSeriesProvider(candles)
-            .setPriceExtractor(c -> c.getClose().toDouble() * 2);
+            .setPriceExtractor(c -> c.getCloseAsDouble() * 2);
 
         Optional<SeriesChunk> result = series.provide(0, 1, 1);
 

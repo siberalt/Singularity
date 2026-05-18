@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.upside.level;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.selector.LevelPair;
 import com.siberalt.singularity.strategy.upside.Upside;
@@ -17,7 +18,7 @@ public class SimpleLevelBasedUpsideCalculatorTest {
         Level<Double> resistance = new Level<>(1, 10, index -> 120.0);
         Level<Double> support = new Level<>(1, 10, index -> 100.0);
         LevelPair levelPair = new LevelPair(resistance, support);
-        Candle lastCandle = Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 125).setIndex(100L);
+        Candle lastCandle = Candle.of(new TimePoint(100, Instant.parse("2024-01-01T00:00:00Z")), 125);
 
         List<Candle> recentCandles = List.of(lastCandle);
         SimpleLevelBasedUpsideCalculator calculator = new SimpleLevelBasedUpsideCalculator();
@@ -32,7 +33,7 @@ public class SimpleLevelBasedUpsideCalculatorTest {
         Level<Double> resistance = new Level<>(1, 10, index -> 120.0);
         Level<Double> support = new Level<>(1, 10, index -> 100.0);
         LevelPair levelPair = new LevelPair(resistance, support);
-        Candle lastCandle = Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 95).setIndex(100L);
+        Candle lastCandle = Candle.of(new TimePoint(100, Instant.parse("2024-01-01T00:00:00Z")), 95);
 
         List<Candle> recentCandles = List.of(lastCandle);
         SimpleLevelBasedUpsideCalculator calculator = new SimpleLevelBasedUpsideCalculator();
@@ -47,7 +48,7 @@ public class SimpleLevelBasedUpsideCalculatorTest {
         Level<Double> resistance = new Level<>(1, 10, index -> 120.0);
         Level<Double> support = new Level<>(1, 10, index -> 100.0);
         LevelPair levelPair = new LevelPair(resistance, support);
-        Candle lastCandle = Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 110).setIndex(100L);
+        Candle lastCandle = Candle.of(new TimePoint(100, Instant.parse("2024-01-01T00:00:00Z")), 110);
 
         List<Candle> recentCandles = List.of(lastCandle);
         SimpleLevelBasedUpsideCalculator calculator = new SimpleLevelBasedUpsideCalculator();
@@ -62,7 +63,7 @@ public class SimpleLevelBasedUpsideCalculatorTest {
         Level<Double> resistance = new Level<>(1, 10, index -> 120.0);
         Level<Double> support = new Level<>(1, 10, index -> 100.0);
         LevelPair levelPair = new LevelPair(resistance, support);
-        Candle lastCandle = Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 118).setIndex(100L);
+        Candle lastCandle = Candle.of(new TimePoint(100, Instant.parse("2024-01-01T00:00:00Z")), 118);
 
         List<Candle> recentCandles = List.of(lastCandle);
         SimpleLevelBasedUpsideCalculator calculator = new SimpleLevelBasedUpsideCalculator();
@@ -77,7 +78,7 @@ public class SimpleLevelBasedUpsideCalculatorTest {
         Level<Double> resistance = new Level<>(1, 10, index -> 120.0);
         Level<Double> support = new Level<>(1, 10, index -> 100.0);
         LevelPair levelPair = new LevelPair(resistance, support);
-        Candle lastCandle = Candle.of(Instant.parse("2024-01-01T00:00:00Z"), 102).setIndex(100L);
+        Candle lastCandle = Candle.of(new TimePoint(100, Instant.parse("2024-01-01T00:00:00Z")), 102);
 
         List<Candle> recentCandles = List.of(lastCandle);
         SimpleLevelBasedUpsideCalculator calculator = new SimpleLevelBasedUpsideCalculator();

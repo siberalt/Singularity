@@ -191,7 +191,7 @@ class DBSCANClusterAggregatorTest {
             MedianCalculator mockMedian = mock(MedianCalculator.class);
             when(mockMedian.calculateMedian(any())).thenReturn(999.9);
 
-            DBSCANClusterAggregator aggregator = new DBSCANClusterAggregator(0.5, 2, Candle::getClose, mockMedian);
+            DBSCANClusterAggregator aggregator = new DBSCANClusterAggregator(0.5, 2, Candle::close, mockMedian);
             List<Candle> extremes = List.of(
                 candle(100.0),
                 candle(100.0)

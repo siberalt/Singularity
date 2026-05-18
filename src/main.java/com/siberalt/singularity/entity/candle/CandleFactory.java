@@ -105,10 +105,10 @@ public class CandleFactory {
         Quotation lowPrice,
         long volume
     ) {
-        return !cachedCandle.getOpen().equals(openPrice) ||
-            !cachedCandle.getClose().equals(closePrice) ||
-            !cachedCandle.getHigh().equals(highPrice) ||
-            !cachedCandle.getLow().equals(lowPrice) ||
-            cachedCandle.getVolume() != volume;
+        return !cachedCandle.open().equals(openPrice) ||
+            !cachedCandle.close().equals(closePrice) ||
+            !cachedCandle.high().equals(highPrice) ||
+            !cachedCandle.low().equals(lowPrice) ||
+            cachedCandle.volume() != volume;
     }
 }

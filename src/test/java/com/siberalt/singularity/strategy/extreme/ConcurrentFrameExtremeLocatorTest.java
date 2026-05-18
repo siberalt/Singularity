@@ -225,7 +225,11 @@ class ConcurrentFrameExtremeLocatorTest {
 
         ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(3, baseLocator);
 
-        List<Candle> candles = List.of(new Candle(), new Candle(), new Candle());
+        List<Candle> candles = List.of(
+            candleFactory.createCommon("2023-01-01T00:00:00Z", 100),
+            candleFactory.createCommon("2023-01-01T00:01:00Z", 150),
+            candleFactory.createCommon("2023-01-01T00:02:00Z", 200)
+        );
 
         assertThrows(RuntimeException.class, () -> locator.locate(candles));
     }

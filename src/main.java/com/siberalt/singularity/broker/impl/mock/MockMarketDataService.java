@@ -64,7 +64,7 @@ public class MockMarketDataService implements MarketDataService {
                     currentTime
             );
             candles.stream()
-                    .map(x -> LastPrice.of(instrumentUid, x.getTime(), x.getOpen()))
+                    .map(x -> LastPrice.of(instrumentUid, x.getTime(), x.open()))
                     .forEach(lastPrices::add);
         }
 
@@ -83,7 +83,7 @@ public class MockMarketDataService implements MarketDataService {
         }
 
         Candle candle = candleList.get(0);
-        Quotation price = candle.getOpen();
+        Quotation price = candle.open();
 
         return new GetCurrentPriceResponse()
             .setInstrumentUid(instrumentUid)
@@ -139,11 +139,11 @@ public class MockMarketDataService implements MarketDataService {
         long volumeAvg = 0;
 
         for (var uniteCandle : uniteCandles) {
-            openAvg = openAvg.add(uniteCandle.getOpen());
-            closeAvg = closeAvg.add(uniteCandle.getClose());
-            highAvg = highAvg.add(uniteCandle.getHigh());
-            lowAvg = lowAvg.add(uniteCandle.getLow());
-            volumeAvg += uniteCandle.getVolume();
+            openAvg = openAvg.add(uniteCandle.open());
+            closeAvg = closeAvg.add(uniteCandle.close());
+            highAvg = highAvg.add(uniteCandle.high());
+            lowAvg = lowAvg.add(uniteCandle.low());
+            volumeAvg += uniteCandle.volume();
         }
 
         openAvg = openAvg.divide(candlesCount);
@@ -153,14 +153,15 @@ public class MockMarketDataService implements MarketDataService {
         volumeAvg /= candlesCount;
         var firstCandle = uniteCandles.stream().findFirst().orElseThrow();
 
-        return new Candle()
-                .setOpen(openAvg)
-                .setClose(closeAvg)
-                .setHigh(highAvg)
-                .setLow(lowAvg)
-                .setVolume(volumeAvg)
-                .setInstrumentUid(firstCandle.getInstrumentUid())
-                .setTime(firstCandle.getTime());
+        return Candle.of(
+            firstCandle.getTime(),
+            firstCandle.instrumentUid(),
+            volumeAvg,
+            openAvg,
+            highAvg,
+            lowAvg,
+            closeAvg
+        );
     }
 
     protected Candle getInstrumentCurrentCandle(String instrumentUid) {

@@ -28,8 +28,8 @@ public class VWAPUpsideCalculator implements UpsideCalculator {
         }
 
         // 1. Рассчитываем VWAP
-        double totalValue = candles.stream().mapToDouble(t -> priceExtractor.apply(t) * t.getVolume()).sum();
-        double totalVolume = candles.stream().mapToDouble(Candle::getVolume).sum();
+        double totalValue = candles.stream().mapToDouble(t -> priceExtractor.apply(t) * t.volume()).sum();
+        double totalVolume = candles.stream().mapToDouble(Candle::volume).sum();
 
         if (totalVolume == 0) {
             return Upside.NEUTRAL;

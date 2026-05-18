@@ -23,7 +23,7 @@ public class StdDevVolatilityCalculator implements VolatilityCalculator {
      * Удобный конструктор: использует цену закрытия.
      */
     public StdDevVolatilityCalculator(int period) {
-        this(period, Candle::getClose);
+        this(period, Candle::close);
     }
 
     @Override

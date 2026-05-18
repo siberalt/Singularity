@@ -219,11 +219,11 @@ class MockMarketDataServiceIT {
         Candle candle = marketDataService.findClosestBefore(config.getInstrument().getUid(), time).orElseThrow();
 
         assertEquals(Instant.parse("2020-12-30T15:15:00Z"), candle.getTime());
-        assertEquals(Quotation.of(5.558), candle.getOpen());
-        assertEquals(Quotation.of(5.56), candle.getClose());
-        assertEquals(Quotation.of(5.56), candle.getHigh());
-        assertEquals(Quotation.of(5.556), candle.getLow());
-        assertEquals(35532, candle.getVolume());
+        assertEquals(Quotation.of(5.558), candle.open());
+        assertEquals(Quotation.of(5.56), candle.close());
+        assertEquals(Quotation.of(5.56), candle.high());
+        assertEquals(Quotation.of(5.556), candle.low());
+        assertEquals(35532, candle.volume());
     }
 
     @Test
@@ -267,7 +267,7 @@ class MockMarketDataServiceIT {
 
         // each candle has close price more than 5.554
         for (Candle candle : result) {
-            assertTrue(candle.getClose().isGreaterThan(Quotation.of(5.554)));
+            assertTrue(candle.close().isGreaterThan(Quotation.of(5.554)));
         }
 
         // Assert correctness of time sequence
@@ -291,11 +291,11 @@ class MockMarketDataServiceIT {
 
         assertNotNull(candle);
         assertEquals(Instant.parse("2020-12-30T15:15:00Z"), candle.getTime());
-        assertEquals(Quotation.of(5.558), candle.getOpen());
-        assertEquals(Quotation.of(5.56), candle.getClose());
-        assertEquals(Quotation.of(5.56), candle.getHigh());
-        assertEquals(Quotation.of(5.556), candle.getLow());
-        assertEquals(35532, candle.getVolume());
+        assertEquals(Quotation.of(5.558), candle.open());
+        assertEquals(Quotation.of(5.56), candle.close());
+        assertEquals(Quotation.of(5.56), candle.high());
+        assertEquals(Quotation.of(5.556), candle.low());
+        assertEquals(35532, candle.volume());
     }
 
     void getCandlesTest(GetCandlesRequest request) {
@@ -363,11 +363,11 @@ class MockMarketDataServiceIT {
         long volumeAvg = 0;
 
         for (var uniteCandle : uniteCandles) {
-            openAvg = openAvg.add(uniteCandle.getOpen());
-            closeAvg = closeAvg.add(uniteCandle.getClose());
-            highAvg = highAvg.add(uniteCandle.getHigh());
-            lowAvg = lowAvg.add(uniteCandle.getLow());
-            volumeAvg += uniteCandle.getVolume();
+            openAvg = openAvg.add(uniteCandle.open());
+            closeAvg = closeAvg.add(uniteCandle.close());
+            highAvg = highAvg.add(uniteCandle.high());
+            lowAvg = lowAvg.add(uniteCandle.low());
+            volumeAvg += uniteCandle.volume();
         }
 
         openAvg = openAvg.divide(uniteCandles.size());

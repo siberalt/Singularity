@@ -6,6 +6,7 @@ import com.siberalt.singularity.configuration.YamlConfig;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ComparisonOperator;
 import com.siberalt.singularity.entity.candle.FindPriceParams;
+import com.siberalt.singularity.entity.candle.TimePoint;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -39,43 +40,43 @@ public class CvsCandleRepositoryTest {
         try (var candleStorage = candleStorageFactory.create(instrumentUid, instrumentDataPath)) {
             // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-10T09:45:00Z;5.436;5.436;5.436;5.434;1588;
             assertCandleEquals(
-                new Candle()
-                    .setInstrumentUid(instrumentUid)
-                    .setTime(Instant.parse("2020-12-10T09:45:00Z"))
-                    .setOpen(Quotation.of(5.436))
-                    .setClose(Quotation.of(5.436))
-                    .setHigh(Quotation.of(5.436))
-                    .setLow(Quotation.of(5.434))
-                    .setVolume(1588)
-                ,
+                new Candle(
+                    instrumentUid,
+                    new TimePoint(Instant.parse("2020-12-10T09:45:00Z")),
+                    Quotation.of(5.436),
+                    Quotation.of(5.436),
+                    Quotation.of(5.436),
+                    Quotation.of(5.434),
+                    1588
+                ),
                 candleStorage.getAt(instrumentUid, Instant.parse("2020-12-10T09:45:00Z"))
             );
 
             // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-10T10:40:00Z;5.44;5.436;5.44;5.436;1750;
             assertCandleEquals(
-                new Candle()
-                    .setInstrumentUid(instrumentUid)
-                    .setTime(Instant.parse("2020-12-10T10:40:00Z"))
-                    .setOpen(Quotation.of(5.44))
-                    .setClose(Quotation.of(5.436))
-                    .setHigh(Quotation.of(5.44))
-                    .setLow(Quotation.of(5.436))
-                    .setVolume(1750)
-                ,
+                new Candle(
+                    instrumentUid,
+                    new TimePoint(Instant.parse("2020-12-10T10:40:00Z")),
+                    Quotation.of(5.44),
+                    Quotation.of(5.436),
+                    Quotation.of(5.44),
+                    Quotation.of(5.436),
+                    1750
+                ),
                 candleStorage.getAt(instrumentUid, Instant.parse("2020-12-10T10:40:00Z"))
             );
 
             // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-10T11:33:00Z;5.44;5.442;5.442;5.44;785;
             assertCandleEquals(
-                new Candle()
-                    .setInstrumentUid(instrumentUid)
-                    .setTime(Instant.parse("2020-12-10T11:33:00Z"))
-                    .setOpen(Quotation.of(5.44))
-                    .setClose(Quotation.of(5.442))
-                    .setHigh(Quotation.of(5.442))
-                    .setLow(Quotation.of(5.44))
-                    .setVolume(785)
-                ,
+                new Candle(
+                    instrumentUid,
+                    new TimePoint(Instant.parse("2020-12-10T11:33:00Z")),
+                    Quotation.of(5.44),
+                    Quotation.of(5.442),
+                    Quotation.of(5.442),
+                    Quotation.of(5.44),
+                    785
+                ),
                 candleStorage.getAt(instrumentUid, Instant.parse("2020-12-10T11:33:00Z"))
             );
         }
@@ -91,41 +92,45 @@ public class CvsCandleRepositoryTest {
         try (var candleStorage = candleStorageFactory.create(instrumentUid, instrumentDataPath)) {
             List<Candle> matchCandles = List.of(
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-09-02T07:00:00Z;4.97;4.968;4.97;4.948;255;
-                new Candle()
-                    .setInstrumentUid(instrumentUid)
-                    .setTime(Instant.parse("2020-09-02T07:00:00Z"))
-                    .setOpen(Quotation.of(4.97))
-                    .setClose(Quotation.of(4.968))
-                    .setHigh(Quotation.of(4.97))
-                    .setLow(Quotation.of(4.948))
-                    .setVolume(255),
+                new Candle(
+                    instrumentUid,
+                    new TimePoint(Instant.parse("2020-09-02T07:00:00Z")),
+                    Quotation.of(4.97),
+                    Quotation.of(4.968),
+                    Quotation.of(4.97),
+                    Quotation.of(4.948),
+                    255
+                ),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-09-02T07:11:00Z;4.968;4.968;4.968;4.966;8572;
-                new Candle()
-                    .setInstrumentUid(instrumentUid)
-                    .setTime(Instant.parse("2020-09-02T07:11:00Z"))
-                    .setOpen(Quotation.of(4.968))
-                    .setClose(Quotation.of(4.968))
-                    .setHigh(Quotation.of(4.968))
-                    .setLow(Quotation.of(4.966))
-                    .setVolume(8572),
+                new Candle(
+                    instrumentUid,
+                    new TimePoint(Instant.parse("2020-09-02T07:11:00Z")),
+                    Quotation.of(4.968),
+                    Quotation.of(4.968),
+                    Quotation.of(4.968),
+                    Quotation.of(4.966),
+                    8572
+                ),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-09-02T11:59:00Z;4.99;4.99;4.99;4.99;584;
-                new Candle()
-                    .setInstrumentUid(instrumentUid)
-                    .setTime(Instant.parse("2020-09-02T11:59:00Z"))
-                    .setOpen(Quotation.of(4.99))
-                    .setClose(Quotation.of(4.99))
-                    .setHigh(Quotation.of(4.99))
-                    .setLow(Quotation.of(4.99))
-                    .setVolume(584),
+                new Candle(
+                    instrumentUid,
+                    new TimePoint(Instant.parse("2020-09-02T11:59:00Z")),
+                    Quotation.of(4.99),
+                    Quotation.of(4.99),
+                    Quotation.of(4.99),
+                    Quotation.of(4.99),
+                    584
+                ),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-09-02T15:40:00Z;4.916;4.918;4.918;4.91;710;
-                new Candle()
-                    .setInstrumentUid(instrumentUid)
-                    .setTime(Instant.parse("2020-09-02T15:40:00Z"))
-                    .setOpen(Quotation.of(4.916))
-                    .setClose(Quotation.of(4.918))
-                    .setHigh(Quotation.of(4.918))
-                    .setLow(Quotation.of(4.91))
-                    .setVolume(710)
+                new Candle(
+                    instrumentUid,
+                    new TimePoint(Instant.parse("2020-09-02T15:40:00Z")),
+                    Quotation.of(4.916),
+                    Quotation.of(4.918),
+                    Quotation.of(4.918),
+                    Quotation.of(4.91),
+                    710
+                )
             );
 
             matchCandles = new ArrayList<>(matchCandles);
@@ -141,41 +146,45 @@ public class CvsCandleRepositoryTest {
 
             matchCandles = List.of(
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-25T07:00:00Z;5.466;5.464;5.466;5.454;570;
-                new Candle()
-                    .setInstrumentUid(instrumentUid)
-                    .setTime(Instant.parse("2020-12-25T07:00:00Z"))
-                    .setOpen(Quotation.of(5.466))
-                    .setClose(Quotation.of(5.464))
-                    .setHigh(Quotation.of(5.466))
-                    .setLow(Quotation.of(5.454))
-                    .setVolume(570),
+                new Candle(
+                    instrumentUid,
+                    new TimePoint(Instant.parse("2020-12-25T07:00:00Z")),
+                    Quotation.of(5.466),
+                    Quotation.of(5.464),
+                    Quotation.of(5.466),
+                    Quotation.of(5.454),
+                    570
+                ),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-25T08:11:00Z;5.454;5.452;5.454;5.452;4373;
-                new Candle()
-                    .setInstrumentUid(instrumentUid)
-                    .setTime(Instant.parse("2020-12-25T08:11:00Z"))
-                    .setOpen(Quotation.of(5.454))
-                    .setClose(Quotation.of(5.452))
-                    .setHigh(Quotation.of(5.454))
-                    .setLow(Quotation.of(5.452))
-                    .setVolume(4373),
+                new Candle(
+                    instrumentUid,
+                    new TimePoint(Instant.parse("2020-12-25T08:11:00Z")),
+                    Quotation.of(5.454),
+                    Quotation.of(5.452),
+                    Quotation.of(5.454),
+                    Quotation.of(5.452),
+                    4373
+                ),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-25T09:41:00Z;5.454;5.454;5.454;5.454;104;
-                new Candle()
-                    .setInstrumentUid(instrumentUid)
-                    .setTime(Instant.parse("2020-12-25T09:41:00Z"))
-                    .setOpen(Quotation.of(5.454))
-                    .setClose(Quotation.of(5.454))
-                    .setHigh(Quotation.of(5.454))
-                    .setLow(Quotation.of(5.454))
-                    .setVolume(104),
+                new Candle(
+                    instrumentUid,
+                    new TimePoint(Instant.parse("2020-12-25T09:41:00Z")),
+                    Quotation.of(5.454),
+                    Quotation.of(5.454),
+                    Quotation.of(5.454),
+                    Quotation.of(5.454),
+                    104
+                ),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-25T15:44:00Z;5.48;5.482;5.482;5.48;343;
-                new Candle()
-                    .setInstrumentUid(instrumentUid)
-                    .setTime(Instant.parse("2020-12-25T15:44:00Z"))
-                    .setOpen(Quotation.of(5.48))
-                    .setClose(Quotation.of(5.482))
-                    .setHigh(Quotation.of(5.482))
-                    .setLow(Quotation.of(5.48))
-                    .setVolume(343)
+                new Candle(
+                    instrumentUid,
+                    new TimePoint(Instant.parse("2020-12-25T15:44:00Z")),
+                    Quotation.of(5.48),
+                    Quotation.of(5.482),
+                    Quotation.of(5.482),
+                    Quotation.of(5.48),
+                    343
+                )
             );
 
             matchCandles = new ArrayList<>(matchCandles);
@@ -267,7 +276,7 @@ public class CvsCandleRepositoryTest {
             Assertions.assertTrue(candleTime.compareTo(findPriceParams.from()) >= 0);
             Assertions.assertTrue(candleTime.compareTo(findPriceParams.to()) <= 0);
             Assertions.assertTrue(
-                candle.getOpen().compare(
+                candle.open().compare(
                     findPriceParams.price(),
                     findPriceParams.comparisonOperator()
                 )
@@ -327,12 +336,12 @@ public class CvsCandleRepositoryTest {
     }
 
     void assertCandleEquals(Candle actual, Candle expected) {
-        Assertions.assertEquals(actual.getInstrumentUid(), expected.getInstrumentUid());
+        Assertions.assertEquals(actual.instrumentUid(), expected.instrumentUid());
         Assertions.assertEquals(actual.getTime(), expected.getTime());
-        Assertions.assertEquals(actual.getOpen(), expected.getOpen());
-        Assertions.assertEquals(actual.getClose(), expected.getClose());
-        Assertions.assertEquals(actual.getHigh(), expected.getHigh());
-        Assertions.assertEquals(actual.getLow(), expected.getLow());
-        Assertions.assertEquals(actual.getVolume(), expected.getVolume());
+        Assertions.assertEquals(actual.open(), expected.open());
+        Assertions.assertEquals(actual.close(), expected.close());
+        Assertions.assertEquals(actual.high(), expected.high());
+        Assertions.assertEquals(actual.low(), expected.low());
+        Assertions.assertEquals(actual.volume(), expected.volume());
     }
 }

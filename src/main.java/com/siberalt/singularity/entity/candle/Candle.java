@@ -7,37 +7,26 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.Objects;
 
-public class Candle {
+public record Candle (
+    String instrumentUid,
+    TimePoint timePoint,
+    Quotation open,
+    Quotation close,
+    Quotation high,
+    Quotation low,
+    long volume
+){
     public static final long DEFAULT_INDEX = -1;
 
-    private String instrumentUid;
-    private TimePoint timePoint;
-    private Quotation open;
-    private Quotation close;
-    private Quotation high;
-    private Quotation low;
-    private long volume;
-
-    public Candle() {
-    }
-
-    public Candle(
-        String instrumentUid,
-        TimePoint timePoint,
-        Quotation openPrice,
-        Quotation closePrice,
-        Quotation highPrice,
-        Quotation lowPrice,
-        long volume
-    ) {
-        this.instrumentUid = instrumentUid;
-        this.timePoint = timePoint;
-        this.open = openPrice;
-        this.close = closePrice;
-        this.high = highPrice;
-        this.low = lowPrice;
-        this.volume = volume;
-    }
+    public static final Candle EMPTY = new Candle(
+        null,
+        TimePoint.NULL,
+        Quotation.ZERO,
+        Quotation.ZERO,
+        Quotation.ZERO,
+        Quotation.ZERO,
+        0
+    );
 
     @Override
     public boolean equals(Object o) {
@@ -70,53 +59,16 @@ public class Candle {
         return timePoint.index();
     }
 
-    public Candle setIndex(long index) {
-        timePoint = (timePoint == null) ? new TimePoint(index, null) : new TimePoint(index, timePoint.time());
-        return this;
-    }
-
-    public String getInstrumentUid() {
-        return instrumentUid;
-    }
-
-    public Candle setInstrumentUid(String instrumentUid) {
-        this.instrumentUid = instrumentUid;
-        return this;
-    }
-
     public Instant getTime() {
         return timePoint.time();
     }
 
-    public Candle setTime(Instant time) {
-        timePoint = (timePoint == null) ? new TimePoint(DEFAULT_INDEX, time) : new TimePoint(timePoint.index(), time);
-        return this;
-    }
-
-    public Quotation getOpen() {
-        return open;
-    }
-
     public double getOpenAsDouble(){
-        return this.getOpen().toDouble();
-    }
-
-    public Candle setOpen(Quotation open) {
-        this.open = open;
-        return this;
-    }
-
-    public Quotation getClose() {
-        return close;
+        return this.open().toDouble();
     }
 
     public double getCloseAsDouble() {
         return close.toDouble();
-    }
-
-    public Candle setClose(Quotation close) {
-        this.close = close;
-        return this;
     }
 
     public double getTypicalAsDouble() {
@@ -136,60 +88,17 @@ public class Candle {
         );
     }
 
-    public Quotation getHigh() {
-        return high;
-    }
-
     public double getHighAsDouble() {
-        return this.getHigh().toDouble();
-    }
-
-    public Candle setHigh(Quotation high) {
-        this.high = high;
-        return this;
-    }
-
-    public Quotation getLow() {
-        return low;
+        return this.high().toDouble();
     }
 
     public double getLowAsDouble(){
-        return this.getLow().toDouble();
-    }
-
-    public Candle setLow(Quotation low) {
-        this.low = low;
-        return this;
-    }
-
-    public long getVolume() {
-        return volume;
-    }
-
-    public Candle setVolume(long volume) {
-        this.volume = volume;
-        return this;
-    }
-
-    public TimePoint getTimePoint() {
-        return timePoint;
-    }
-
-    public Candle setTimePoint(TimePoint timePoint) {
-        this.timePoint = timePoint;
-        return this;
+        return this.low().toDouble();
     }
 
     @Override
     public Candle clone() {
-        return new Candle()
-            .setInstrumentUid(instrumentUid)
-            .setTimePoint(timePoint)
-            .setOpen(open)
-            .setClose(close)
-            .setHigh(high)
-            .setLow(low)
-            .setVolume(volume);
+        return new Candle(instrumentUid, timePoint, open, close, high, low, volume);
     }
 
     public boolean isEmpty() {
@@ -212,57 +121,76 @@ public class Candle {
         return Candle.of(timePoint, 0L, repeatedValue, repeatedValue, repeatedValue, repeatedValue);
     }
 
+    public static Candle of(
+        TimePoint timePoint, 
+        String instrumentUid, 
+        long volume,
+        Quotation open, 
+        Quotation high,
+        Quotation low,
+        Quotation close
+    ) {
+        return new Candle(instrumentUid, timePoint, open, close, high, low, volume);
+    }
+
     public static Candle of(TimePoint timePoint, String instrumentUid, long volume, double open, double high, double low, double close) {
-        return new Candle()
-            .setInstrumentUid(instrumentUid)
-            .setTimePoint(timePoint)
-            .setVolume(volume)
-            .setOpen(Quotation.of(open))
-            .setHigh(Quotation.of(high))
-            .setLow(Quotation.of(low))
-            .setClose(Quotation.of(close));
+        return new Candle(
+            instrumentUid,
+            timePoint,
+            Quotation.of(open),
+            Quotation.of(close),
+            Quotation.of(high),
+            Quotation.of(low),
+            volume
+        );
     }
 
     public static Candle of(TimePoint timePoint, long volume, double open, double high, double low, double close) {
-        return new Candle()
-            .setTimePoint(timePoint)
-            .setVolume(volume)
-            .setOpen(Quotation.of(open))
-            .setHigh(Quotation.of(high))
-            .setLow(Quotation.of(low))
-            .setClose(Quotation.of(close));
+        return new Candle(
+            null,
+            timePoint,
+            Quotation.of(open),
+            Quotation.of(close),
+            Quotation.of(high),
+            Quotation.of(low),
+            volume
+        );
     }
 
     public static Candle of(Instant time, String instrumentUid, long volume, double open, double high, double low, double close) {
-        return new Candle()
-            .setInstrumentUid(instrumentUid)
-            .setTime(time)
-            .setVolume(volume)
-            .setOpen(Quotation.of(open))
-            .setHigh(Quotation.of(high))
-            .setLow(Quotation.of(low))
-            .setClose(Quotation.of(close));
+        return new Candle(
+            instrumentUid,
+            new TimePoint(time),
+            Quotation.of(open),
+            Quotation.of(close),
+            Quotation.of(high),
+            Quotation.of(low),
+            volume
+        );
     }
 
     public static Candle of(Instant time, String instrumentUid, long volume, Quotation open, Quotation high, Quotation low, Quotation close) {
-        return new Candle()
-            .setInstrumentUid(instrumentUid)
-            .setTime(time)
-            .setVolume(volume)
-            .setOpen(open)
-            .setHigh(high)
-            .setLow(low)
-            .setClose(close);
+        return new Candle(
+            instrumentUid,
+            new TimePoint(time),
+            open,
+            close,
+            high,
+            low,
+            volume
+        );
     }
 
     public static Candle of(Instant time, long volume, double open, double high, double low, double close) {
-        return new Candle()
-            .setTime(time)
-            .setVolume(volume)
-            .setOpen(Quotation.of(open))
-            .setHigh(Quotation.of(high))
-            .setLow(Quotation.of(low))
-            .setClose(Quotation.of(close));
+        return new Candle(
+            null,
+            new TimePoint(time),
+            Quotation.of(open),
+            Quotation.of(close),
+            Quotation.of(high),
+            Quotation.of(low),
+            volume
+        );
     }
 
     public static CandleBuilder builder() {

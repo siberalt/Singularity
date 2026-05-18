@@ -54,7 +54,7 @@ public class NetVolumeUpsideCalculator implements UpsideCalculator {
         double downVolume = 0.0;
 
         for (Candle candle : lastCandles) {
-            double volume = candle.getVolume();
+            double volume = candle.volume();
 
             if (volume <= 0) {
                 continue; // Пропускаем свечи с нулевым объёмом

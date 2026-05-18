@@ -156,11 +156,11 @@ public class EventSimulatedOrderServiceTest extends MockOrderServiceTest {
         addMoney(Quotation.of(1000));
 
         return new PostOrderResponse[] {
-            assertBuyOrder(testCandles[0], OrderType.MARKET, 1, testCandles[0].getOpen()),
-            assertBuyOrder(testCandles[1], OrderType.LIMIT, 12, testCandles[1].getOpen()),
+            assertBuyOrder(testCandles[0], OrderType.MARKET, 1, testCandles[0].open()),
+            assertBuyOrder(testCandles[1], OrderType.LIMIT, 12, testCandles[1].open()),
             assertBuyOrder(testCandles[3], OrderType.BEST_PRICE, 12),
-            assertSellOrder(testCandles[4], OrderType.MARKET, 10, testCandles[3].getOpen()),
-            assertSellOrder(testCandles[5], OrderType.LIMIT, 12, testCandles[4].getOpen()),
+            assertSellOrder(testCandles[4], OrderType.MARKET, 10, testCandles[3].open()),
+            assertSellOrder(testCandles[5], OrderType.LIMIT, 12, testCandles[4].open()),
             assertBuyOrder(testCandles[7], OrderType.BEST_PRICE, 12),
         };
     }

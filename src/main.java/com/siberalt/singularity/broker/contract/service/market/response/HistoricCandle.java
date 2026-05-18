@@ -96,11 +96,11 @@ public class HistoricCandle {
     public static HistoricCandle of(Candle candle) {
         return new HistoricCandle()
                 .setTime(candle.getTime())
-                .setVolume(candle.getVolume())
-                .setLow(candle.getLow())
-                .setHigh(candle.getHigh())
-                .setClose(candle.getClose())
-                .setOpen(candle.getOpen())
+                .setVolume(candle.volume())
+                .setLow(candle.low())
+                .setHigh(candle.high())
+                .setClose(candle.close())
+                .setOpen(candle.open())
                 .setComplete(true);
     }
 }

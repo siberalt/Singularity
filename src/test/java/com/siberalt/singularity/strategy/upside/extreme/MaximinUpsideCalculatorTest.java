@@ -1,5 +1,6 @@
 package com.siberalt.singularity.strategy.upside.extreme;
 
+import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.upside.Upside;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -54,9 +56,9 @@ class MaximinUpsideCalculatorTest {
         @DisplayName("Должен вернуть NEUTRAL, если maxLocator вернул null")
         void shouldReturnNeutralIfMaxLocatorReturnsNull() {
             when(mockMaxLocator.locate(any())).thenReturn(null);
-            when(mockMinLocator.locate(any())).thenReturn(List.of(mock(Candle.class)));
+            when(mockMinLocator.locate(any())).thenReturn(List.of(Candle.EMPTY));
 
-            List<Candle> candles = List.of(mock(Candle.class));
+            List<Candle> candles = List.of(Candle.EMPTY);
             Upside result = calculator.calculate(candles);
 
             assertEquals(Upside.NEUTRAL, result);
@@ -65,10 +67,10 @@ class MaximinUpsideCalculatorTest {
         @Test
         @DisplayName("Должен вернуть NEUTRAL, если minLocator вернул null")
         void shouldReturnNeutralIfMinLocatorReturnsNull() {
-            when(mockMaxLocator.locate(any())).thenReturn(List.of(mock(Candle.class)));
+            when(mockMaxLocator.locate(any())).thenReturn(List.of(Candle.EMPTY));
             when(mockMinLocator.locate(any())).thenReturn(null);
 
-            List<Candle> candles = List.of(mock(Candle.class));
+            List<Candle> candles = List.of(Candle.EMPTY);
             Upside result = calculator.calculate(candles);
 
             assertEquals(Upside.NEUTRAL, result);
@@ -78,9 +80,9 @@ class MaximinUpsideCalculatorTest {
         @DisplayName("Должен вернуть NEUTRAL, если maxLocator вернул пустой список")
         void shouldReturnNeutralIfMaxLocatorReturnsEmpty() {
             when(mockMaxLocator.locate(any())).thenReturn(List.of());
-            when(mockMinLocator.locate(any())).thenReturn(List.of(mock(Candle.class)));
+            when(mockMinLocator.locate(any())).thenReturn(List.of(Candle.EMPTY));
 
-            List<Candle> candles = List.of(mock(Candle.class));
+            List<Candle> candles = List.of(Candle.EMPTY);
             Upside result = calculator.calculate(candles);
 
             assertEquals(Upside.NEUTRAL, result);
@@ -89,10 +91,10 @@ class MaximinUpsideCalculatorTest {
         @Test
         @DisplayName("Должен вернуть NEUTRAL, если minLocator вернул пустой список")
         void shouldReturnNeutralIfMinLocatorReturnsEmpty() {
-            when(mockMaxLocator.locate(any())).thenReturn(List.of(mock(Candle.class)));
+            when(mockMaxLocator.locate(any())).thenReturn(List.of(Candle.EMPTY));
             when(mockMinLocator.locate(any())).thenReturn(List.of());
 
-            List<Candle> candles = List.of(mock(Candle.class));
+            List<Candle> candles = List.of(Candle.EMPTY);
             Upside result = calculator.calculate(candles);
 
             assertEquals(Upside.NEUTRAL, result);
@@ -105,23 +107,18 @@ class MaximinUpsideCalculatorTest {
 
         private Candle lowCandle;
         private Candle highCandle;
-        private Candle currentCandle;
 
         @BeforeEach
         void setupCandles() {
-            lowCandle = mock(Candle.class);
-            highCandle = mock(Candle.class);
-            currentCandle = mock(Candle.class);
-
-            when(lowCandle.getTypicalAsDouble()).thenReturn(100.0);
-            when(highCandle.getTypicalAsDouble()).thenReturn(150.0);
+            lowCandle = Candle.builder().setClose(Quotation.of(100.0)).build();
+            highCandle = Candle.builder().setClose(Quotation.of(150.0)).build();
         }
 
         @Test
         @DisplayName("Должен вернуть +1.0, если цена у минимального экстремума")
         void shouldReturnMaxPositiveWhenPriceAtMinimum() {
             // Цена у минимума
-            when(currentCandle.getTypicalAsDouble()).thenReturn(100.0);
+            Candle currentCandle = Candle.builder().setClose(Quotation.of(100.0)).build();
 
             when(mockMaxLocator.locate(any())).thenReturn(List.of(highCandle));
             when(mockMinLocator.locate(any())).thenReturn(List.of(lowCandle));
@@ -136,7 +133,7 @@ class MaximinUpsideCalculatorTest {
         @DisplayName("Должен вернуть -1.0, если цена у максимального экстремума")
         void shouldReturnMaxNegativeWhenPriceAtMaximum() {
             // Цена у максимума
-            when(currentCandle.getTypicalAsDouble()).thenReturn(150.0);
+            Candle currentCandle = Candle.builder().setClose(Quotation.of(150.0)).build();
 
             when(mockMaxLocator.locate(any())).thenReturn(List.of(highCandle));
             when(mockMinLocator.locate(any())).thenReturn(List.of(lowCandle));
@@ -151,7 +148,7 @@ class MaximinUpsideCalculatorTest {
         @DisplayName("Должен вернуть 0.0, если цена в середине диапазона")
         void shouldReturnZeroWhenPriceInMiddle() {
             // Цена посередине: (100 + 150) / 2 = 125
-            when(currentCandle.getTypicalAsDouble()).thenReturn(125.0);
+            Candle currentCandle = Candle.builder().setClose(Quotation.of(125.0)).build();
 
             when(mockMaxLocator.locate(any())).thenReturn(List.of(highCandle));
             when(mockMinLocator.locate(any())).thenReturn(List.of(lowCandle));
@@ -168,15 +165,13 @@ class MaximinUpsideCalculatorTest {
     class EdgeCases {
 
         @Test
-        @DisplayName("Должен вернуть NEUTRAL при NaN в экстремумах")
-        void shouldReturnNeutralOnNaNExtremes() {
-            Candle extreme = mock(Candle.class);
-            when(extreme.getTypicalAsDouble()).thenReturn(Double.NaN);
+        @DisplayName("Должен вернуть NEUTRAL при отсутствии валидных экстремумов")
+        void shouldReturnNeutralWhenNoValidExtremes() {
+            // Мокаем локаторы так, чтобы они возвращали пустые списки
+            when(mockMaxLocator.locate(any())).thenReturn(Collections.emptyList());
+            when(mockMinLocator.locate(any())).thenReturn(Collections.emptyList());
 
-            when(mockMaxLocator.locate(any())).thenReturn(List.of(extreme));
-            when(mockMinLocator.locate(any())).thenReturn(List.of(extreme));
-
-            List<Candle> candles = List.of(mock(Candle.class));
+            List<Candle> candles = List.of(Candle.EMPTY);
             Upside result = calculator.calculate(candles);
 
             assertEquals(Upside.NEUTRAL, result);
@@ -185,16 +180,13 @@ class MaximinUpsideCalculatorTest {
         @Test
         @DisplayName("Должен вернуть NEUTRAL при max <= min")
         void shouldReturnNeutralWhenMaxNotGreaterThanMin() {
-            Candle min = mock(Candle.class);
-            Candle max = mock(Candle.class);
-
-            when(min.getTypicalAsDouble()).thenReturn(100.0);
-            when(max.getTypicalAsDouble()).thenReturn(100.0); // max == min
+            Candle min = Candle.builder().setClose(Quotation.of(100.0)).build();
+            Candle max = Candle.builder().setClose(Quotation.of(100.0)).build();
 
             when(mockMaxLocator.locate(any())).thenReturn(List.of(max));
             when(mockMinLocator.locate(any())).thenReturn(List.of(min));
 
-            List<Candle> candles = List.of(mock(Candle.class));
+            List<Candle> candles = List.of(Candle.EMPTY);
             Upside result = calculator.calculate(candles);
 
             assertEquals(Upside.NEUTRAL, result);

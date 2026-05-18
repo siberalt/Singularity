@@ -88,7 +88,7 @@ public class ProfitTakerStrategy implements StrategyInterface {
     }
 
     private void onNewCandle(NewCandleEvent event, Subscription subscription) {
-        Quotation currentPrice = event.getCandle().getClose();
+        Quotation currentPrice = event.getCandle().close();
         priceHistory.addLast(currentPrice);
 
         if (priceHistory.size() > priceHistoryLimit) {

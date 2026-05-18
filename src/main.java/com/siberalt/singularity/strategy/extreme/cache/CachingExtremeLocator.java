@@ -126,7 +126,7 @@ public class CachingExtremeLocator implements ExtremeLocator {
 
         long fromIndex = candles.get(0).getIndex();
         long toIndex = candles.get(candles.size() - 1).getIndex();
-        String instrumentId = candles.get(0).getInstrumentUid();
+        String instrumentId = candles.get(0).instrumentUid();
         validateRange(fromIndex, toIndex);
 
         return new ExtremeRange(fromIndex, toIndex, instrumentId, extremeType, rangeType);

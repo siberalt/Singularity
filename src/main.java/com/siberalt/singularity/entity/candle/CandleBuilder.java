@@ -7,10 +7,10 @@ import java.time.Instant;
 public class CandleBuilder {
     private String instrumentUid;
     private Instant time;
-    private Quotation openPrice;
-    private Quotation closePrice;
-    private Quotation highPrice;
-    private Quotation lowPrice;
+    private Quotation open;
+    private Quotation close;
+    private Quotation high;
+    private Quotation low;
     private long volume;
     private long index = Candle.DEFAULT_INDEX;
 
@@ -24,23 +24,23 @@ public class CandleBuilder {
         return this;
     }
 
-    public CandleBuilder setOpenPrice(Quotation openPrice) {
-        this.openPrice = openPrice;
+    public CandleBuilder setOpen(Quotation open) {
+        this.open = open;
         return this;
     }
 
-    public CandleBuilder setClosePrice(Quotation closePrice) {
-        this.closePrice = closePrice;
+    public CandleBuilder setClose(Quotation closePrice) {
+        this.close = closePrice;
         return this;
     }
 
-    public CandleBuilder setHighPrice(Quotation highPrice) {
-        this.highPrice = highPrice;
+    public CandleBuilder setHigh(Quotation high) {
+        this.high = high;
         return this;
     }
 
-    public CandleBuilder setLowPrice(Quotation lowPrice) {
-        this.lowPrice = lowPrice;
+    public CandleBuilder setLow(Quotation low) {
+        this.low = low;
         return this;
     }
 
@@ -55,13 +55,14 @@ public class CandleBuilder {
     }
 
     public Candle build() {
-        return new Candle()
-            .setInstrumentUid(instrumentUid)
-            .setTimePoint(new TimePoint(index, time))
-            .setOpen(openPrice)
-            .setClose(closePrice)
-            .setHigh(highPrice)
-            .setLow(lowPrice)
-            .setVolume(volume);
+        return new Candle(
+            instrumentUid,
+            new TimePoint(index, time),
+            open,
+            close,
+            high,
+            low,
+            volume
+        );
     }
 }

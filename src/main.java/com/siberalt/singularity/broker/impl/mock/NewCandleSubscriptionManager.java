@@ -126,13 +126,13 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
                     }
                 }
 
-                Iterator<Candle> iterator = candleIterator.get(eventCandle.getInstrumentUid());
+                Iterator<Candle> iterator = candleIterator.get(eventCandle.instrumentUid());
 
                 if (iterator != null && iterator.hasNext()) {
                     scheduleCandleEvent(iterator.next());
                 } else {
                     // If no more candles are available, we can stop scheduling events for this instrument
-                    candleIterator.remove(eventCandle.getInstrumentUid());
+                    candleIterator.remove(eventCandle.instrumentUid());
                 }
             }
 
@@ -158,7 +158,7 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
         // Check if the event matches the subscription criteria
         return event instanceof NewCandleEvent newCandleEvent &&
             ((NewCandleSubscriptionSpec) subscription).getInstrumentIds()
-                .contains(newCandleEvent.getCandle().getInstrumentUid());
+                .contains(newCandleEvent.getCandle().instrumentUid());
     }
 
     private void scheduleCandleEvent(Candle candle) {
