@@ -83,20 +83,15 @@ public class StatelessClusterLevelDetector implements LevelDetector {
             TimePoint pointFrom = new TimePoint(firstExtreme.getIndex(), firstExtreme.getTime());
             TimePoint pointTo = new TimePoint(lastExtreme.getIndex(), lastExtreme.getTime());
 
-            StrengthCalculator.LevelContext context = new StrengthCalculator.LevelContext(
-                pointFrom,
-                pointTo,
-                function,
-                0.0, // Временная заглушка для силы, будет пересчитано ниже
-                cluster.size()
-            );
-
             Level<Double> updatedLevel = new Level<>(
                 pointFrom,
                 pointTo,
                 function,
-                strengthCalculator.calculate(context)
+                0.0,
+                cluster.size()
             );
+            double strength = strengthCalculator.calculate(updatedLevel, candles);
+            updatedLevel = updatedLevel.withStrength(strength);
             levels.add(updatedLevel);
         }
 

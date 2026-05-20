@@ -1,6 +1,10 @@
 package com.siberalt.singularity.strategy.level.linear;
 
+import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.math.LinearFunction;
+import com.siberalt.singularity.strategy.level.Level;
+
+import java.util.List;
 
 public class BasicStrengthCalculator implements StrengthCalculator {
     private double touchWeight = 0.4;
@@ -17,28 +21,28 @@ public class BasicStrengthCalculator implements StrengthCalculator {
     }
 
     @Override
-    public double calculate(LevelContext context) {
+    public double calculate(Level<Double> level, List<Candle> candles) {
         if (
-            context.touchesCount() <= 0
-                || context.indexFrom() < 0
-                || context.indexTo() < context.indexFrom()
+            level.touchesCount() <= 0
+                || level.indexFrom() < 0
+                || level.indexTo() < level.indexFrom()
         ) {
             return 0.0;
         }
 
         double angleFactor;
 
-        if (context.function() instanceof LinearFunction<Double>) {
-            double slope = Math.abs(((LinearFunction<Double>) context.function()).getSlope());
+        if (level.function() instanceof LinearFunction<Double>) {
+            double slope = Math.abs(((LinearFunction<Double>) level.function()).getSlope());
             angleFactor = calculateAngleFactor(slope);
-        } else if (context.function() == null) {
+        } else if (level.function() == null) {
             return 0.0;
         } else {
             angleFactor = 0; // Default factor if function type is unknown
         }
 
-        double touchFactor = calculateTouchFactor(context.touchesCount());
-        double timeframeFactor = calculateTimeframeFactor(context.indexTo() - context.indexFrom());
+        double touchFactor = calculateTouchFactor(level.touchesCount());
+        double timeframeFactor = calculateTimeframeFactor(level.indexTo() - level.indexFrom());
 
         // Пример простой формулы для расчета силы уровня
         return touchWeight * touchFactor +

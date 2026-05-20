@@ -40,7 +40,7 @@ class LinearLevelDetectorTest {
         // For this test, we assume the strength is 3 * 3 = 9
         // This is a simplification; in a real scenario, the strengthCalculator would have more complex logic
         double expectedStrength = 3 * 3; // Example strength value
-        when(strengthCalculator.calculate(any())).thenReturn(expectedStrength);
+        when(strengthCalculator.calculate(any(), eq(candles))).thenReturn(expectedStrength);
         List<Level<Double>> levels = calculator.detect(candles);
 
         assertEquals(1, levels.size());
@@ -79,7 +79,7 @@ class LinearLevelDetectorTest {
         // For this test, we assume the strength is 3 * 3 = 9
         double expectedStrength1 = 3 * 3; // Example strength value
         double expectedStrength2 = 2 * 3; // Example strength value for the second level
-        when(strengthCalculator.calculate(any())).thenReturn(expectedStrength1, expectedStrength2);
+        when(strengthCalculator.calculate(any(), eq(candles))).thenReturn(expectedStrength1, expectedStrength2);
 
         List<Level<Double>> levels = calculator.detect(candles);
 
@@ -115,7 +115,7 @@ class LinearLevelDetectorTest {
         );
         calculator.setStrengthCalculator(strengthCalculator);
         // Mock the strength calculation
-        verify(strengthCalculator, never()).calculate(any());
+        verify(strengthCalculator, never()).calculate(any(), eq(candles));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
             calculator.detect(candles)
@@ -144,7 +144,7 @@ class LinearLevelDetectorTest {
         // Assuming strength is calculated as the square of the number of candles in the frame
         // For this test, we assume the strength is 3 * 3 = 9
         double expectedStrength = 3 * 3; // Example strength value
-        when(strengthCalculator.calculate(any())).thenReturn(expectedStrength);
+        when(strengthCalculator.calculate(any(), eq(candles))).thenReturn(expectedStrength);
 
         List<Level<Double>> result = calculator.detect(candles);
 
@@ -170,7 +170,7 @@ class LinearLevelDetectorTest {
             2, 0.1, Candle::getCloseAsDouble
         );
         calculator.setStrengthCalculator(strengthCalculator);
-        verify(strengthCalculator, never()).calculate(any());
+        verify(strengthCalculator, never()).calculate(any(), eq(candles));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
             calculator.detect(candles)
@@ -201,9 +201,8 @@ class LinearLevelDetectorTest {
         );
         StrengthCalculator strengthCalculator = mock(StrengthCalculator.class);
         detector.setStrengthCalculator(strengthCalculator);
-        when(strengthCalculator.calculate(any()))
-            .thenReturn(25.0)
-            .thenReturn(45.0);
+        when(strengthCalculator.calculate(any(), eq(candles1))).thenReturn(25.0);
+        when(strengthCalculator.calculate(any(), eq(candles2))).thenReturn(45.0);
 
         // First call to detect
         List<Level<Double>> levelsFirstCall = detector.detect(candles1);
@@ -254,9 +253,8 @@ class LinearLevelDetectorTest {
         );
         StrengthCalculator strengthCalculator = mock(StrengthCalculator.class);
         detector.setStrengthCalculator(strengthCalculator);
-        when(strengthCalculator.calculate(any()))
-            .thenReturn(25.0)
-            .thenReturn(45.0);
+        when(strengthCalculator.calculate(any(), eq(candles1))).thenReturn(25.0);
+        when(strengthCalculator.calculate(any(), eq(candles2))).thenReturn(45.0);
 
         // First call to detect
         List<Level<Double>> levelsFirstCall = detector.detect(candles1);

@@ -72,7 +72,8 @@ public class LinearLevelDetector implements LevelDetector {
                             lastTime,
                             startLevelIndex,
                             lastIndex,
-                            linearModel.getInliers().size()
+                            linearModel.getInliers().size(),
+                            candles
                         )
                     );
                 }
@@ -95,10 +96,11 @@ public class LinearLevelDetector implements LevelDetector {
                     lastTime,
                     startLevelIndex,
                     lastIndex,
-                    linearModel.getInliers().size()
+                    linearModel.getInliers().size(),
+                    candles
                 )
             );
-        } else if (linearModel.getInliers().size() == 0) {
+        } else if (linearModel.getInliers().isEmpty()) {
             startLevelIndex = (int) (lastIndex + 1);
             startLevelTime = lastTime;
         }
@@ -111,22 +113,22 @@ public class LinearLevelDetector implements LevelDetector {
         Instant endLevelTime,
         long startLevelIndex,
         long endLevelIndex,
-        int touchesCount
+        int touchesCount,
+        List<Candle> candles
     ) {
         TimePoint startPoint = new TimePoint(startLevelIndex, startLevelTime);
         TimePoint endPoint = new TimePoint(endLevelIndex, endLevelTime);
 
-        StrengthCalculator.LevelContext context = new StrengthCalculator.LevelContext(
+        Level<Double> level = new Level<>(
             startPoint,
             endPoint,
             linearModel.getLinearFunction(),
             0,
             touchesCount
         );
+        double strength = strengthCalculator.calculate(level, candles);
 
-        double strength = strengthCalculator.calculate(context);
-
-        return new Level<>(startPoint, endPoint, linearModel.getLinearFunction(), strength);
+        return level.withStrength(strength);
     }
 
     public LinearLevelDetector setStrengthCalculator(StrengthCalculator strengthCalculator) {

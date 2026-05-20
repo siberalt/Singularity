@@ -11,10 +11,16 @@ public record Level<T extends Number>(
     TimePoint pointFrom,
     TimePoint pointTo,
     Function<T, T> function,
-    double strength) {
+    double strength,
+    int touchesCount) {
+
+
+    public Level(TimePoint pointFrom, TimePoint pointTo, Function<T, T> function, double strength, int touchesCount) {
+        this(UUID.randomUUID().toString(), pointFrom, pointTo, function, strength, touchesCount);
+    }
 
     public Level(TimePoint pointFrom, TimePoint pointTo, Function<T, T> function, double strength) {
-        this(UUID.randomUUID().toString(), pointFrom, pointTo, function, strength);
+        this(UUID.randomUUID().toString(), pointFrom, pointTo, function, strength, 0);
     }
 
     public Level(long indexFrom, long indexTo, Function<T, T> function) {
@@ -43,5 +49,9 @@ public record Level<T extends Number>(
 
     public boolean intersects(Level<T> other) {
         return pointFrom.index() <= other.pointTo().index() && other.pointFrom().index() <= pointTo.index();
+    }
+
+    public Level<T> withStrength(double strength) {
+        return new Level<>(id, pointFrom, pointTo, function, strength, touchesCount);
     }
 }

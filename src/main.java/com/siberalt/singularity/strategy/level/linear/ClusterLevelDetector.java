@@ -103,16 +103,11 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
                 timePointFrom,
                 timePointTo,
                 function,
-                recalculateStrength(
-                    new Level<>(
-                        timePointFrom,
-                        timePointTo,
-                        function,
-                        existingDetails.level().strength()
-                    ),
-                    existingDetails.touchesCount() + newLevelExtremes.size()
-                )
+                existingDetails.level().strength(),
+                existingDetails.touchesCount() + newLevelExtremes.size()
             );
+            double strength = strengthCalculator.calculate(updatedLevel, candles);
+            updatedLevel = updatedLevel.withStrength(strength);
             LevelDetails newDetails = new LevelDetails(
                 updatedLevel,
                 updatedPrice,
@@ -146,17 +141,6 @@ public class ClusterLevelDetector implements StatefulLevelDetector {
             .entrySet()
             .stream()
             .min(Comparator.comparingDouble(entry -> Math.abs(entry.getKey() - price)));
-    }
-
-    private double recalculateStrength(Level<Double> updatedLevel, int touchesCount) {
-        StrengthCalculator.LevelContext context = new StrengthCalculator.LevelContext(
-            updatedLevel.pointFrom(),
-            updatedLevel.pointTo(),
-            updatedLevel.function(),
-            updatedLevel.strength(),
-            touchesCount
-        );
-        return strengthCalculator.calculate(context);
     }
 
     private void createNewLevel(Candle candle) {
