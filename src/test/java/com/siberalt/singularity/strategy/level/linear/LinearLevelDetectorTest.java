@@ -5,6 +5,7 @@ import com.siberalt.singularity.entity.candle.CandleFactory;
 import com.siberalt.singularity.math.ArithmeticOperations;
 import com.siberalt.singularity.math.LinearFunction2D;
 import com.siberalt.singularity.strategy.level.Level;
+import com.siberalt.singularity.strategy.level.strength.StrengthCalculator;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;

@@ -9,6 +9,8 @@ import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.FrameExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
+import com.siberalt.singularity.strategy.level.strength.BasicStrengthCalculator;
+import com.siberalt.singularity.strategy.level.strength.StrengthCalculator;
 
 import java.time.Instant;
 import java.util.ArrayList;

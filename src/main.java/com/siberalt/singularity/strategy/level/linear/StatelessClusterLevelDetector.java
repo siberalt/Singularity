@@ -6,6 +6,8 @@ import com.siberalt.singularity.math.median.RobustMedianCalculator;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
+import com.siberalt.singularity.strategy.level.strength.BasicStrengthCalculator;
+import com.siberalt.singularity.strategy.level.strength.StrengthCalculator;
 import com.siberalt.singularity.strategy.market.PriceExtractor;
 import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
 import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;

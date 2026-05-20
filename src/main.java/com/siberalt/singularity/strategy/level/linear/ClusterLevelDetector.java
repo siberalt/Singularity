@@ -7,6 +7,8 @@ import com.siberalt.singularity.math.median.RobustMedianCalculator;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.StatefulLevelDetector;
+import com.siberalt.singularity.strategy.level.strength.BasicStrengthCalculator;
+import com.siberalt.singularity.strategy.level.strength.StrengthCalculator;
 
 import java.time.Duration;
 import java.time.Instant;

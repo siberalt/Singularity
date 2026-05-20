@@ -1,4 +1,4 @@
-package com.siberalt.singularity.strategy.level.linear;
+package com.siberalt.singularity.strategy.level.strength;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.math.LinearFunction;
