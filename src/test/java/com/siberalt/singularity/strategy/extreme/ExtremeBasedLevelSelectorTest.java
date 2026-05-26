@@ -2,7 +2,7 @@ package com.siberalt.singularity.strategy.extreme;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.Level;
-import com.siberalt.singularity.strategy.level.selector.ExtremeBasedLevelSelector;
+import com.siberalt.singularity.strategy.level.selector.ExtremeBasedLevelPairSelector;
 import com.siberalt.singularity.strategy.level.selector.LevelPair;
 import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 import org.junit.jupiter.api.Test;
@@ -31,7 +31,7 @@ class ExtremeBasedLevelSelectorTest {
         Level<Double> resistanceLevel = new Level<>(0, 10, index -> 199.0);
         Level<Double> supportLevel = new Level<>(0, 10, index -> 101.0);
 
-        ExtremeBasedLevelSelector selector = new ExtremeBasedLevelSelector(minimumLocator, maximumLocator, volCalcMock);
+        ExtremeBasedLevelPairSelector selector = new ExtremeBasedLevelPairSelector(minimumLocator, maximumLocator, volCalcMock);
         selector.setVicinityMultiplier(1);
 
         List<LevelPair> result = selector.select(
@@ -62,7 +62,7 @@ class ExtremeBasedLevelSelectorTest {
         Level<Double> resistanceLevel = new Level<>(0, 10, index -> 110.0);
         Level<Double> supportLevel = new Level<>(0, 10, index -> 180.0);
 
-        ExtremeBasedLevelSelector selector = new ExtremeBasedLevelSelector(minimumLocator, maximumLocator);
+        ExtremeBasedLevelPairSelector selector = new ExtremeBasedLevelPairSelector(minimumLocator, maximumLocator);
         selector.setVicinityMultiplier(0.02);
 
         List<LevelPair> result = selector.select(List.of(resistanceLevel), List.of(supportLevel), List.of());
@@ -78,7 +78,7 @@ class ExtremeBasedLevelSelectorTest {
         when(minimumLocator.locate(Mockito.anyList())).thenReturn(List.of());
         when(maximumLocator.locate(Mockito.anyList())).thenReturn(List.of());
 
-        ExtremeBasedLevelSelector selector = new ExtremeBasedLevelSelector(minimumLocator, maximumLocator);
+        ExtremeBasedLevelPairSelector selector = new ExtremeBasedLevelPairSelector(minimumLocator, maximumLocator);
 
         List<LevelPair> result = selector.select(List.of(), List.of(), List.of());
 

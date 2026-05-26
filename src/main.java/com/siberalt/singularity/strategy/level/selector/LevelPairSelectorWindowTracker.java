@@ -8,12 +8,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-public class LevelSelectorWindowTracker implements LevelSelector {
-    private final LevelSelector baseSelector;
+public class LevelPairSelectorWindowTracker implements LevelPairSelector {
+    private final LevelPairSelector baseSelector;
     private final List<LevelPairsSnapshot> trackedLevelPairs = new ArrayList<>();
     private RangeLong previousRange;
 
-    public LevelSelectorWindowTracker(LevelSelector baseSelector) {
+    public LevelPairSelectorWindowTracker(LevelPairSelector baseSelector) {
         this.baseSelector = baseSelector;
     }
 

@@ -7,11 +7,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-public class LevelSelectorTracker implements LevelSelector {
-    private final LevelSelector baseSelector;
+public class LevelSelectorTracker implements LevelPairSelector {
+    private final LevelPairSelector baseSelector;
     private final List<LevelPairsSnapshot> trackedLevelPairs = new ArrayList<>();
 
-    public LevelSelectorTracker(LevelSelector baseSelector) {
+    public LevelSelectorTracker(LevelPairSelector baseSelector) {
         this.baseSelector = baseSelector;
     }
 

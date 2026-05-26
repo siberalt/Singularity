@@ -13,7 +13,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class ExtremeBasedLevelSelector implements LevelSelector {
+public class ExtremeBasedLevelPairSelector implements LevelPairSelector {
     public final double DEFAULT_VICINITY_MULTIPLIER = 1.0;
     public final int DEFAULT_NUMBER_OF_PAIRS = 3;
 
@@ -24,7 +24,7 @@ public class ExtremeBasedLevelSelector implements LevelSelector {
     private final VolatilityCalculator volatilityCalculator;
     private double vicinityMultiplier = DEFAULT_VICINITY_MULTIPLIER;   // сколько волатильностей допускать
 
-    public ExtremeBasedLevelSelector(
+    public ExtremeBasedLevelPairSelector(
         ExtremeLocator minimumLocator,
         ExtremeLocator maximumLocator,
         VolatilityCalculator volatilityCalculator
@@ -34,7 +34,7 @@ public class ExtremeBasedLevelSelector implements LevelSelector {
         this.volatilityCalculator = volatilityCalculator;
     }
 
-    public ExtremeBasedLevelSelector(
+    public ExtremeBasedLevelPairSelector(
         ExtremeLocator minimumLocator,
         ExtremeLocator maximumLocator
     ) {
@@ -51,7 +51,7 @@ public class ExtremeBasedLevelSelector implements LevelSelector {
         this.numberOfPairs = numberOfPairs;
     }
 
-    public ExtremeBasedLevelSelector setPriceExtractor(PriceExtractor priceExtractor) {
+    public ExtremeBasedLevelPairSelector setPriceExtractor(PriceExtractor priceExtractor) {
         this.priceExtractor = priceExtractor;
         return this;
     }

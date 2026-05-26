@@ -5,7 +5,7 @@ import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.selector.LevelPair;
-import com.siberalt.singularity.strategy.level.selector.LevelSelector;
+import com.siberalt.singularity.strategy.level.selector.LevelPairSelector;
 import com.siberalt.singularity.strategy.upside.Upside;
 import org.junit.jupiter.api.Test;
 
@@ -36,7 +36,7 @@ public class KeyLevelsUpsideCalculatorTest {
         LevelDetector supportDetector = mock(LevelDetector.class);
         LevelDetector resistanceDetector = mock(LevelDetector.class);
         LevelBasedUpsideCalculator upsideCalculator = mock(LevelBasedUpsideCalculator.class);
-        LevelSelector levelSelector = mock(LevelSelector.class);
+        LevelPairSelector levelSelector = mock(LevelPairSelector.class);
 
         when(levelSelector.select(any(), any(), any()))
             .thenReturn(List.of(new LevelPair(resistance, support)));

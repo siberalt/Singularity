@@ -91,12 +91,12 @@ public class BasicTradeStrategySimulation {
         ExtremeLocator minimumLocator = PivotPointExtremeLocator.ofMinimums(120);
         LevelDetectorWindowTracker supportTracker = createLevelDetector(0.005, minimumLocator);
         LevelDetectorWindowTracker resistanceTracker = createLevelDetector(0.005, maximumLocator);
-        var levelSelector = new ExtremeBasedLevelSelector(
+        var levelSelector = new ExtremeBasedLevelPairSelector(
             LastExtremeLocator.ofMinimums(6, 2, Candle::getCloseAsDouble),
             LastExtremeLocator.ofMaximums(6, 2, Candle::getCloseAsDouble)
         );
         levelSelector.setVicinityMultiplier(10);
-        LevelSelectorWindowTracker selectorTracker = new LevelSelectorWindowTracker(levelSelector);
+        LevelPairSelectorWindowTracker selectorTracker = new LevelPairSelectorWindowTracker(levelSelector);
         StrategyInterface strategy = createLevelsStrategy(
             candleRepository,
             broker,
@@ -178,7 +178,7 @@ public class BasicTradeStrategySimulation {
         Account account,
         LevelDetector supportDetector,
         LevelDetector resistanceDetector,
-        LevelSelector selectorTracker,
+        LevelPairSelector selectorTracker,
         ExtremeLocator maximaBaseLocator,
         ExtremeLocator minimaBaseLocator
     ) {

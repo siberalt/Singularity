@@ -5,7 +5,7 @@ import com.siberalt.singularity.strategy.level.Level;
 
 import java.util.List;
 
-public interface LevelSelector {
+public interface LevelPairSelector {
     List<LevelPair> select(
         List<Level<Double>> resistanceLevels,
         List<Level<Double>> supportLevels,

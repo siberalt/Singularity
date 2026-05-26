@@ -14,14 +14,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 class LevelSelectorWindowTrackerTest {
-    private LevelSelector baseSelectorMock;
-    private LevelSelectorWindowTracker tracker;
+    private LevelPairSelector baseSelectorMock;
+    private LevelPairSelectorWindowTracker tracker;
     private final CandleFactory candleFactory = new CandleFactory("TEST");
 
     @BeforeEach
     void setUp() {
-        baseSelectorMock = mock(LevelSelector.class);
-        tracker = new LevelSelectorWindowTracker(baseSelectorMock);
+        baseSelectorMock = mock(LevelPairSelector.class);
+        tracker = new LevelPairSelectorWindowTracker(baseSelectorMock);
     }
 
     @Test

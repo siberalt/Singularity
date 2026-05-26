@@ -6,7 +6,7 @@ import com.siberalt.singularity.math.median.RobustMedianCalculator;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
-import com.siberalt.singularity.strategy.level.strength.BasicStrengthCalculator;
+import com.siberalt.singularity.strategy.level.strength.SimpleStrengthCalculator;
 import com.siberalt.singularity.strategy.level.strength.StrengthCalculator;
 import com.siberalt.singularity.strategy.market.PriceExtractor;
 import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
@@ -19,7 +19,7 @@ public class StatelessClusterLevelDetector implements LevelDetector {
     private static final int MAX_LEVELS = 30;
     private static final Map<Double, Function<Double, Double>> functionsCache = new WeakHashMap<>();
     private final ExtremeLocator extremeLocator;
-    private StrengthCalculator strengthCalculator = new BasicStrengthCalculator();
+    private StrengthCalculator strengthCalculator = new SimpleStrengthCalculator();
     private final ClusterAggregator clusterAggregator;
     private VolatilityCalculator volatilityCalculator = new ATRVolatilityCalculator();
 

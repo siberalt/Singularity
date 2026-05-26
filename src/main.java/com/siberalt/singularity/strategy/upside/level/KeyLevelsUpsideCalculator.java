@@ -6,7 +6,7 @@ import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.LinearLevelDetector;
 import com.siberalt.singularity.strategy.level.selector.BasicLevelSelector;
 import com.siberalt.singularity.strategy.level.selector.LevelPair;
-import com.siberalt.singularity.strategy.level.selector.LevelSelector;
+import com.siberalt.singularity.strategy.level.selector.LevelPairSelector;
 import com.siberalt.singularity.strategy.upside.Upside;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 
@@ -24,7 +24,7 @@ public class KeyLevelsUpsideCalculator implements UpsideCalculator {
     private LevelDetector supportLevelDetector;
     private LevelDetector resistanceLevelDetector;
     private LevelBasedUpsideCalculator levelBasedUpsideCalculator;
-    private LevelSelector levelSelector = new BasicLevelSelector();
+    private LevelPairSelector levelSelector = new BasicLevelSelector();
 
     public KeyLevelsUpsideCalculator(
         LevelDetector supportLevelDetector,
@@ -36,7 +36,7 @@ public class KeyLevelsUpsideCalculator implements UpsideCalculator {
         this.levelBasedUpsideCalculator = levelBasedUpsideCalculator;
     }
 
-    public KeyLevelsUpsideCalculator setLevelSelector(LevelSelector levelSelector) {
+    public KeyLevelsUpsideCalculator setLevelSelector(LevelPairSelector levelSelector) {
         this.levelSelector = levelSelector;
         return this;
     }

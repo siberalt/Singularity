@@ -6,7 +6,7 @@ import com.siberalt.singularity.strategy.level.Level;
 import java.util.Comparator;
 import java.util.List;
 
-public class BasicLevelSelector implements LevelSelector {
+public class BasicLevelSelector implements LevelPairSelector {
     private int limit = 1; // Default limit
 
     public BasicLevelSelector(int limit) {
