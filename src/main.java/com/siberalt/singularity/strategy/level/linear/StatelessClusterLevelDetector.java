@@ -103,7 +103,7 @@ public class StatelessClusterLevelDetector implements LevelDetector {
     }
 
     public static StatelessClusterLevelDetector createDefault(double multiplier, ExtremeLocator extremeLocator) {
-        return new StatelessClusterLevelDetector(extremeLocator, new DBSCANClusterAggregator(multiplier, 2));
+        return new StatelessClusterLevelDetector(extremeLocator, new DBSCANClusterAggregator(multiplier, 2), 5);
     }
 
     public static StatelessClusterLevelDetector createDefault(ExtremeLocator extremeLocator, PriceExtractor priceExtractor) {

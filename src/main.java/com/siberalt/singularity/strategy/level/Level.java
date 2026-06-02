@@ -27,6 +27,10 @@ public record Level<T extends Number>(
         this(new TimePoint(indexFrom), new TimePoint(indexTo), function, 0);
     }
 
+    public Level(long indexFrom, long indexTo, Function<T, T> function, double strength) {
+        this(new TimePoint(indexFrom), new TimePoint(indexTo), function, strength);
+    }
+
     public long indexFrom() {
         return pointFrom.index();
     }

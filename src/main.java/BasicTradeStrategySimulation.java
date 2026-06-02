@@ -36,7 +36,9 @@ import com.siberalt.singularity.strategy.observer.Observer;
 import com.siberalt.singularity.strategy.upside.*;
 import com.siberalt.singularity.strategy.upside.extreme.MaximinUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.level.*;
+import com.siberalt.singularity.strategy.upside.level.adaptive.AdaptiveUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.subrange.CalendarPeriodFilterDecorator;
+import com.siberalt.singularity.strategy.upside.volume.NetVolumeUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.volume.VWAPUpsideCalculator;
 
 import java.awt.*;
@@ -54,6 +56,7 @@ public class BasicTradeStrategySimulation {
         Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
         CvsFileCandleRepositoryFactory factory = new CvsFileCandleRepositoryFactory();
         OrderRepository orderRepository = new InMemoryOrderRepository();
+        boolean enableTracing = false;
 
         CvsCandleRepository candleRepository = factory.create(
             "TMOS",
@@ -87,15 +90,11 @@ public class BasicTradeStrategySimulation {
         Quotation initialInvestment = Quotation.of(1000000.00);
         broker.getOperationsService().addMoney(account.getId(), Money.of("RUB", initialInvestment));
 
-        ExtremeLocator maximumLocator = PivotPointExtremeLocator.ofMaximums(120);
-        ExtremeLocator minimumLocator = PivotPointExtremeLocator.ofMinimums(120);
-        LevelDetectorWindowTracker supportTracker = createLevelDetector(0.005, minimumLocator);
-        LevelDetectorWindowTracker resistanceTracker = createLevelDetector(0.005, maximumLocator);
-        var levelSelector = new ExtremeBasedLevelPairSelector(
-            LastExtremeLocator.ofMinimums(6, 2, Candle::getCloseAsDouble),
-            LastExtremeLocator.ofMaximums(6, 2, Candle::getCloseAsDouble)
-        );
-        levelSelector.setVicinityMultiplier(10);
+        ExtremeLocator maximumLocator = PivotPointExtremeLocator.ofMaximums(100);
+        ExtremeLocator minimumLocator = PivotPointExtremeLocator.ofMinimums(100);
+        LevelDetectorWindowTracker supportTracker = createLevelDetector(1.4, minimumLocator);
+        LevelDetectorWindowTracker resistanceTracker = createLevelDetector(1.4, maximumLocator);
+        var levelSelector = new StrongestLevelPairSelector(2);
         LevelPairSelectorWindowTracker selectorTracker = new LevelPairSelectorWindowTracker(levelSelector);
         StrategyInterface strategy = createLevelsStrategy(
             candleRepository,
@@ -160,16 +159,29 @@ public class BasicTradeStrategySimulation {
 
         System.out.printf("APY: %.2f%%", apy);
 
-        drawOrdersChart(
-            supportTracker.getSnapshots(),
-            resistanceTracker.getSnapshots(),
-            orders,
-            candleRepository,
-            "TMOS",
-            startTime,
-            endTime,
-            selectorTracker.getTrackedLevelPairs()
-        );
+        if (!enableTracing) {
+            drawOrdersChart(
+                List.of(),
+                List.of(),
+                orders,
+                candleRepository,
+                "TMOS",
+                startTime,
+                endTime,
+                List.of()
+            );
+        } else {
+            drawOrdersChart(
+                supportTracker.getSnapshots(),
+                resistanceTracker.getSnapshots(),
+                orders,
+                candleRepository,
+                "TMOS",
+                startTime,
+                endTime,
+                selectorTracker.getTrackedLevelPairs()
+            );
+        }
     }
 
     private static StrategyInterface createLevelsStrategy(
@@ -205,27 +217,28 @@ public class BasicTradeStrategySimulation {
 //                    SubrangeUpsideCalculator.ofLastN(60, new NetVolumeUpsideCalculator()), 0.2
 //                ),
                 CompositeFactorUpsideCalculator.newWeightedCalculator(
-                    CalendarPeriodFilterDecorator.ofLastDays(1, new VWAPUpsideCalculator()), 1
+                    CalendarPeriodFilterDecorator.ofLastDays(1, new VWAPUpsideCalculator()), 0.8
                 )
             )
         );
 
-        LevelBasedUpsideCalculator adaptiveUpsideCalculator = new AdaptiveUpsideCalculator(
-            new ChannelLevelBasedUpsideCalculator(), volumeUpsideCalculator
+        var adaptiveUpsideCalculator = new AdaptiveUpsideCalculator(
+            new SimpleLevelBasedUpsideCalculator(),
+            volumeUpsideCalculator
         );
 
-        KeyLevelsUpsideCalculator levelUpsideCalculator = new KeyLevelsUpsideCalculator(
+        UpsideCalculator levelUpsideCalculator = new KeyLevelsUpsideCalculator(
             supportDetector,
             resistanceDetector,
-            //new ChannelLevelBasedUpsideCalculator()
-            new SimpleLevelBasedUpsideCalculator()
+            adaptiveUpsideCalculator,
+            selectorTracker,
+            volumeUpsideCalculator
         );
-        levelUpsideCalculator.setLevelSelector(selectorTracker);
+        //levelUpsideCalculator = SubrangeUpsideCalculator.ofLastN(60 * 24 * 7 * 2, levelUpsideCalculator);
 
         CompositeFactorUpsideCalculator compositeUpsideCalculator = new CompositeFactorUpsideCalculator(
             List.of(
-                CompositeFactorUpsideCalculator.newWeightedCalculator(levelUpsideCalculator, 0.2),
-                CompositeFactorUpsideCalculator.newWeightedCalculator(volumeUpsideCalculator, 0.6),
+                CompositeFactorUpsideCalculator.newWeightedCalculator(levelUpsideCalculator, 0.8),
                 CompositeFactorUpsideCalculator.newWeightedCalculator(SubrangeUpsideCalculator.ofLastN(60 * 24, maximinUpsideCalculator), 0.2)
                 // CompositeFactorUpsideCalculator.newWeightedCalculator(volumeUpsideCalculator, 1)
 
@@ -237,9 +250,10 @@ public class BasicTradeStrategySimulation {
             broker,
             "TMOS",
             account.getId(),
-            new WindowUpsideCalculator(compositeUpsideCalculator, 10080),
+            new WindowUpsideCalculator(compositeUpsideCalculator, 60 * 24 * 7 * 2),
             candleRepository
         );
+        strategy.setLookbackCandles(60 * 24 * 7 * 2);
         strategy.setBuyThreshold(0.5);
         strategy.setSellThreshold(-0.5);
         strategy.setStep(10);
@@ -297,8 +311,8 @@ public class BasicTradeStrategySimulation {
         Toolkit.getDefaultToolkit().beep();
     }
 
-    private static LevelDetectorWindowTracker createLevelDetector(double sensitivity, ExtremeLocator baseLocator) {
-        StatelessClusterLevelDetector levelDetector = StatelessClusterLevelDetector.createDefault(sensitivity, baseLocator);
+    private static LevelDetectorWindowTracker createLevelDetector(double multiplier, ExtremeLocator baseLocator) {
+        StatelessClusterLevelDetector levelDetector = StatelessClusterLevelDetector.createDefault(multiplier, baseLocator);
 
         return new LevelDetectorWindowTracker(
 //            LinearLevelDetector.createSupport(

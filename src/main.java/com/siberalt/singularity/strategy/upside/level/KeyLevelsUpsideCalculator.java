@@ -4,71 +4,56 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.LinearLevelDetector;
-import com.siberalt.singularity.strategy.level.selector.BasicLevelSelector;
 import com.siberalt.singularity.strategy.level.selector.LevelPair;
 import com.siberalt.singularity.strategy.level.selector.LevelPairSelector;
+import com.siberalt.singularity.strategy.level.selector.StrongestLevelPairSelector;
 import com.siberalt.singularity.strategy.upside.Upside;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 
-public class KeyLevelsUpsideCalculator implements UpsideCalculator {
-    private record LevelPairUpside(
-        LevelPair levelPair,
-        Upside upside,
-        double weight
-    ) {
-    }
-
-    private LevelDetector supportLevelDetector;
-    private LevelDetector resistanceLevelDetector;
-    private LevelBasedUpsideCalculator levelBasedUpsideCalculator;
-    private LevelPairSelector levelSelector = new BasicLevelSelector();
-
+public record KeyLevelsUpsideCalculator(LevelDetector supportLevelDetector,
+                                        LevelDetector resistanceLevelDetector,
+                                        LevelBasedUpsideCalculator levelBasedUpsideCalculator,
+                                        LevelPairSelector levelSelector,
+                                        UpsideCalculator fallbackUpsideCalculator) implements UpsideCalculator {
     public KeyLevelsUpsideCalculator(
         LevelDetector supportLevelDetector,
         LevelDetector resistanceLevelDetector,
-        LevelBasedUpsideCalculator levelBasedUpsideCalculator
+        LevelBasedUpsideCalculator levelBasedUpsideCalculator,
+        LevelPairSelector levelSelector,
+        UpsideCalculator fallbackUpsideCalculator
     ) {
-        this.supportLevelDetector = supportLevelDetector;
-        this.resistanceLevelDetector = resistanceLevelDetector;
-        this.levelBasedUpsideCalculator = levelBasedUpsideCalculator;
-    }
-
-    public KeyLevelsUpsideCalculator setLevelSelector(LevelPairSelector levelSelector) {
-        this.levelSelector = levelSelector;
-        return this;
-    }
-
-    public KeyLevelsUpsideCalculator setLevelBasedUpsideCalculator(LevelBasedUpsideCalculator levelBasedUpsideCalculator) {
-        this.levelBasedUpsideCalculator = levelBasedUpsideCalculator;
-        return this;
-    }
-
-    public KeyLevelsUpsideCalculator setSupportLevelDetector(LevelDetector supportLevelDetector) {
-        this.supportLevelDetector = supportLevelDetector;
-        return this;
-    }
-
-    public KeyLevelsUpsideCalculator setResistanceLevelDetector(LevelDetector resistanceLevelDetector) {
-        this.resistanceLevelDetector = resistanceLevelDetector;
-        return this;
+        this.supportLevelDetector = Objects.requireNonNull(supportLevelDetector);
+        this.resistanceLevelDetector = Objects.requireNonNull(resistanceLevelDetector);
+        this.levelBasedUpsideCalculator = Objects.requireNonNull(levelBasedUpsideCalculator);
+        this.levelSelector = Objects.requireNonNull(levelSelector);
+        this.fallbackUpsideCalculator = Objects.requireNonNull(fallbackUpsideCalculator);
     }
 
     @Override
     public Upside calculate(List<Candle> lastCandles) {
+        if (lastCandles == null || lastCandles.isEmpty()) {
+            return Upside.NEUTRAL;
+        }
+
         List<Level<Double>> supportLevels = supportLevelDetector.detect(lastCandles);
         List<Level<Double>> resistanceLevels = resistanceLevelDetector.detect(lastCandles);
 
         List<LevelPair> selectedLevels = levelSelector.select(resistanceLevels, supportLevels, lastCandles);
 
         if (selectedLevels.isEmpty()) {
-            return levelBasedUpsideCalculator.calculate(LevelPair.EMPTY, lastCandles);
-        } else if (selectedLevels.size() == 1) {
+            return fallbackUpsideCalculator.calculate(lastCandles);
+        }
+
+        if (selectedLevels.size() == 1) {
             LevelPair levelPair = selectedLevels.get(0);
 
-            return levelBasedUpsideCalculator.calculate(levelPair, lastCandles);
+            Upside upside = levelBasedUpsideCalculator.calculate(levelPair, lastCandles);
+
+            return upside.strength() > 0 ? upside: Upside.NEUTRAL;
         }
 
         List<LevelPairUpside> upsides = selectedLevels.stream()
@@ -78,6 +63,10 @@ public class KeyLevelsUpsideCalculator implements UpsideCalculator {
         double totalWeight = upsides.stream()
             .mapToDouble(lp -> lp.weight)
             .sum();
+
+        if (totalWeight <= 0) {
+            return Upside.NEUTRAL;
+        }
 
         double combinedSignal = 0;
         double combinedStrength = 0;
@@ -89,6 +78,9 @@ public class KeyLevelsUpsideCalculator implements UpsideCalculator {
         }
 
         return new Upside(combinedSignal, combinedStrength);
+    }
+
+    private record LevelPairUpside(LevelPair levelPair, Upside upside, double weight) {
     }
 
     private LevelPairUpside calculateLevelPairUpside(LevelPair levelPair, List<Candle> lastCandles) {
@@ -123,7 +115,8 @@ public class KeyLevelsUpsideCalculator implements UpsideCalculator {
             resistanceNeighborhoodRatio,
             supportNeighborhoodRatio,
             levelBasedUpsideCalculator,
-            priceExtractor
+            priceExtractor,
+            lastCandles -> Upside.NEUTRAL
         );
     }
 
@@ -132,24 +125,27 @@ public class KeyLevelsUpsideCalculator implements UpsideCalculator {
         double resistanceNeighborhoodRatio,
         double supportNeighborhoodRatio,
         LevelBasedUpsideCalculator levelBasedUpsideCalculator,
-        Function<Candle, Double> priceExtractor
+        Function<Candle, Double> priceExtractor,
+        UpsideCalculator fallbackUpsideCalculator
     ) {
         // Load candles or perform any necessary initialization here
         var supportLevelDetector = LinearLevelDetector.createSupport(
             frameSize,
-            resistanceNeighborhoodRatio,
+            supportNeighborhoodRatio,
             priceExtractor
         );
         var resistanceLevelDetector = LinearLevelDetector.createResistance(
             frameSize,
-            supportNeighborhoodRatio,
+            resistanceNeighborhoodRatio,
             priceExtractor
         );
 
         return new KeyLevelsUpsideCalculator(
             supportLevelDetector,
             resistanceLevelDetector,
-            levelBasedUpsideCalculator
+            levelBasedUpsideCalculator,
+            new StrongestLevelPairSelector(1),
+            fallbackUpsideCalculator
         );
     }
 }
