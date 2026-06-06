@@ -1,6 +1,7 @@
 package com.siberalt.singularity.presenter.google.series;
 
 import com.siberalt.singularity.presenter.google.PriceChart;
+import com.siberalt.singularity.shared.RangeLong;
 
 import java.util.HashMap;
 import java.util.List;
@@ -46,7 +47,7 @@ public class PointSeriesProvider implements SeriesProvider {
 
         // Filter points within the specified range
         Map<Long, Double> filteredPoints = points.entrySet().stream()
-            .filter(entry -> entry.getKey() >= start && entry.getKey() <= end)
+            .filter(entry -> RangeLong.belongsTo(start, end, entry.getKey()))
             .map(entry -> adjustToStepInterval(entry, stepInterval, start))
             .collect(
                 Collectors.toMap(

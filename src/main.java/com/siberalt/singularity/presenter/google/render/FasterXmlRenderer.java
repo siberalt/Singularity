@@ -15,14 +15,11 @@ import java.util.List;
 import java.util.Map;
 
 public class FasterXmlRenderer implements DataRenderer {
-    private static final String DEFAULT_HTML_FILE = "src/main/resources/presenter/google/PriceChart.html";
     private static final String DEFAULT_OUTPUT_FILE_PATH = "src/main/resources/presenter/google/PriceChart.json";
 
-    private String htmlFile = DEFAULT_HTML_FILE;
     private String outputFilePath = DEFAULT_OUTPUT_FILE_PATH;
 
-    public FasterXmlRenderer(String htmlFile, String outputFilePath) {
-        this.htmlFile = htmlFile;
+    public FasterXmlRenderer(String outputFilePath) {
         this.outputFilePath = outputFilePath;
     }
 

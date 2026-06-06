@@ -1,20 +1,21 @@
 package com.siberalt.singularity.presenter.google.series;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.CandleFactory;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class CandlePriceSeriesTest {
+class CandleSeriesTest {
+    private final CandleFactory candleFactory = new CandleFactory("EURUSD");
 
     @Test
     void provideReturnsEmptyWhenNoCandles() {
-        CandlePriceSeriesProvider provider = new CandlePriceSeriesProvider(List.of());
+        CandleSeriesProvider provider = new CandleSeriesProvider(List.of());
         Optional<SeriesChunk> result = provider.provide(0, 1000, 100);
         assertTrue(result.isEmpty());
     }
@@ -22,12 +23,12 @@ class CandlePriceSeriesTest {
     @Test
     void provideReturnsCorrectDataForValidCandles() {
         List<Candle> candles = List.of(
-            Candle.of(Instant.parse("2023-01-01T00:01:00Z"), 87, 100.0),
-            Candle.of(Instant.parse("2023-01-01T00:02:00Z"), 88, 101.0),
-            Candle.of(Instant.parse("2023-01-01T00:03:00Z"), 89, 102.0)
+            candleFactory.createCommon("2023-01-01T00:01:00Z", 87, 100.0),
+            candleFactory.createCommon("2023-01-01T00:02:00Z", 88, 101.0),
+            candleFactory.createCommon("2023-01-01T00:03:00Z", 89, 102.0)
         );
 
-        CandlePriceSeriesProvider provider = new CandlePriceSeriesProvider(candles);
+        CandleSeriesProvider provider = new CandleSeriesProvider(candles);
         Optional<SeriesChunk> result = provider.provide(0, 2, 1);
 
         assertTrue(result.isPresent());
@@ -44,13 +45,13 @@ class CandlePriceSeriesTest {
     @Test
     void provideSkipsCandlesOutsideRange() {
         List<Candle> candles = List.of(
-            Candle.of(Instant.parse("2023-01-01T00:01:00Z"), 100, 100.0),
-            Candle.of(Instant.parse("2023-01-01T00:02:00Z"), 100, 101.0),
-            Candle.of(Instant.parse("2023-01-01T00:03:00Z"), 100, 102.0)
+            candleFactory.createCommon("2023-01-01T00:01:00Z", 100, 100.0),
+            candleFactory.createCommon("2023-01-01T00:02:00Z", 100, 101.0),
+            candleFactory.createCommon("2023-01-01T00:03:00Z", 100, 102.0)
         );
 
-        CandlePriceSeriesProvider series = new CandlePriceSeriesProvider(candles);
-        Optional<SeriesChunk> result = series.provide(1, 2, 1);
+        CandleSeriesProvider series = new CandleSeriesProvider(candles);
+        Optional<SeriesChunk> result = series.provide(0, 1, 1);
 
         assertTrue(result.isPresent());
         SeriesChunk chunk = result.get();
@@ -65,13 +66,13 @@ class CandlePriceSeriesTest {
     @Test
     void provideHandlesStepGreaterThanOne() {
         List<Candle> candles = List.of(
-            Candle.of(Instant.parse("2023-01-01T00:01:00Z"), 87, 100.0),
-            Candle.of(Instant.parse("2023-01-01T00:02:00Z"), 88, 101.0),
-            Candle.of(Instant.parse("2023-01-01T00:03:00Z"), 89, 102.0),
-            Candle.of(Instant.parse("2023-01-01T00:04:00Z"), 90, 103.0)
+            candleFactory.createCommon("2023-01-01T00:01:00Z", 87, 100.0),
+            candleFactory.createCommon("2023-01-01T00:02:00Z", 88, 101.0),
+            candleFactory.createCommon("2023-01-01T00:03:00Z", 89, 102.0),
+            candleFactory.createCommon("2023-01-01T00:04:00Z", 90, 103.0)
         );
 
-        CandlePriceSeriesProvider provider = new CandlePriceSeriesProvider(candles);
+        CandleSeriesProvider provider = new CandleSeriesProvider(candles);
         Optional<SeriesChunk> result = provider.provide(0, 3, 2);
 
         assertTrue(result.isPresent());
@@ -87,13 +88,11 @@ class CandlePriceSeriesTest {
     @Test
     void provideAppliesCustomPriceExtractor() {
         List<Candle> candles = List.of(
-            Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 0, 100.0),
-            Candle.of(Instant.parse("2023-01-01T00:01:00Z"), 1, 101.0)
+            candleFactory.createCommon("2023-01-01T00:00:00Z", 0, 100.0),
+            candleFactory.createCommon("2023-01-01T00:01:00Z", 1, 101.0)
         );
 
-        CandlePriceSeriesProvider series = new CandlePriceSeriesProvider(candles)
-            .setPriceExtractor(c -> c.getCloseAsDouble() * 2);
-
+        CandleSeriesProvider series = new CandleSeriesProvider(candles, c -> c.getCloseAsDouble() * 2);
         Optional<SeriesChunk> result = series.provide(0, 1, 1);
 
         assertTrue(result.isPresent());
@@ -107,7 +106,7 @@ class CandlePriceSeriesTest {
     @Test
     void provideHandlesEmptyDataArrayGracefully() {
         List<Candle> candles = List.of();
-        CandlePriceSeriesProvider series = new CandlePriceSeriesProvider(candles);
+        CandleSeriesProvider series = new CandleSeriesProvider(candles);
 
         Optional<SeriesChunk> result = series.provide(0, 1000, 100);
         assertTrue(result.isEmpty());

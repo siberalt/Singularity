@@ -2,6 +2,7 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.cvs.CvsCandleRepository;
 import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory;
 import com.siberalt.singularity.presenter.google.PriceChart;
+import com.siberalt.singularity.presenter.google.VolumeChart;
 import com.siberalt.singularity.presenter.google.series.FunctionGroupSeriesProvider;
 import com.siberalt.singularity.presenter.google.series.PointSeriesProvider;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
@@ -94,6 +95,9 @@ public class LevelPairSelectorSimulation {
         priceChart.setStepInterval(1);
         // Render the chart (hypothetical method)
         priceChart.render(candles);
+
+        VolumeChart volumeChart = new VolumeChart();
+        volumeChart.render(candles);
     }
 
     private static void addLevelsToChart(PriceChart chart, String name, List<Level<Double>> levels, String color) {

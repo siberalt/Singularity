@@ -33,10 +33,7 @@ public class LinearLevelCalculatorSimulator {
         var resultSupport = supportDetector.detect(candles);
         var resultResistance = resistanceDetector.detect(candles);
 
-        var renderer = new FasterXmlRenderer(
-            "src/main/resources/presenter/google/PriceChart.html",
-            "src/main/resources/presenter/google/PriceChart.json"
-        );
+        var renderer = new FasterXmlRenderer("src/main/resources/presenter/google/PriceChart.json");
         var priceChart = new PriceChart(candleRepository, "TMOS", priceExtractor);
         priceChart.setDataRenderer(renderer);
         priceChart.setStepInterval(1);

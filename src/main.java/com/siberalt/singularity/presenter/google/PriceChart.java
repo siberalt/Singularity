@@ -4,7 +4,7 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.presenter.google.render.DataRenderer;
 import com.siberalt.singularity.presenter.google.render.FasterXmlRenderer;
-import com.siberalt.singularity.presenter.google.series.CandlePriceSeriesProvider;
+import com.siberalt.singularity.presenter.google.series.CandleSeriesProvider;
 import com.siberalt.singularity.presenter.google.series.SeriesChunk;
 import com.siberalt.singularity.presenter.google.series.SeriesDataAggregator;
 import com.siberalt.singularity.presenter.google.series.SeriesProvider;
@@ -20,7 +20,6 @@ public class PriceChart {
     private Function<Candle, Double> priceExtractor = Candle::getCloseAsDouble;
     private int stepInterval = 30; // Default step interval for rendering
     private DataRenderer dataRenderer = new FasterXmlRenderer();
-    private boolean useCandleIndexRange = true;
     private final List<SeriesProvider> seriesProviders = new ArrayList<>();
 
     public PriceChart(ReadCandleRepository candleRepository, String instrumentUid) {
@@ -40,11 +39,6 @@ public class PriceChart {
 
     public PriceChart(Function<Candle, Double> priceExtractor) {
         this.priceExtractor = priceExtractor;
-    }
-
-    public PriceChart setUseCandleIndexRange(boolean useCandleIndexRange) {
-        this.useCandleIndexRange = useCandleIndexRange;
-        return this;
     }
 
     public PriceChart setDataRenderer(DataRenderer dataRenderer) {
@@ -69,10 +63,11 @@ public class PriceChart {
 
         List<Candle> candles = candleRepository.getPeriod(instrumentUid, startTime, endTime);
 
-        long start = 0, end = candles.size() - 1;
+        long start = candles.get(0).getIndex();
+        long end = candles.get(candles.size() - 1).getIndex();
 
         SeriesDataAggregator aggregator = new SeriesDataAggregator()
-            .addSeriesProvider(new CandlePriceSeriesProvider(candles).setPriceExtractor(priceExtractor));
+            .addSeriesProvider(new CandleSeriesProvider(candles, priceExtractor));
         seriesProviders.forEach(aggregator::addSeriesProvider);
 
         SeriesChunk chunk = aggregator.provide(start, end, stepInterval).orElseThrow();
@@ -81,15 +76,11 @@ public class PriceChart {
     }
 
     public void render(List<Candle> candles) {
-        long start = 0, end = candles.size() - 1;
-
-        if (useCandleIndexRange) {
-            start = candles.get(0).getIndex();
-            end = candles.get(candles.size() - 1).getIndex();
-        }
+        long start = candles.get(0).getIndex();
+        long end = candles.get(candles.size() - 1).getIndex();
 
         SeriesDataAggregator aggregator = new SeriesDataAggregator()
-            .addSeriesProvider(new CandlePriceSeriesProvider(candles).setPriceExtractor(priceExtractor));
+            .addSeriesProvider(new CandleSeriesProvider(candles, priceExtractor));
         seriesProviders.forEach(aggregator::addSeriesProvider);
 
         SeriesChunk chunk = aggregator.provide(start, end, stepInterval).orElseThrow();

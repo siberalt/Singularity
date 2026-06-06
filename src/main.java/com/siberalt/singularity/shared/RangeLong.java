@@ -12,6 +12,10 @@ public record RangeLong(long fromIndex, long toIndex) {
         }
     }
 
+    public boolean contains(long index) {
+        return belongsTo(fromIndex, toIndex, index);
+    }
+
     public long length() {
         return toIndex - fromIndex + 1;
     }
@@ -88,17 +92,6 @@ public record RangeLong(long fromIndex, long toIndex) {
         return result;
     }
 
-    public static RangeLong average(List<RangeLong> ranges) {
-        if (ranges.isEmpty()) {
-            throw new IllegalArgumentException("Cannot average empty range list");
-        }
-
-        long fromIndex = Math.round(ranges.stream().mapToLong(RangeLong::fromIndex).average().orElseThrow());
-        long toIndex = Math.round(ranges.stream().mapToLong(RangeLong::toIndex).average().orElseThrow());
-
-        return new RangeLong(fromIndex, toIndex);
-    }
-
     public RangeLong intersection(RangeLong other) {
         if (!this.isOverlapping(other)) {
             return null; // No intersection
@@ -110,6 +103,17 @@ public record RangeLong(long fromIndex, long toIndex) {
         return new RangeLong(intersectFromIndex, intersectToIndex);
     }
 
+    public static RangeLong average(List<RangeLong> ranges) {
+        if (ranges.isEmpty()) {
+            throw new IllegalArgumentException("Cannot average empty range list");
+        }
+
+        long fromIndex = Math.round(ranges.stream().mapToLong(RangeLong::fromIndex).average().orElseThrow());
+        long toIndex = Math.round(ranges.stream().mapToLong(RangeLong::toIndex).average().orElseThrow());
+
+        return new RangeLong(fromIndex, toIndex);
+    }
+
     public static RangeLong unite(List<RangeLong> ranges) {
         if (ranges.isEmpty()) {
             throw new IllegalArgumentException("Cannot unite empty range list");
@@ -119,5 +123,9 @@ public record RangeLong(long fromIndex, long toIndex) {
         long toIndex = ranges.stream().mapToLong(RangeLong::toIndex).max().orElseThrow();
 
         return new RangeLong(fromIndex, toIndex);
+    }
+
+    public static boolean belongsTo(long fromIndex, long toIndex, long index) {
+        return index >= fromIndex && index <= toIndex;
     }
 }

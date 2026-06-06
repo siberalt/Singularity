@@ -19,6 +19,7 @@ import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
 import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.presenter.google.PriceChart;
+import com.siberalt.singularity.presenter.google.VolumeChart;
 import com.siberalt.singularity.presenter.google.series.FunctionGroupSeriesProvider;
 import com.siberalt.singularity.presenter.google.series.OrderSeriesProvider;
 import com.siberalt.singularity.simulation.EventSimulator;
@@ -38,7 +39,6 @@ import com.siberalt.singularity.strategy.upside.extreme.MaximinUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.level.*;
 import com.siberalt.singularity.strategy.upside.level.adaptive.AdaptiveUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.subrange.CalendarPeriodFilterDecorator;
-import com.siberalt.singularity.strategy.upside.volume.NetVolumeUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.volume.VWAPUpsideCalculator;
 
 import java.awt.*;
@@ -308,6 +308,8 @@ public class BasicTradeStrategySimulation {
         );
         priceChart.setStepInterval(1);
         priceChart.render(candles);
+        VolumeChart volumeChart = new VolumeChart();
+        volumeChart.render(candles);
         Toolkit.getDefaultToolkit().beep();
     }
 

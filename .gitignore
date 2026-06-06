@@ -39,3 +39,4 @@ build/
 /.idea/*
 /src/test/resources/broker/tinkoff/test-settings.yaml
 /src/main/resources/presenter/google/PriceChart.json
+/src/main/resources/presenter/google/VolumeChart.json
