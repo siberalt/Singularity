@@ -214,10 +214,10 @@ public class BasicTradeStrategySimulation {
         var volumeUpsideCalculator = new CompositeFactorUpsideCalculator(
             List.of(
 //                CompositeFactorUpsideCalculator.newWeightedCalculator(
-//                    SubrangeUpsideCalculator.ofLastN(60, new NetVolumeUpsideCalculator()), 0.2
-//                ),
+//                    SubrangeUpsideCalculator.ofLastN(60, new VWAPUpsideCalculator()), 1
+//                )
                 CompositeFactorUpsideCalculator.newWeightedCalculator(
-                    CalendarPeriodFilterDecorator.ofLastDays(1, new VWAPUpsideCalculator()), 0.8
+                    CalendarPeriodFilterDecorator.ofLastDays(1, new VWAPUpsideCalculator()), 1
                 )
             )
         );
@@ -238,11 +238,11 @@ public class BasicTradeStrategySimulation {
 
         CompositeFactorUpsideCalculator compositeUpsideCalculator = new CompositeFactorUpsideCalculator(
             List.of(
-                CompositeFactorUpsideCalculator.newWeightedCalculator(levelUpsideCalculator, 0.8),
-                CompositeFactorUpsideCalculator.newWeightedCalculator(SubrangeUpsideCalculator.ofLastN(60 * 24, maximinUpsideCalculator), 0.2)
-                // CompositeFactorUpsideCalculator.newWeightedCalculator(volumeUpsideCalculator, 1)
+                // CompositeFactorUpsideCalculator.newWeightedCalculator(levelUpsideCalculator, 0.8),
+                CompositeFactorUpsideCalculator.newWeightedCalculator(SubrangeUpsideCalculator.ofLastN(60 * 24, maximinUpsideCalculator), 0.2),
+                CompositeFactorUpsideCalculator.newWeightedCalculator(volumeUpsideCalculator, 0.8)
 
-                //CompositeFactorUpsideCalculator.newWeightedCalculator(maximinUpsideCalculator, 0.1)
+                // CompositeFactorUpsideCalculator.newWeightedCalculator(maximinUpsideCalculator, 0.2)
                 //new CompositeFactorUpsideCalculator.WeightedCalculator(subrangeUpsideCalculator, 0.05)
             )
         );
@@ -308,7 +308,7 @@ public class BasicTradeStrategySimulation {
         );
         priceChart.setStepInterval(1);
         priceChart.render(candles);
-        VolumeChart volumeChart = new VolumeChart();
+        VolumeChart volumeChart = new VolumeChart(1);
         volumeChart.render(candles);
         Toolkit.getDefaultToolkit().beep();
     }

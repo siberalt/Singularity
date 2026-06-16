@@ -30,8 +30,8 @@ public class LevelPairSelectorSimulation {
         List<Candle> candles = candleRepository.getPeriod("TMOS", startTime, endTime);
         ExtremeLocator minExtremeLocator = PivotPointExtremeLocator.ofMinimums(50);
         ExtremeLocator maxExtremeLocator = PivotPointExtremeLocator.ofMaximums(50);
-        LevelDetector supportDetector = StatelessClusterLevelDetector.createDefault(1.4, minExtremeLocator);
-        LevelDetector resistanceDetector = StatelessClusterLevelDetector.createDefault(1.4, maxExtremeLocator);
+        LevelDetector supportDetector = StatelessClusterLevelDetector.createDefault(2.5, minExtremeLocator);
+        LevelDetector resistanceDetector = StatelessClusterLevelDetector.createDefault(2.5, maxExtremeLocator);
         ArrayList<Level<Double>> supportLevels = new ArrayList<>(supportDetector.detect(candles));
         ArrayList<Level<Double>> resistanceLevels = new ArrayList<>(resistanceDetector.detect(candles));
 
@@ -96,7 +96,7 @@ public class LevelPairSelectorSimulation {
         // Render the chart (hypothetical method)
         priceChart.render(candles);
 
-        VolumeChart volumeChart = new VolumeChart();
+        VolumeChart volumeChart = new VolumeChart(1);
         volumeChart.render(candles);
     }
 
