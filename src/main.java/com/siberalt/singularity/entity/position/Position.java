@@ -1,4 +1,4 @@
-package com.siberalt.singularity.broker.contract.service.operation.response;
+package com.siberalt.singularity.entity.position;
 
 public class Position {
     protected long blocked;

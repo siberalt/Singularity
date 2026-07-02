@@ -7,7 +7,7 @@ import com.siberalt.singularity.broker.contract.service.exception.NotFoundExcept
 import com.siberalt.singularity.broker.contract.service.order.response.CalculateResponse;
 import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.entity.instrument.Instrument;
-import com.siberalt.singularity.broker.contract.service.operation.response.Position;
+import com.siberalt.singularity.entity.position.Position;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.order.response.ExecutionStatus;
 import com.siberalt.singularity.broker.contract.service.order.response.GetOrdersResponse;

@@ -3,7 +3,7 @@ package com.siberalt.singularity.broker.shared;
 import com.siberalt.singularity.broker.contract.execution.Broker;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.operation.request.GetPositionsRequest;
-import com.siberalt.singularity.broker.contract.service.operation.response.Position;
+import com.siberalt.singularity.entity.position.Position;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.order.response.CancelOrderResponse;
 import com.siberalt.singularity.broker.contract.service.order.response.GetOrdersResponse;

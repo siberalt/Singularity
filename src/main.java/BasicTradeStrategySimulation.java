@@ -6,6 +6,7 @@ import com.siberalt.singularity.broker.contract.service.user.Account;
 import com.siberalt.singularity.broker.contract.service.user.AccountType;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
+import com.siberalt.singularity.broker.impl.decorator.PositionRiskManagerUpsideCalculator;
 import com.siberalt.singularity.broker.impl.mock.EventMockBroker;
 import com.siberalt.singularity.broker.shared.BrokerFacade;
 import com.siberalt.singularity.entity.candle.Candle;
@@ -18,6 +19,7 @@ import com.siberalt.singularity.entity.instrument.InstrumentRepository;
 import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
 import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.entity.order.OrderRepository;
+import com.siberalt.singularity.entity.order.ReadOrderRepository;
 import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.VolumeChart;
 import com.siberalt.singularity.presenter.google.series.FunctionGroupSeriesProvider;
@@ -33,6 +35,7 @@ import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetector;
 import com.siberalt.singularity.strategy.level.selector.*;
 import com.siberalt.singularity.strategy.level.track.*;
+import com.siberalt.singularity.strategy.market.position.BaseEntryPriceCalculator;
 import com.siberalt.singularity.strategy.observer.Observer;
 import com.siberalt.singularity.strategy.upside.*;
 import com.siberalt.singularity.strategy.upside.extreme.MaximinUpsideCalculator;
@@ -40,6 +43,7 @@ import com.siberalt.singularity.strategy.upside.level.*;
 import com.siberalt.singularity.strategy.upside.level.adaptive.AdaptiveUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.subrange.CalendarPeriodFilterDecorator;
 import com.siberalt.singularity.strategy.upside.volume.VWAPUpsideCalculator;
+import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
 
 import java.awt.*;
 import java.math.BigDecimal;
@@ -97,6 +101,7 @@ public class BasicTradeStrategySimulation {
         var levelSelector = new StrongestLevelPairSelector(2);
         LevelPairSelectorWindowTracker selectorTracker = new LevelPairSelectorWindowTracker(levelSelector);
         StrategyInterface strategy = createLevelsStrategy(
+            orderRepository,
             candleRepository,
             broker,
             account,
@@ -185,6 +190,7 @@ public class BasicTradeStrategySimulation {
     }
 
     private static StrategyInterface createLevelsStrategy(
+        ReadOrderRepository readOrderRepository,
         ReadCandleRepository candleRepository,
         EventSubscriptionBroker broker,
         Account account,
@@ -246,11 +252,24 @@ public class BasicTradeStrategySimulation {
                 //new CompositeFactorUpsideCalculator.WeightedCalculator(subrangeUpsideCalculator, 0.05)
             )
         );
+
+        PositionRiskManagerUpsideCalculator riskManagerUpsideCalculator = new PositionRiskManagerUpsideCalculator(
+            account.getId(),
+            new BaseEntryPriceCalculator(readOrderRepository),
+            ATRVolatilityCalculator.ofMultiplier(3)
+        );
+
+        ThresholdSwitchUpsideCalculator switcherUpsideCalculator = new ThresholdSwitchUpsideCalculator(
+            compositeUpsideCalculator,
+            riskManagerUpsideCalculator,
+            0.8,
+            -0.8
+        );
         BasicTradeStrategy strategy = new BasicTradeStrategy(
             broker,
             "TMOS",
             account.getId(),
-            new WindowUpsideCalculator(compositeUpsideCalculator, 60 * 24 * 7 * 2),
+            new WindowUpsideCalculator(switcherUpsideCalculator, 60 * 24 * 7 * 2),
             candleRepository
         );
         strategy.setLookbackCandles(60 * 24 * 7 * 2);

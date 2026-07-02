@@ -4,7 +4,7 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.ExceptionBuilder;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
-import com.siberalt.singularity.broker.contract.service.operation.response.Position;
+import com.siberalt.singularity.entity.position.Position;
 import com.siberalt.singularity.broker.contract.service.order.*;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.order.response.*;

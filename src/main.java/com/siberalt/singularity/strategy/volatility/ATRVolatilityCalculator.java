@@ -40,4 +40,12 @@ public record ATRVolatilityCalculator(int period) implements VolatilityCalculato
 
         return atr;
     }
+
+    public static VolatilityCalculator ofMultiplier(double multiplier, int period) {
+        return new MultiplierVolatilityCalculator(new ATRVolatilityCalculator(period), multiplier);
+    }
+
+    public static VolatilityCalculator ofMultiplier(double multiplier) {
+        return new MultiplierVolatilityCalculator(new ATRVolatilityCalculator(), multiplier);
+    }
 }

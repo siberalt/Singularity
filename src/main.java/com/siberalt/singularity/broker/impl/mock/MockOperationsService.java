@@ -7,7 +7,7 @@ import com.siberalt.singularity.broker.contract.service.instrument.request.GetRe
 import com.siberalt.singularity.broker.contract.service.operation.OperationsService;
 import com.siberalt.singularity.broker.contract.service.operation.request.GetPositionsRequest;
 import com.siberalt.singularity.broker.contract.service.operation.response.GetPositionsResponse;
-import com.siberalt.singularity.broker.contract.service.operation.response.Position;
+import com.siberalt.singularity.entity.position.Position;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.AccountBalance;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.OpenPosition;

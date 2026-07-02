@@ -1,6 +1,6 @@
 package com.siberalt.singularity.broker.impl.mock.shared.operation;
 
-import com.siberalt.singularity.broker.contract.service.operation.response.Position;
+import com.siberalt.singularity.entity.position.Position;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.transaction.Transaction;

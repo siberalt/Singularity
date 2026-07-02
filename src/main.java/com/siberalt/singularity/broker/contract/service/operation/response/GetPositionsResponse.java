@@ -1,6 +1,7 @@
 package com.siberalt.singularity.broker.contract.service.operation.response;
 
 import com.siberalt.singularity.broker.contract.value.money.Money;
+import com.siberalt.singularity.entity.position.Position;
 
 import java.util.Collection;
 

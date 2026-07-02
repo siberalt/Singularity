@@ -1,6 +1,6 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared.translation;
 
-import com.siberalt.singularity.broker.contract.service.operation.response.Position;
+import com.siberalt.singularity.entity.position.Position;
 
 public class PositionSecuritiesTranslator {
     public static ru.tinkoff.piapi.contract.v1.PositionsSecurities toTinkoff(Position positionsSecurities) {

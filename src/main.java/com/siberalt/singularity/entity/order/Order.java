@@ -201,4 +201,8 @@ public class Order {
             .setExecutionStatus(executionStatus)
             .setCurrency(instrumentCurrency);
     }
+
+    public boolean isFilled() {
+        return this.executionStatus.equals(ExecutionStatus.FILL);
+    }
 }
