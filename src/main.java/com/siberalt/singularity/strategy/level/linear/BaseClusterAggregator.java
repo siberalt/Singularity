@@ -5,6 +5,7 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.math.median.MedianCalculator;
 import com.siberalt.singularity.math.median.RobustMedianCalculator;
 import com.siberalt.singularity.shared.RangeDouble;
+import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.market.PriceExtractor;
 
 import java.util.*;
@@ -41,26 +42,36 @@ public class BaseClusterAggregator implements ClusterAggregator  {
 
     private PriceExtractor priceExtractor = Candle::close;
     private MedianCalculator medianCalculator = new RobustMedianCalculator();
+    private final ExtremeLocator extremeLocator;
     private int minClusterSize = DEFAULT_CLUSTER_SIZE;
     private final double sensitivity;
 
-    public BaseClusterAggregator(double sensitivity) {
+    public BaseClusterAggregator(double sensitivity, ExtremeLocator extremeLocator) {
         this.sensitivity = sensitivity;
+        this.extremeLocator = extremeLocator;
     }
 
-    public BaseClusterAggregator(double sensitivity, int minClusterSize) {
+    public BaseClusterAggregator(double sensitivity, ExtremeLocator extremeLocator, int minClusterSize) {
         this.sensitivity = sensitivity;
         this.minClusterSize = minClusterSize;
+        this.extremeLocator = extremeLocator;
     }
 
-    public BaseClusterAggregator(PriceExtractor priceExtractor, MedianCalculator medianCalculator, double sensitivity) {
+    public BaseClusterAggregator(
+        PriceExtractor priceExtractor,
+        MedianCalculator medianCalculator,
+        double sensitivity,
+        ExtremeLocator extremeLocator
+    ) {
         this.priceExtractor = priceExtractor;
         this.medianCalculator = medianCalculator;
         this.sensitivity = sensitivity;
+        this.extremeLocator = extremeLocator;
     }
 
     @Override
-    public List<Cluster> aggregate(List<Candle> extremes, double volatility) {
+    public List<Cluster> aggregate(List<Candle> lastCandles) {
+        List<Candle> extremes = extremeLocator.locate(lastCandles);
         NavigableMap<Double, Set<Candle>> extremesTree = createExtremesTree(extremes);
         List<Candle> sortedExtremes = extremes.stream()
             .sorted(Comparator.comparingDouble(candle -> priceExtractor.extract(candle).toDouble()))

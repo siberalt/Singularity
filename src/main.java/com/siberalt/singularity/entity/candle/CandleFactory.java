@@ -63,6 +63,34 @@ public class CandleFactory {
         );
     }
 
+    public Candle createCommon(double commonValue) {
+        return create(
+            Quotation.of(commonValue),
+            Quotation.of(commonValue),
+            Quotation.of(commonValue),
+            Quotation.of(commonValue),
+            0
+        );
+    }
+
+    public Candle create(
+        Quotation openPrice,
+        Quotation closePrice,
+        Quotation highPrice,
+        Quotation lowPrice,
+        long volume
+    ) {
+        return new Candle(
+            instrumentUid,
+            new TimePoint(startIndex++),
+            openPrice,
+            closePrice,
+            highPrice,
+            lowPrice,
+            volume
+        );
+    }
+
     public Candle create(
         Instant time,
         Quotation openPrice,

@@ -28,10 +28,12 @@ public class LevelPairSelectorSimulation {
             "src/test/resources/entity.candle.cvs/TMOS"
         );
         List<Candle> candles = candleRepository.getPeriod("TMOS", startTime, endTime);
-        ExtremeLocator minExtremeLocator = PivotPointExtremeLocator.ofMinimums(50);
-        ExtremeLocator maxExtremeLocator = PivotPointExtremeLocator.ofMaximums(50);
-        LevelDetector supportDetector = StatelessClusterLevelDetector.createDefault(2.5, minExtremeLocator);
-        LevelDetector resistanceDetector = StatelessClusterLevelDetector.createDefault(2.5, maxExtremeLocator);
+        ExtremeLocator minExtremeLocator = PivotPointExtremeLocator.ofMinimums(70);
+        ExtremeLocator maxExtremeLocator = PivotPointExtremeLocator.ofMaximums(70);
+
+        LevelDetector supportDetector = StatelessClusterLevelDetector.createDefault(1.5, minExtremeLocator);
+        LevelDetector resistanceDetector = StatelessClusterLevelDetector.createDefault(1.5, maxExtremeLocator);
+
         ArrayList<Level<Double>> supportLevels = new ArrayList<>(supportDetector.detect(candles));
         ArrayList<Level<Double>> resistanceLevels = new ArrayList<>(resistanceDetector.detect(candles));
 
@@ -69,23 +71,29 @@ public class LevelPairSelectorSimulation {
         List<Level<Double>> unselectedSupportLevels = new ArrayList<>();
         List<Level<Double>> unselectedResistanceLevels = new ArrayList<>();
 
-        for (var pair : levelPairs) {
-            for (var supportLevel : supportLevels) {
-                if (supportLevel.equals(pair.support())) {
-                    selectedSupportLevels.add(supportLevel);
-                } else {
-                    unselectedSupportLevels.add(supportLevel);
+        if (levelPairs.isEmpty()) {
+            unselectedSupportLevels = supportLevels;
+            unselectedResistanceLevels = resistanceLevels;
+        } else {
+            for (var pair : levelPairs) {
+                for (var supportLevel : supportLevels) {
+                    if (supportLevel.equals(pair.support())) {
+                        selectedSupportLevels.add(supportLevel);
+                    } else {
+                        unselectedSupportLevels.add(supportLevel);
+                    }
                 }
-            }
 
-            for (var restanceLevel : resistanceLevels) {
-                if (restanceLevel.equals(pair.resistance())) {
-                    selectedResistanceLevels.add(restanceLevel);
-                } else {
-                    unselectedResistanceLevels.add(restanceLevel);
+                for (var restanceLevel : resistanceLevels) {
+                    if (restanceLevel.equals(pair.resistance())) {
+                        selectedResistanceLevels.add(restanceLevel);
+                    } else {
+                        unselectedResistanceLevels.add(restanceLevel);
+                    }
                 }
             }
         }
+
         addLevelsToChart(priceChart, "Support Levels", unselectedSupportLevels, "#00FFFA");
         addLevelsToChart(priceChart, "Resistance Levels", unselectedResistanceLevels, "#FFBB00");
         addLevelsToChart(priceChart, "Selected resistance Levels", selectedResistanceLevels, "#CC8400");

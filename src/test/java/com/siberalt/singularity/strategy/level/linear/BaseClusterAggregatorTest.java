@@ -3,9 +3,13 @@ package com.siberalt.singularity.strategy.level.linear;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.CandleFactory;
 import com.siberalt.singularity.shared.RangeDouble;
+import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.*;
 
@@ -14,7 +18,7 @@ class BaseClusterAggregatorTest {
 
     @Test
     void aggregatesClustersWithMultipleExtremes() {
-        BaseClusterAggregator aggregator = new BaseClusterAggregator(0.1);
+        ExtremeLocator extremeLocator = mock(ExtremeLocator.class);
         List<Candle> extremes = List.of(
             candleFactory.createCommon("2024-01-01T00:00:00Z", 100.0),
             candleFactory.createCommon("2024-01-01T00:01:00Z", 101.0),
@@ -22,8 +26,12 @@ class BaseClusterAggregatorTest {
             candleFactory.createCommon("2024-01-01T00:03:00Z", 200.0),
             candleFactory.createCommon("2024-01-01T00:04:00Z", 201.0)
         );
+        when(extremeLocator.locate(any())).thenReturn(extremes);
 
-        List<Cluster> resultClusters = aggregator.aggregate(extremes, 0.0);
+        BaseClusterAggregator aggregator = new BaseClusterAggregator(0.1, extremeLocator);
+
+
+        List<Cluster> resultClusters = aggregator.aggregate(extremes);
 
         assertEquals(2, resultClusters.size());
 
@@ -38,13 +46,16 @@ class BaseClusterAggregatorTest {
 
     @Test
     void aggregatesClustersWithEqualExtremes() {
-        BaseClusterAggregator aggregator = new BaseClusterAggregator(0.1);
+        ExtremeLocator extremeLocator = mock(ExtremeLocator.class);
         List<Candle> extremes = List.of(
             candleFactory.createCommon("2024-01-01T00:00:00Z", 100.0),
             candleFactory.createCommon("2024-01-01T00:01:00Z", 100.0)
         );
+        when(extremeLocator.locate(any())).thenReturn(extremes);
 
-        List<Cluster> result = aggregator.aggregate(extremes, 0.0);
+        BaseClusterAggregator aggregator = new BaseClusterAggregator(0.1, extremeLocator);
+
+        List<Cluster> result = aggregator.aggregate(extremes);
 
         assertClustersEquals(
             List.of(
@@ -56,25 +67,31 @@ class BaseClusterAggregatorTest {
 
     @Test
     void handlesEmptyExtremesList() {
-        BaseClusterAggregator aggregator = new BaseClusterAggregator(0.1);
+        ExtremeLocator extremeLocator = mock(ExtremeLocator.class);
         List<Candle> extremes = Collections.emptyList();
+        when(extremeLocator.locate(any())).thenReturn(extremes);
 
-        List<Cluster> clusters = aggregator.aggregate(extremes, 0.0);
+        BaseClusterAggregator aggregator = new BaseClusterAggregator(0.1, extremeLocator);
+
+        List<Cluster> clusters = aggregator.aggregate(extremes);
 
         assertTrue(clusters.isEmpty());
     }
 
     @Test
     void handlesClustersWithNoSubsetRelationsUsingAggregate() {
-        BaseClusterAggregator aggregator = new BaseClusterAggregator(0.1);
+        ExtremeLocator extremeLocator = mock(ExtremeLocator.class);
         List<Candle> extremes = List.of(
             candleFactory.createCommon("2024-01-01T00:00:00Z", 100.0),
             candleFactory.createCommon("2024-01-01T00:01:00Z", 200.0),
             candleFactory.createCommon("2024-01-01T00:02:00Z", 100.0),
             candleFactory.createCommon("2024-01-01T00:03:00Z", 200.0)
         );
+        when(extremeLocator.locate(any())).thenReturn(extremes);
 
-        List<Cluster> result = aggregator.aggregate(extremes, 0.0);
+        BaseClusterAggregator aggregator = new BaseClusterAggregator(0.1, extremeLocator);
+
+        List<Cluster> result = aggregator.aggregate(extremes);
 
         assertEquals(2, result.size());
         assertClustersEquals(
