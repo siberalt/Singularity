@@ -258,9 +258,10 @@ public class BasicTradeStrategySimulation {
             new BaseEntryPriceCalculator(readOrderRepository),
             ATRVolatilityCalculator.ofMultiplier(3)
         );
+        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(5);
 
         ThresholdSwitchUpsideCalculator switcherUpsideCalculator = new ThresholdSwitchUpsideCalculator(
-            compositeUpsideCalculator,
+            new UpsideSignalAmplifier(slopeUpsideCalculator, 0.9, 0.9),
             riskManagerUpsideCalculator,
             0.8,
             -0.8
@@ -269,13 +270,13 @@ public class BasicTradeStrategySimulation {
             broker,
             "TMOS",
             account.getId(),
-            new WindowUpsideCalculator(switcherUpsideCalculator, 60 * 24 * 7 * 2),
+            new WindowUpsideCalculator(switcherUpsideCalculator, 60 * 24),
             candleRepository
         );
-        strategy.setLookbackCandles(60 * 24 * 7 * 2);
-        strategy.setBuyThreshold(0.5);
-        strategy.setSellThreshold(-0.5);
-        strategy.setStep(10);
+        strategy.setLookbackCandles(60 * 24);
+        strategy.setBuyThreshold(0.9);
+        strategy.setSellThreshold(-0.9);
+        strategy.setStep(5);
 
         return strategy;
     }
