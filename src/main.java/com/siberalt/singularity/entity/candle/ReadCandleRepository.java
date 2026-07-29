@@ -12,4 +12,6 @@ public interface ReadCandleRepository {
     List<Candle> getPeriod(String instrumentUid, Instant from, Instant to);
 
     List<Candle> findByOpenPrice(FindPriceParams params);
+
+    CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to);
 }

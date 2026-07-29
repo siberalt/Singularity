@@ -4,9 +4,11 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.configuration.ConfigInterface;
 import com.siberalt.singularity.configuration.YamlConfig;
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.CandleRangeMetadata;
 import com.siberalt.singularity.entity.candle.ComparisonOperator;
 import com.siberalt.singularity.entity.candle.FindPriceParams;
 import com.siberalt.singularity.entity.candle.TimePoint;
+import com.siberalt.singularity.shared.TimePointRange;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -199,6 +201,58 @@ public class CvsCandleRepositoryTest {
             );
 
             System.out.println("end");
+        }
+    }
+
+    @Test
+    void testGetRangeMetadata() throws IOException {
+        var config = createTestConfig();
+        String instrumentUid = config.getInstrumentUid();
+        String instrumentDataPath = config.getInstrumentDataPath();
+        var candleStorageFactory = new CvsFileCandleRepositoryFactory();
+
+        try (var candleStorage = candleStorageFactory.create(instrumentUid, instrumentDataPath)) {
+            // Test existing range
+            CandleRangeMetadata metadata = candleStorage.getRangeMetadata(
+                instrumentUid,
+                Instant.parse("2020-09-02T07:00:00Z"),
+                Instant.parse("2020-09-02T15:40:00Z")
+            );
+
+            Assertions.assertFalse(metadata.isEmpty());
+            Assertions.assertTrue(metadata.count() > 0, "Expected candles in range");
+
+            TimePointRange range = metadata.range();
+            Assertions.assertEquals(Instant.parse("2020-09-02T07:00:00Z"), range.fromTime());
+            Assertions.assertEquals(Instant.parse("2020-09-02T15:40:00Z"), range.toTime());
+
+            // Verify count matches actual candles
+            List<Candle> candles = candleStorage.getPeriod(
+                instrumentUid,
+                Instant.parse("2020-09-02T07:00:00Z"),
+                Instant.parse("2020-09-02T15:40:00Z")
+            );
+            Assertions.assertEquals(candles.size(), metadata.count(), "Count should match actual candles");
+
+            // Test empty range (non-existent instrument)
+            CandleRangeMetadata emptyMetadata = candleStorage.getRangeMetadata(
+                "NONEXISTENT",
+                Instant.parse("2020-09-02T07:00:00Z"),
+                Instant.parse("2020-09-02T15:40:00Z")
+            );
+
+            Assertions.assertTrue(emptyMetadata.isEmpty());
+            Assertions.assertEquals(0, emptyMetadata.count());
+
+            // Test range with no candles
+            CandleRangeMetadata noCandlesMetadata = candleStorage.getRangeMetadata(
+                instrumentUid,
+                Instant.parse("2099-01-01T00:00:00Z"),
+                Instant.parse("2099-12-31T23:59:59Z")
+            );
+
+            Assertions.assertTrue(noCandlesMetadata.isEmpty());
+            Assertions.assertEquals(0, noCandlesMetadata.count());
         }
     }
 

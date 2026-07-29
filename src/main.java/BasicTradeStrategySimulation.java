@@ -9,10 +9,12 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.decorator.PositionRiskManagerUpsideCalculator;
 import com.siberalt.singularity.broker.impl.mock.EventMockBroker;
 import com.siberalt.singularity.broker.shared.BrokerFacade;
+import com.siberalt.singularity.configuration.ConfigInterface;
+import com.siberalt.singularity.configuration.YamlConfig;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
-import com.siberalt.singularity.entity.candle.cvs.CvsCandleRepository;
-import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory;
+import com.siberalt.singularity.entity.candle.SqliteCandleRepository;
+import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.entity.instrument.InstrumentRepository;
@@ -24,6 +26,7 @@ import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.VolumeChart;
 import com.siberalt.singularity.presenter.google.series.FunctionGroupSeriesProvider;
 import com.siberalt.singularity.presenter.google.series.OrderSeriesProvider;
+import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.simulation.EventSimulator;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
@@ -46,8 +49,11 @@ import com.siberalt.singularity.strategy.upside.volume.VWAPUpsideCalculator;
 import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
 
 import java.awt.*;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -55,17 +61,21 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class BasicTradeStrategySimulation {
-    public static void main(String[] args) throws AbstractException {
+    public static void main(String[] args) throws AbstractException, IOException {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
-        CvsFileCandleRepositoryFactory factory = new CvsFileCandleRepositoryFactory();
+        ConfigInterface configuration = new YamlConfig(
+            Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
+        );
+
+        SqliteCandleRepositoryFactory sqliteCandleRepositoryFactory = new SqliteCandleRepositoryFactory();
+        SqliteCandleRepository candleRepository = sqliteCandleRepositoryFactory.create(
+            ConfigFacade.of(configuration).getAsString("dbPath")
+        );
+
         OrderRepository orderRepository = new InMemoryOrderRepository();
         boolean enableTracing = false;
 
-        CvsCandleRepository candleRepository = factory.create(
-            "TMOS",
-            "src/test/resources/entity.candle.cvs/TMOS"
-        );
         InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
         instrumentRepository.save(
             new Instrument()
@@ -256,7 +266,7 @@ public class BasicTradeStrategySimulation {
         PositionRiskManagerUpsideCalculator riskManagerUpsideCalculator = new PositionRiskManagerUpsideCalculator(
             account.getId(),
             new BaseEntryPriceCalculator(readOrderRepository),
-            ATRVolatilityCalculator.ofMultiplier(3)
+            ATRVolatilityCalculator.ofMultiplier(2)
         );
         SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(5);
 

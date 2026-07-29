@@ -64,7 +64,7 @@ class CvsCandleIterator implements Iterator<Candle> {
 
         do {
             if (!scanner.hasNext()) {
-                throw new RuntimeException("No more lines in the input stream");
+                return this;
             }
 
             var matcher = Pattern.compile("^.+?;(.+?);").matcher(initFromLastLine = scanner.nextLine());

@@ -1,0 +1,1 @@
+dbPath: jdbc:sqlite:trade.db

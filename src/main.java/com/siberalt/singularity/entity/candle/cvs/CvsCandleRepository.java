@@ -1,8 +1,11 @@
 package com.siberalt.singularity.entity.candle.cvs;
 
-import com.siberalt.singularity.entity.candle.ReadCandleRepository;
-import com.siberalt.singularity.entity.candle.FindPriceParams;
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.CandleRangeMetadata;
+import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.entity.candle.TimePoint;
+import com.siberalt.singularity.entity.candle.FindPriceParams;
+import com.siberalt.singularity.shared.TimePointRange;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -121,6 +124,38 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
         }
 
         return resultCandles;
+    }
+
+    @Override
+    public CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to) {
+        if (!Objects.equals(this.instrumentUid, instrumentUid)) {
+            return CandleRangeMetadata.EMPTY;
+        }
+
+        resetInputStream(inputStream);
+
+        int count = 0;
+        Instant lastTime = null, firstTime = null;
+
+        Iterable<Candle> iterator = () -> new CvsCandleIterator(inputStream)
+            .initInstrumentUid(instrumentUid)
+            .initFrom(from)
+            .initTo(to);
+
+        for (Candle candle : iterator) {
+            if (count == 0) {
+                firstTime = candle.getTime();
+            }
+            count++;
+            lastTime = candle.getTime();
+        }
+
+        if (count == 0 || lastTime == null) {
+            return CandleRangeMetadata.EMPTY;
+        }
+
+        TimePointRange range = new TimePointRange(new TimePoint(firstTime), new TimePoint(lastTime));
+        return new CandleRangeMetadata(range, count);
     }
 
     protected void resetInputStream(InputStream inputStream) {

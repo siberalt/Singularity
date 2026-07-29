@@ -1,24 +1,33 @@
+import com.siberalt.singularity.configuration.ConfigInterface;
+import com.siberalt.singularity.configuration.YamlConfig;
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.entity.candle.cvs.CvsCandleRepository;
-import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory;
+import com.siberalt.singularity.entity.candle.SqliteCandleRepository;
+import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.series.PointSeriesProvider;
+import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.strategy.extreme.LastExtremeLocator;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.List;
 
 public class LastExtremeLocatorSimulation {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
-        CvsFileCandleRepositoryFactory factory = new CvsFileCandleRepositoryFactory();
-
-        CvsCandleRepository candleRepository = factory.create(
-            "TMOS",
-            "src/test/resources/entity.candle.cvs/TMOS"
+        ConfigInterface configuration = new YamlConfig(
+            Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
-        List<Candle> candles = candleRepository.getPeriod("TMOS", startTime, endTime);
+
+        SqliteCandleRepositoryFactory sqliteCandleRepositoryFactory = new SqliteCandleRepositoryFactory();
+        SqliteCandleRepository sqliteCandleRepository = sqliteCandleRepositoryFactory.create(
+            ConfigFacade.of(configuration).getAsString("dbPath")
+        );
+
+        List<Candle> candles = sqliteCandleRepository.getPeriod("TMOS", startTime, endTime);
         LastExtremeLocator minExtremeLocator = LastExtremeLocator.ofMinimums(
             50, 1, Candle::getTypicalAsDouble
         );
@@ -56,7 +65,7 @@ public class LastExtremeLocatorSimulation {
         }
 
         PriceChart priceChart = new PriceChart(
-            candleRepository,
+            sqliteCandleRepository,
             "TMOS",
             Candle::getTypicalAsDouble
         );

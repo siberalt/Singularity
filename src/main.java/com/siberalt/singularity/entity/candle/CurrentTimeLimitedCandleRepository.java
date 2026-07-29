@@ -59,4 +59,13 @@ public class CurrentTimeLimitedCandleRepository implements ReadCandleRepository 
 
         return delegate.findByOpenPrice(adjustedParams);
     }
+
+    @Override
+    public CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to) {
+        if (from.isAfter(currentTime)) {
+            return CandleRangeMetadata.EMPTY;
+        }
+        Instant adjustedTo = to.isAfter(currentTime) ? currentTime : to;
+        return delegate.getRangeMetadata(instrumentUid, from, adjustedTo);
+    }
 }

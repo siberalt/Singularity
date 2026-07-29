@@ -27,6 +27,10 @@ public record TimePointRange(
         return toPoint.time();
     }
 
+    public TimePointRange(Instant from, Instant to) {
+        this(new TimePoint(from), new TimePoint(to));
+    }
+
     public TimePointRange(Instant singleInstant) {
         this(new TimePoint(singleInstant));
     }

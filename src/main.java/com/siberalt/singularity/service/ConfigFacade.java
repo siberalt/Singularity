@@ -39,6 +39,10 @@ public class ConfigFacade {
         return value != null ? value : defaultValue;
     }
 
+    public String getAsString(String configPath) {
+        return getAsString(configPath, null);
+    }
+
     public String getAsString(String configPath, String defaultValue) {
         Object value = get(configPath);
         return value != null ? value.toString() : defaultValue;

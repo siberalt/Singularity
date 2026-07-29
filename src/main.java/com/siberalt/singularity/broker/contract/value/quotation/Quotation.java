@@ -208,4 +208,28 @@ public class Quotation {
     public boolean isNegative() {
         return units < 0 || (units == 0 && nano < 0);
     }
+
+    /**
+     * Конвертирует Quotation в long для хранения в SQLite (units * 1_000_000_000 + nano)
+     *
+     * @return long представление котировки
+     */
+    public long toLong() {
+        return units * 1_000_000_000L + nano;
+    }
+
+    /**
+     * Создает Quotation из long значения (обратное преобразование)
+     *
+     * @param value long значение (units * 1_000_000_000 + nano)
+     * @return Quotation объект
+     */
+    public static Quotation fromLong(long value) {
+        if (value == 0) {
+            return ZERO;
+        }
+        long units = value / 1_000_000_000L;
+        int nano = (int) (value % 1_000_000_000L);
+        return Quotation.of(units, nano);
+    }
 }

@@ -66,4 +66,16 @@ public class PeriodLimitedCandleRepository implements ReadCandleRepository {
 
         return delegate.findByOpenPrice(adjustedParams);
     }
+
+    @Override
+    public CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to) {
+        Instant adjustedFrom = from.isBefore(this.from) ? this.from : from;
+        Instant adjustedTo = to.isAfter(this.to) ? this.to : to;
+
+        if (adjustedFrom.isAfter(adjustedTo)) {
+            return CandleRangeMetadata.EMPTY;
+        }
+
+        return delegate.getRangeMetadata(instrumentUid, adjustedFrom, adjustedTo);
+    }
 }
