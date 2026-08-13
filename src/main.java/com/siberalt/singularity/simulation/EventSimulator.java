@@ -96,6 +96,8 @@ public class EventSimulator {
             currentTime = eventObserver.getNextEventTime();
             eventObserver.advanceToNextEvent();
         }
+
+        clock.syncCurrentTime(to);
     }
 
     protected void init(Instant startTime, Instant endTime) {

@@ -1,14 +1,10 @@
 import com.siberalt.singularity.broker.contract.execution.EventSubscriptionBroker;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.instrument.common.InstrumentType;
-import com.siberalt.singularity.broker.contract.service.user.AccessLevel;
 import com.siberalt.singularity.broker.contract.service.user.Account;
-import com.siberalt.singularity.broker.contract.service.user.AccountType;
 import com.siberalt.singularity.broker.contract.value.money.Money;
-import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.decorator.PositionRiskManagerUpsideCalculator;
 import com.siberalt.singularity.broker.impl.mock.EventMockBroker;
-import com.siberalt.singularity.broker.shared.BrokerFacade;
 import com.siberalt.singularity.configuration.ConfigInterface;
 import com.siberalt.singularity.configuration.YamlConfig;
 import com.siberalt.singularity.entity.candle.Candle;
@@ -27,11 +23,12 @@ import com.siberalt.singularity.presenter.google.VolumeChart;
 import com.siberalt.singularity.presenter.google.series.FunctionGroupSeriesProvider;
 import com.siberalt.singularity.presenter.google.series.OrderSeriesProvider;
 import com.siberalt.singularity.service.ConfigFacade;
-import com.siberalt.singularity.simulation.EventSimulator;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
-import com.siberalt.singularity.strategy.StrategyInterface;
-import com.siberalt.singularity.strategy.extreme.*;
+import com.siberalt.singularity.strategy.Strategy;
+import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.LastExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
@@ -39,10 +36,14 @@ import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetec
 import com.siberalt.singularity.strategy.level.selector.*;
 import com.siberalt.singularity.strategy.level.track.*;
 import com.siberalt.singularity.strategy.market.position.BaseEntryPriceCalculator;
-import com.siberalt.singularity.strategy.observer.Observer;
+import com.siberalt.singularity.strategy.simulation.runner.AnalysisReport;
+import com.siberalt.singularity.strategy.simulation.runner.EffectivenessAnalyzer;
+import com.siberalt.singularity.strategy.simulation.runner.StrategyResult;
+import com.siberalt.singularity.strategy.simulation.runner.StrategyStarter;
 import com.siberalt.singularity.strategy.upside.*;
 import com.siberalt.singularity.strategy.upside.extreme.MaximinUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.*;
+import com.siberalt.singularity.strategy.upside.level.KeyLevelsUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.level.SimpleLevelBasedUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.level.adaptive.AdaptiveUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.subrange.CalendarPeriodFilterDecorator;
 import com.siberalt.singularity.strategy.upside.volume.VWAPUpsideCalculator;
@@ -50,8 +51,6 @@ import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
 
 import java.awt.*;
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Duration;
@@ -63,7 +62,7 @@ import java.util.stream.Collectors;
 public class BasicTradeStrategySimulation {
     public static void main(String[] args) throws AbstractException, IOException {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
-        Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
+        Instant endTime = Instant.parse("2022-01-01T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
@@ -86,6 +85,19 @@ public class BasicTradeStrategySimulation {
                 .setUid("TMOS")
                 .setPositionUid("TMOS_POS")
         );
+
+        ExtremeLocator maximumLocator = PivotPointExtremeLocator.ofMaximums(100);
+        ExtremeLocator minimumLocator = PivotPointExtremeLocator.ofMinimums(100);
+
+        LevelDetectorWindowTracker supportTracker = createLevelDetector(1.4, minimumLocator);
+        LevelDetectorWindowTracker resistanceTracker = createLevelDetector(1.4, maximumLocator);
+
+        var levelSelector = new StrongestLevelPairSelector(2);
+        LevelPairSelectorWindowTracker selectorTracker = new LevelPairSelectorWindowTracker(levelSelector);
+
+        double commission = 0.0005;
+        Money initialInvestment = Money.of("RUB", 1000000.00);
+
         SimulationClock clock = new SimpleSimulationClock();
         EventMockBroker broker = new EventMockBroker(
             candleRepository,
@@ -93,86 +105,56 @@ public class BasicTradeStrategySimulation {
             orderRepository,
             clock
         );
-        broker.getOrderService().setCommissionRatio(0.0005);
-        EventSimulator simulator = new EventSimulator(clock);
-        Account account = broker.getUserService().openAccount(
-            "Account",
-            AccountType.ORDINARY,
-            AccessLevel.FULL_ACCESS
-        );
+        broker.getOrderService().setCommissionRatio(commission);
 
-        Quotation initialInvestment = Quotation.of(1000000.00);
-        broker.getOperationsService().addMoney(account.getId(), Money.of("RUB", initialInvestment));
+        StrategyStarter strategyStarter = (timeRange, account, observer) ->
+        {
+            Strategy strategy = createLevelsStrategy(
+                orderRepository,
+                candleRepository,
+                broker,
+                account,
+                supportTracker,
+                resistanceTracker,
+                selectorTracker,
+                maximumLocator,
+                minimumLocator
+            );
+            strategy.run(observer);
+        };
 
-        ExtremeLocator maximumLocator = PivotPointExtremeLocator.ofMaximums(100);
-        ExtremeLocator minimumLocator = PivotPointExtremeLocator.ofMinimums(100);
-        LevelDetectorWindowTracker supportTracker = createLevelDetector(1.4, minimumLocator);
-        LevelDetectorWindowTracker resistanceTracker = createLevelDetector(1.4, maximumLocator);
-        var levelSelector = new StrongestLevelPairSelector(2);
-        LevelPairSelectorWindowTracker selectorTracker = new LevelPairSelectorWindowTracker(levelSelector);
-        StrategyInterface strategy = createLevelsStrategy(
-            orderRepository,
+        EffectivenessAnalyzer analyzer = new EffectivenessAnalyzer(
+            strategyStarter,
+            "TMOS",
+            initialInvestment,
             candleRepository,
+            instrumentRepository,
             broker,
-            account,
-            supportTracker,
-            resistanceTracker,
-            selectorTracker,
-            maximumLocator,
-            minimumLocator
+            clock,
+            commission
         );
 
-        Observer observer = new Observer();
-        simulator.addSimulationUnit(broker.getOrderService());
-        simulator.addSimulationUnit(broker.getSubscriptionManager());
-        simulator.addInitializableUnit((from, to) -> strategy.run(observer));
-
-        Instant strategyBeginTime = Instant.now();
-        simulator.run(startTime, endTime);
+        AnalysisReport report = analyzer.run(startTime, endTime);
 
         System.out.println("----------------------------");
 
-        List<Order> orders = orderRepository.getByAccountId(account.getId())
+        List<Order> orders = orderRepository.getByAccountId(report.accountId())
             .stream()
             .sorted(Comparator.comparing(Order::getCreatedTime)).toList();
 
-        for (Order order : orders) {
-            System.out.println("Order ID: " + order.getId());
-            System.out.println("Direction: " + order.getDirection());
-            System.out.println("Instrument: " + order.getInstrument().getUid());
-            System.out.println("Status: " + order.getExecutionStatus());
-            System.out.println("Price: " + order.getBalanceChange());
-            System.out.println("Quantity: " + order.getLotsExecuted());
-            System.out.println("Created at: " + order.getCreatedTime());
-            System.out.println("----------------------------");
-        }
+        StrategyResult strategyResult = report.mainStrategyResult();
+        StrategyResult conservativeStrategyResult = report.conservativeStrategyResult();
 
-        BrokerFacade brokerFacade = BrokerFacade.of(broker);
-
-        long instrumentCount = brokerFacade.getPositionSize(account.getId(), "TMOS");
-        clock.syncCurrentTime(endTime);
-
-        if (instrumentCount > 0) {
-            brokerFacade.sellMarket(account.getId(), "TMOS", instrumentCount);
-        }
-
-        Quotation balance = broker.getOperationsService().getAvailableMoney(account.getId(), "RUB").getQuotation();
-        Quotation profit = balance.subtract(initialInvestment);
-        Quotation profitPercent = profit.divide(initialInvestment).multiply(100);
-
-        Duration duration = Duration.between(Instant.now(), strategyBeginTime);
-        System.out.println("Simulation completed. Time elapsed: " + duration);
+        System.out.println("Simulation completed. Time elapsed: " + strategyResult.executionDuration());
         System.out.println("Period days: " + Duration.between(startTime, endTime).toDays());
-        System.out.printf("Absolute profit: %.2f\n", profit.toDouble());
-        System.out.printf("Total profit percent: %.2f%%\n", profitPercent.toDouble());
+        System.out.printf("Absolute profit: %.2f\n", strategyResult.profit().getQuotation().toDouble());
+        System.out.printf("Total profit percent: %.2f%%\n", strategyResult.profitPercent());
         System.out.println("Total orders: " + orders.size());
-        System.out.printf("Initial investment: %.2f\n", initialInvestment.toDouble());
-        System.out.printf("Result balance: %.2f\n", balance.toDouble());
-        BigDecimal apy = profitPercent
-            .divide(BigDecimal.valueOf(Duration.between(startTime, endTime).toDays()), RoundingMode.HALF_UP)
-            .multiply(BigDecimal.valueOf(365L));
-
-        System.out.printf("APY: %.2f%%", apy);
+        System.out.printf("Initial investment: %.2f\n", initialInvestment.getQuotation().toDouble());
+        System.out.printf("Result balance: %.2f\n", strategyResult.balance().getQuotation().toDouble());
+        System.out.printf("APY: %.2f%%\n", strategyResult.apy());
+        System.out.printf("Conservative APY: %.2f%%\n", conservativeStrategyResult.apy());
+        System.out.printf("Efficiency: %.2f%%\n", report.effectivenessRatio());
 
         if (!enableTracing) {
             drawOrdersChart(
@@ -199,7 +181,7 @@ public class BasicTradeStrategySimulation {
         }
     }
 
-    private static StrategyInterface createLevelsStrategy(
+    private static Strategy createLevelsStrategy(
         ReadOrderRepository readOrderRepository,
         ReadCandleRepository candleRepository,
         EventSubscriptionBroker broker,
@@ -286,7 +268,7 @@ public class BasicTradeStrategySimulation {
         strategy.setLookbackCandles(60 * 24);
         strategy.setBuyThreshold(0.9);
         strategy.setSellThreshold(-0.9);
-        strategy.setStep(5);
+        strategy.setStep(1);
 
         return strategy;
     }

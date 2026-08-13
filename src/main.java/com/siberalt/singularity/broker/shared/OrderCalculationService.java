@@ -15,7 +15,7 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.shared.dto.BuyRequest;
 
 public class OrderCalculationService {
-    private double extraRatio = 0.06;
+    private double extraRatio = 0.03;
 
     public OrderCalculationService(double extraRatio) {
         this.extraRatio = extraRatio;

@@ -9,7 +9,7 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.shared.EventSubscriptionBrokerFacade;
 import com.siberalt.singularity.event.subscription.Subscription;
 import com.siberalt.singularity.event.subscription.SubscriptionSpec;
-import com.siberalt.singularity.strategy.StrategyInterface;
+import com.siberalt.singularity.strategy.Strategy;
 import com.siberalt.singularity.strategy.observer.Observer;
 
 import java.math.BigDecimal;
@@ -17,7 +17,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Set;
 
-public class ProfitTakerStrategy implements StrategyInterface {
+public class ProfitTakerStrategy implements Strategy {
     private final String instrumentId;
     private final String accountId;
     private final double targetProfitPercentage;

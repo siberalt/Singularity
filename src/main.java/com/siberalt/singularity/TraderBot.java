@@ -6,7 +6,7 @@ import com.siberalt.singularity.service.ServiceRegistry;
 import com.siberalt.singularity.service.exception.FactoryNotFoundException;
 import com.siberalt.singularity.service.factory.broker.BrokerFactoryManager;
 import com.siberalt.singularity.service.factory.strategy.StrategyFactoryManager;
-import com.siberalt.singularity.strategy.StrategyInterface;
+import com.siberalt.singularity.strategy.Strategy;
 
 import java.util.HashMap;
 
@@ -28,7 +28,7 @@ public class TraderBot {
 
         String[] activeBrokerIds = (String[]) configuration.get("run.activeBrokerIds");
         String[] activeStrategyIds = (String[]) configuration.get("run.activeStrategies");
-        HashMap<String, StrategyInterface> strategies = new HashMap<>();
+        HashMap<String, Strategy> strategies = new HashMap<>();
         HashMap<String, Broker> brokers = new HashMap<>();
 
         for (String brokerId : activeBrokerIds) {
@@ -38,7 +38,7 @@ public class TraderBot {
 
         for (String strategyId : activeStrategyIds) {
             serviceContainer.setFactory(strategyId, strategyFactoryManager);
-            strategies.put(strategyId, (StrategyInterface) serviceContainer.get(strategyId));
+            strategies.put(strategyId, (Strategy) serviceContainer.get(strategyId));
         }
 
         //StrategyExecutor strategyExecutor = new StrategyExecutor(strategies, brokers, new Scheduler());

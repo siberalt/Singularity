@@ -9,6 +9,8 @@ public interface ReadCandleRepository {
 
     List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore);
 
+    List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter);
+
     List<Candle> getPeriod(String instrumentUid, Instant from, Instant to);
 
     List<Candle> findByOpenPrice(FindPriceParams params);

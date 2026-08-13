@@ -78,6 +78,24 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
     }
 
     @Override
+    public List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter) {
+        if (!Objects.equals(this.instrumentUid, instrumentUid)) {
+            return Collections.emptyList();
+        }
+
+        resetInputStream(inputStream);
+        CvsCandleIterator iterator = new CvsCandleIterator(inputStream).initInstrumentUid(instrumentUid).initFrom(at);
+
+        List<Candle> resultCandles = new ArrayList<>();
+
+        while (iterator.hasNext() && resultCandles.size() < amountAfter) {
+            resultCandles.add(iterator.next());
+        }
+
+        return resultCandles;
+    }
+
+    @Override
     public List<Candle> getPeriod(String instrumentUid, Instant from, Instant to) {
         if (!Objects.equals(this.instrumentUid, instrumentUid)) {
             return Collections.emptyList();

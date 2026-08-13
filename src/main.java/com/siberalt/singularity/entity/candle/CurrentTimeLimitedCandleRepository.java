@@ -1,5 +1,7 @@
 package com.siberalt.singularity.entity.candle;
 
+import com.siberalt.singularity.strategy.context.Clock;
+
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -8,16 +10,16 @@ import java.util.Optional;
 public class CurrentTimeLimitedCandleRepository implements ReadCandleRepository {
     private final ReadCandleRepository delegate;
 
-    private final Instant currentTime;
+    private final Clock clock;
 
-    public CurrentTimeLimitedCandleRepository(ReadCandleRepository delegate, Instant currentTime) {
+    public CurrentTimeLimitedCandleRepository(ReadCandleRepository delegate, Clock clock) {
         this.delegate = delegate;
-        this.currentTime = currentTime;
+        this.clock = clock;
     }
 
     @Override
     public Optional<Candle> getAt(String instrumentUid, Instant at) {
-        if (at.isAfter(currentTime)) {
+        if (at.isAfter(clock.currentTime())) {
             return Optional.empty();
         }
         return delegate.getAt(instrumentUid, at);
@@ -25,14 +27,24 @@ public class CurrentTimeLimitedCandleRepository implements ReadCandleRepository 
 
     @Override
     public List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore) {
-        if (at.isAfter(currentTime)) {
+        if (at.isAfter(clock.currentTime())) {
             return Collections.emptyList();
         }
         return delegate.findBeforeOrEqual(instrumentUid, at, amountBefore);
     }
 
     @Override
+    public List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter) {
+        if (at.isAfter(clock.currentTime())) {
+            return Collections.emptyList();
+        }
+        return delegate.findAfterOrEqual(instrumentUid, at, amountAfter);
+    }
+
+    @Override
     public List<Candle> getPeriod(String instrumentUid, Instant from, Instant to) {
+        Instant currentTime = clock.currentTime();
+
         if (from.isAfter(currentTime)) {
             return List.of();
         }
@@ -42,6 +54,8 @@ public class CurrentTimeLimitedCandleRepository implements ReadCandleRepository 
 
     @Override
     public List<Candle> findByOpenPrice(FindPriceParams params) {
+        Instant currentTime = clock.currentTime();
+
         if (params.from().isAfter(currentTime)) {
             return List.of();
         }
@@ -62,6 +76,8 @@ public class CurrentTimeLimitedCandleRepository implements ReadCandleRepository 
 
     @Override
     public CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to) {
+        Instant currentTime = clock.currentTime();
+
         if (from.isAfter(currentTime)) {
             return CandleRangeMetadata.EMPTY;
         }

@@ -10,7 +10,7 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.event.subscription.Subscription;
 import com.siberalt.singularity.event.subscription.SubscriptionSpec;
-import com.siberalt.singularity.strategy.StrategyInterface;
+import com.siberalt.singularity.strategy.Strategy;
 import com.siberalt.singularity.strategy.observer.Observer;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 
@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-public class BasicTradeStrategy implements StrategyInterface {
+public class BasicTradeStrategy implements Strategy {
     private final EventSubscriptionBrokerFacade broker;
     private final String instrumentId;
     private final String accountId;

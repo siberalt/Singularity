@@ -19,7 +19,7 @@ import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.series.OrderSeriesProvider;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
-import com.siberalt.singularity.strategy.StrategyInterface;
+import com.siberalt.singularity.strategy.Strategy;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.observer.Observer;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
@@ -33,13 +33,13 @@ import java.util.Comparator;
 import java.util.List;
 
 public class StrategySimulator {
-    private final StrategyInterface strategy;
+    private final Strategy strategy;
     private final OrderRepository orderRepository;
     private final ReadCandleRepository candleRepository;
     private final InstrumentRepository instrumentRepository;
 
     public StrategySimulator(
-        StrategyInterface strategy,
+        Strategy strategy,
         OrderRepository orderRepository,
         ReadCandleRepository candleRepository,
         InstrumentRepository instrumentRepository

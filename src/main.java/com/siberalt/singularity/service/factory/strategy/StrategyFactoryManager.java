@@ -2,7 +2,7 @@ package com.siberalt.singularity.service.factory.strategy;
 
 import com.siberalt.singularity.service.DependencyManager;
 import com.siberalt.singularity.service.ServiceDetails;
-import com.siberalt.singularity.strategy.StrategyInterface;
+import com.siberalt.singularity.strategy.Strategy;
 
 import java.util.HashMap;
 
@@ -15,7 +15,7 @@ public class StrategyFactoryManager implements StrategyFactoryInterface {
         return this;
     }
 
-    public StrategyInterface create(ServiceDetails serviceDetails, DependencyManager dependencyManager) {
+    public Strategy create(ServiceDetails serviceDetails, DependencyManager dependencyManager) {
         String type = (String) serviceDetails.config().get("@type");
 
         if (!strategyTypes.containsKey(type)) {

@@ -3,6 +3,7 @@ package com.siberalt.singularity.strategy.upside;
 import com.siberalt.singularity.entity.candle.Candle;
 
 import java.util.List;
+import java.util.ArrayList;
 
 public class CompositeFactorUpsideCalculator implements UpsideCalculator {
     public record WeightedCalculator(UpsideCalculator calculator, double weight) {
@@ -45,6 +46,23 @@ public class CompositeFactorUpsideCalculator implements UpsideCalculator {
         }
 
         return new Upside(totalSignal / totalWeight, totalStrength / totalWeight);
+    }
+
+    public static class Builder {
+        private final List<WeightedCalculator> weightedCalculators = new ArrayList<>();
+
+        public Builder addCalculator(UpsideCalculator calculator, double weight) {
+            weightedCalculators.add(new WeightedCalculator(calculator, weight));
+            return this;
+        }
+
+        public CompositeFactorUpsideCalculator build() {
+            return new CompositeFactorUpsideCalculator(weightedCalculators);
+        }
+    }
+
+    public static Builder builder() {
+        return new Builder();
     }
 
     public static WeightedCalculator newWeightedCalculator(UpsideCalculator upsideCalculator, double weight) {

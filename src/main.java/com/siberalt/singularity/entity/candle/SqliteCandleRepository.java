@@ -85,6 +85,33 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
     }
 
     @Override
+    public List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter) {
+        String sql = """
+            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume
+            FROM candle
+            WHERE instrument_uid = ? AND time >= ?
+            ORDER BY time ASC
+            LIMIT ?
+            """;
+
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, instrumentUid);
+            statement.setLong(2, at.toEpochMilli());
+            statement.setLong(3, amountAfter);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<Candle> candles = new ArrayList<>();
+                while (resultSet.next()) {
+                    candles.add(mapResultSetToCandle(resultSet));
+                }
+                return candles;
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Ошибка при поиске свечей после или равных времени", e);
+        }
+    }
+
+    @Override
     public List<Candle> getPeriod(String instrumentUid, Instant from, Instant to) {
         String sql = """
             SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume

@@ -2,15 +2,15 @@ package com.siberalt.singularity.strategy;
 
 public class StrategyInfo {
     protected String id;
-    protected StrategyInterface strategy;
+    protected Strategy strategy;
     protected StrategyState strategyState;
 
-    public StrategyInfo(String id, StrategyInterface strategy) {
+    public StrategyInfo(String id, Strategy strategy) {
         this.id = id;
         this.strategy = strategy;
     }
 
-    public StrategyInterface getStrategy() {
+    public Strategy getStrategy() {
         return strategy;
     }
 

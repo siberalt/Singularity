@@ -28,6 +28,26 @@ public class BrokerFacade {
             .orElse(0L);
     }
 
+    public long closePositionUnchecked(String accountId, String instrumentId) {
+        try {
+            return closePosition(accountId, instrumentId);
+        } catch (AbstractException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public long closePosition(String accountId, String instrumentId) throws AbstractException {
+        long instrumentCount = this.getPositionSize(accountId, instrumentId);
+
+        if (instrumentCount > 0) {
+            this.sellMarket(accountId, instrumentId, instrumentCount);
+        } else if (instrumentCount < 0) {
+            this.buyMarket(accountId, instrumentId, Math.abs(instrumentCount));
+        }
+
+        return instrumentCount;
+    }
+
     public GetOrdersResponse getOrders(String accountId) throws AbstractException {
         return broker.getOrderService().get(
             new GetOrdersRequest()
@@ -127,6 +147,14 @@ public class BrokerFacade {
         );
     }
 
+    public long buyFullBalanceUnchecked(String accountId, String instrumentId, OrderType orderType) {
+        try {
+            return buyFullBalance(accountId, instrumentId, orderType);
+        } catch (AbstractException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public long buyFullBalance(String accountId, String instrumentId, OrderType orderType) throws AbstractException {
         long possibleBuyQuantity = orderCalculationService.calculatePossibleBuyQuantity(
             broker,
@@ -151,7 +179,7 @@ public class BrokerFacade {
         return buyFullBalance(accountId, instrumentId, OrderType.BEST_PRICE);
     }
 
-    public PostOrderResponse buyMarket(String accountId, String instrumentId, int amount) throws AbstractException {
+    public PostOrderResponse buyMarket(String accountId, String instrumentId, long amount) throws AbstractException {
         return broker.getOrderService().post(
             new PostOrderRequest()
                 .setAccountId(accountId)
