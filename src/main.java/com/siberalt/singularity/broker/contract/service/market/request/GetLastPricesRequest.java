@@ -4,10 +4,10 @@ import java.time.Duration;
 import java.util.List;
 
 public class GetLastPricesRequest {
-    protected Iterable<String> instrumentsUid;
+    protected List<String> instrumentsUid;
     protected Duration period;
 
-    public Iterable<String> getInstrumentsUid() {
+    public List<String> getInstrumentsUid() {
         return instrumentsUid;
     }
 
@@ -20,7 +20,7 @@ public class GetLastPricesRequest {
         return period;
     }
 
-    public GetLastPricesRequest setInstrumentsUid(Iterable<String> instrumentsUid) {
+    public GetLastPricesRequest setInstrumentsUid(List<String> instrumentsUid) {
         this.instrumentsUid = instrumentsUid;
         return this;
     }
@@ -30,7 +30,7 @@ public class GetLastPricesRequest {
         return this;
     }
 
-    public static GetLastPricesRequest of(Iterable<String> instrumentsUid) {
+    public static GetLastPricesRequest of(List<String> instrumentsUid) {
         return new GetLastPricesRequest().setInstrumentsUid(instrumentsUid);
     }
 

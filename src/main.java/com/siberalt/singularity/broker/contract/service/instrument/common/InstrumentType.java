@@ -13,4 +13,5 @@ public enum InstrumentType {
     INDEX,
     COMMODITY,
     CRYPTO,
+    DFA,
 }

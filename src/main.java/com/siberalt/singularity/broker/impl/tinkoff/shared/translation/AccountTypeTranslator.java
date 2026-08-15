@@ -10,6 +10,9 @@ public class AccountTypeTranslator {
             case IIS -> ru.tinkoff.piapi.contract.v1.AccountType.ACCOUNT_TYPE_TINKOFF_IIS;
             case INVEST_BOX -> ru.tinkoff.piapi.contract.v1.AccountType.ACCOUNT_TYPE_INVEST_BOX;
             case INVEST_FUND -> ru.tinkoff.piapi.contract.v1.AccountType.ACCOUNT_TYPE_INVEST_FUND;
+            case DEBIT -> ru.tinkoff.piapi.contract.v1.AccountType.ACCOUNT_TYPE_DEBIT;
+            case DFA -> ru.tinkoff.piapi.contract.v1.AccountType.ACCOUNT_TYPE_DFA;
+            case SAVING -> ru.tinkoff.piapi.contract.v1.AccountType.ACCOUNT_TYPE_SAVING;
         };
     }
 
@@ -20,6 +23,9 @@ public class AccountTypeTranslator {
             case ACCOUNT_TYPE_TINKOFF_IIS -> AccountType.IIS;
             case ACCOUNT_TYPE_INVEST_BOX -> AccountType.INVEST_BOX;
             case ACCOUNT_TYPE_INVEST_FUND -> AccountType.INVEST_FUND;
+            case ACCOUNT_TYPE_DEBIT -> AccountType.DEBIT;
+            case ACCOUNT_TYPE_DFA -> AccountType.DFA;
+            case ACCOUNT_TYPE_SAVING -> AccountType.SAVING;
             case UNRECOGNIZED -> null;
         };
     }

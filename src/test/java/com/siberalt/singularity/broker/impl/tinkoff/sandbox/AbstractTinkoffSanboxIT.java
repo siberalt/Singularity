@@ -13,11 +13,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import ru.tinkoff.piapi.contract.v1.MoneyValue;
+import ru.ttech.piapi.core.connector.ConnectorConfiguration;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Objects;
+import java.util.Properties;
 
 public abstract class AbstractTinkoffSanboxIT {
     protected TinkoffSandboxBroker tinkoffBroker;
@@ -28,7 +30,10 @@ public abstract class AbstractTinkoffSanboxIT {
     @BeforeEach
     protected void setUp() throws IOException, AbstractException {
         configuration = getConfiguration();
-        tinkoffBroker = new TinkoffSandboxBroker((String) configuration.get("sandboxToken"));
+        Properties properties = new Properties();
+        properties.put("token", getConfiguration().get("sandboxToken"));
+        properties.setProperty("sandbox.enabled", "true");
+        tinkoffBroker = new TinkoffSandboxBroker(ConnectorConfiguration.loadFromProperties(properties));
     }
 
     @AfterEach
@@ -46,11 +51,11 @@ public abstract class AbstractTinkoffSanboxIT {
         return testShare;
     }
 
-    protected String openTestAccount(String name) throws IOException, AbstractException {
+    protected String openTestAccount(String name) throws AbstractException {
         return openTestAccount(name, MoneyValue.newBuilder().setCurrency("RUB").setUnits(120000).build());
     }
 
-    protected String openTestAccount(String name, MoneyValue startBalance) throws IOException, AbstractException {
+    protected String openTestAccount(String name, MoneyValue startBalance) throws AbstractException {
         var tinkoffBroker = getTinkoffSandbox();
         var responseAccounts = tinkoffBroker.getUserService().getAccounts(null);
         TinkoffSandboxService sandboxService = tinkoffBroker.getSandboxService();

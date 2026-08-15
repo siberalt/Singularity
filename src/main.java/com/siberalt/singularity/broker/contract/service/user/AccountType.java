@@ -5,5 +5,8 @@ public enum AccountType {
     ORDINARY,
     IIS,
     INVEST_BOX,
+    DEBIT,
+    DFA,
+    SAVING,
     INVEST_FUND
 }

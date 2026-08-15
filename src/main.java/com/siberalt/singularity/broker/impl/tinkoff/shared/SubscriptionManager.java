@@ -13,39 +13,39 @@ import com.siberalt.singularity.event.EventManager;
 import com.siberalt.singularity.event.subscription.Subscription;
 import com.siberalt.singularity.event.subscription.SubscriptionSpec;
 import com.siberalt.singularity.event.trigger.TriggerManager;
-import ru.tinkoff.piapi.core.InvestApi;
-import ru.tinkoff.piapi.core.stream.MarketDataSubscriptionService;
+import ru.tinkoff.piapi.contract.v1.GetCandlesRequest;
+import ru.ttech.piapi.core.impl.marketdata.MarketDataStreamManager;
+import ru.ttech.piapi.core.impl.marketdata.subscription.CandleSubscriptionSpec;
+import ru.ttech.piapi.core.impl.marketdata.subscription.Instrument;
+import ru.ttech.piapi.core.impl.marketdata.wrapper.CandleWrapper;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 public class SubscriptionManager implements com.siberalt.singularity.event.subscription.SubscriptionManager {
-    private record SubscriptionData(UUID subscriptionId, MarketDataSubscriptionService marketDataSubscription) {
+    private record SubscriptionData(UUID subscriptionId, CandleSubscriptionSpec candleSubscriptionSpec) {
     }
 
-    private final InvestApi api;
+    private final MarketDataStreamManager streamManager;
     private final EventManager eventManager;
     private final Map<SubscriptionSpec<?>, SubscriptionData> subscriptions = new HashMap<>();
 
-    public SubscriptionManager(InvestApi api) {
-        this.api = api;
+    public SubscriptionManager(MarketDataStreamManager streamManager) {
+        this.streamManager = streamManager;
         eventManager = new EventManager(Executors.newSingleThreadExecutor(), Set.of(NewCandleEvent.class));
         eventManager.setEventMatcher(new EventMatcher());
         eventManager.setTriggerManager(new TriggerManager() {
             @Override
             public void enable(SubscriptionSpec<?> subscriptionSpec, EventDispatcher eventDispatcher) {
                 UUID subscriptionId = UUID.randomUUID();
-                MarketDataSubscriptionService marketDataSubscription = null;
 
                 if (subscriptionSpec instanceof NewCandleSubscriptionSpec spec) {
-                    marketDataSubscription = subscribeToCandleEvents(spec, eventDispatcher, subscriptionId);
-                }
-
-                if (marketDataSubscription != null) {
-                    subscriptions.put(subscriptionSpec, new SubscriptionData(subscriptionId, marketDataSubscription));
+                    CandleSubscriptionSpec candleSubscriptionSpec = subscribeToCandleEvents(spec, eventDispatcher);
+                    subscriptions.put(subscriptionSpec, new SubscriptionData(subscriptionId, candleSubscriptionSpec));
                 }
             }
 
@@ -54,8 +54,10 @@ public class SubscriptionManager implements com.siberalt.singularity.event.subsc
                 SubscriptionData subscriptionData = subscriptions.remove(subscriptionSpec);
                 if (subscriptionData != null) {
                     if (subscriptionSpec instanceof NewCandleSubscriptionSpec spec) {
-                        MarketDataSubscriptionService marketDataSubscription = subscriptionData.marketDataSubscription();
-                        marketDataSubscription.unsubscribeCandles(spec.getInstrumentIds().stream().toList());
+                        SubscriptionManager.this.streamManager.unsubscribeCandles(
+                            spec.getInstrumentIds().stream().map(Instrument::new).collect(Collectors.toSet()),
+                            subscriptionData.candleSubscriptionSpec()
+                        );
                     }
                 }
             }
@@ -72,42 +74,37 @@ public class SubscriptionManager implements com.siberalt.singularity.event.subsc
         return eventManager.subscribe(spec, handler);
     }
 
-    private MarketDataSubscriptionService subscribeToCandleEvents(
-        NewCandleSubscriptionSpec subscriptionSpec,
-        EventDispatcher eventDispatcher,
-        UUID subscriptionId
-    ) {
-        MarketDataSubscriptionService marketSubscriptionService = api.getMarketDataStreamService().newStream(
-            subscriptionId.toString(),
-            request -> {
-                if (request.hasCandle()) {
-                    var candle = request.getCandle();
-                    System.out.println("Received candle: " + candle);
+    private CandleSubscriptionSpec subscribeToCandleEvents(NewCandleSubscriptionSpec subscriptionSpec, EventDispatcher eventDispatcher) {
+        CandleSubscriptionSpec candleSubscriptionSpec = new CandleSubscriptionSpec(GetCandlesRequest.CandleSource.CANDLE_SOURCE_INCLUDE_WEEKEND);
 
-                    eventDispatcher.dispatch(
-                        new NewCandleEvent(
-                            UUID.randomUUID(),
-                            Candle.of(
-                                TimestampTranslator.toContract(candle.getTime()),
-                                candle.getInstrumentUid(),
-                                candle.getVolume(),
-                                QuotationTranslator.toContract(candle.getOpen()),
-                                QuotationTranslator.toContract(candle.getHigh()),
-                                QuotationTranslator.toContract(candle.getLow()),
-                                QuotationTranslator.toContract(candle.getClose())
-                            )
-                        )
-                    );
-                }
-            },
-            error -> System.err.println("Error in market data stream: " + error)
+        streamManager.subscribeCandles(
+            subscriptionSpec.getInstrumentIds().stream().map(Instrument::new).collect(Collectors.toSet()),
+            candleSubscriptionSpec,
+            candleWrapper -> proceedNewCandle(candleWrapper, eventDispatcher)
         );
+        streamManager.start();
 
-        marketSubscriptionService.subscribeCandles(
-            subscriptionSpec.getInstrumentIds().stream().toList(),
-            true
+        return candleSubscriptionSpec;
+    }
+
+    private void proceedNewCandle(CandleWrapper candleWrapper, EventDispatcher eventDispatcher) {
+        System.out.println("Received candle: " + candleWrapper.getInstrumentUid());
+
+        ru.tinkoff.piapi.contract.v1.Candle candle = candleWrapper.getOriginal();
+
+        eventDispatcher.dispatch(
+            new NewCandleEvent(
+                UUID.randomUUID(),
+                Candle.of(
+                    TimestampTranslator.toContract(candle.getTime()),
+                    candle.getInstrumentUid(),
+                    candle.getVolume(),
+                    QuotationTranslator.toContract(candle.getOpen()),
+                    QuotationTranslator.toContract(candle.getHigh()),
+                    QuotationTranslator.toContract(candle.getLow()),
+                    QuotationTranslator.toContract(candle.getClose())
+                )
+            )
         );
-
-        return marketSubscriptionService;
     }
 }

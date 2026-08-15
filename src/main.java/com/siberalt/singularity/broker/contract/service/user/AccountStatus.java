@@ -4,5 +4,6 @@ public enum AccountStatus {
     UNSPECIFIED,
     NEW,
     OPEN,
+    ALL,
     CLOSED
 }

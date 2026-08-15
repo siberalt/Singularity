@@ -5,13 +5,17 @@ import com.siberalt.singularity.broker.contract.service.market.MarketDataService
 import com.siberalt.singularity.broker.contract.service.operation.OperationsService;
 import com.siberalt.singularity.broker.contract.service.order.OrderService;
 import com.siberalt.singularity.broker.contract.service.user.UserService;
-import ru.tinkoff.piapi.contract.v1.OperationsServiceGrpc;
-import ru.tinkoff.piapi.core.InvestApi;
+import ru.tinkoff.piapi.contract.v1.*;
+import ru.ttech.piapi.core.connector.ConnectorConfiguration;
+import ru.ttech.piapi.core.connector.ServiceStubFactory;
+import ru.ttech.piapi.core.connector.streaming.StreamManagerFactory;
+import ru.ttech.piapi.core.connector.streaming.StreamServiceStubFactory;
 
 import java.io.Closeable;
+import java.util.concurrent.Executors;
 
 public abstract class AbstractTinkoffBroker implements EventSubscriptionBroker, Closeable {
-    protected InvestApi api;
+    protected ServiceStubFactory serviceStubFactory;
     protected com.siberalt.singularity.broker.impl.tinkoff.shared.OrderService orderService;
     protected com.siberalt.singularity.broker.impl.tinkoff.shared.MarketDataService marketDataService;
     protected com.siberalt.singularity.broker.impl.tinkoff.shared.OperationsService operationsService;
@@ -19,30 +23,46 @@ public abstract class AbstractTinkoffBroker implements EventSubscriptionBroker, 
     protected InstrumentService instrumentService;
     protected SubscriptionManager subscriptionManager;
 
-    public AbstractTinkoffBroker(String token) {
-        init(token);
+    public AbstractTinkoffBroker(ConnectorConfiguration configuration) {
+        init(configuration);
     }
 
-    protected void init(String token) {
-        api = createApi(token);
-        var channel = api.getChannel();
-        orderService = new com.siberalt.singularity.broker.impl.tinkoff.shared.OrderService(api.getOrdersService(), this);
-        marketDataService = new com.siberalt.singularity.broker.impl.tinkoff.shared.MarketDataService(api.getMarketDataService());
-        operationsService = new com.siberalt.singularity.broker.impl.tinkoff.shared.OperationsService(OperationsServiceGrpc.newBlockingStub(channel));
-        userService = new com.siberalt.singularity.broker.impl.tinkoff.shared.UserService(api.getUserService());
-        instrumentService = new InstrumentService(api.getInstrumentsService());
-        subscriptionManager = new SubscriptionManager(api);
+    protected void init(ConnectorConfiguration configuration) {
+        serviceStubFactory = ServiceStubFactory.create(configuration);
+
+        orderService = new com.siberalt.singularity.broker.impl.tinkoff.shared.OrderService(
+            serviceStubFactory.newSyncService(OrdersServiceGrpc::newBlockingStub).getStub(), this
+        );
+        marketDataService = new com.siberalt.singularity.broker.impl.tinkoff.shared.MarketDataService(
+            serviceStubFactory.newSyncService(MarketDataServiceGrpc::newBlockingStub).getStub()
+        );
+        operationsService = new com.siberalt.singularity.broker.impl.tinkoff.shared.OperationsService(
+            serviceStubFactory.newSyncService(OperationsServiceGrpc::newBlockingStub).getStub()
+        );
+        userService = new com.siberalt.singularity.broker.impl.tinkoff.shared.UserService(
+            serviceStubFactory.newSyncService(UsersServiceGrpc::newBlockingStub).getStub()
+        );
+        instrumentService = new InstrumentService(
+            serviceStubFactory.newSyncService(InstrumentsServiceGrpc::newBlockingStub).getStub()
+        );
+
+        var streamFactory = StreamServiceStubFactory.create(serviceStubFactory);
+        var streamManagerFactory = StreamManagerFactory.create(streamFactory);
+
+        var executorService = Executors.newCachedThreadPool();
+        var scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+        var marketDataStreamManager = streamManagerFactory.newMarketDataStreamManager(executorService, scheduledExecutorService);
+
+        subscriptionManager = new SubscriptionManager(marketDataStreamManager);
     }
 
+    @Override
     public void close() {
-        if (null != api) {
-            api.destroy(10);
-            api = null;
+        if (serviceStubFactory != null) {
+            // 4. Закрываем ресурсы через новый метод close() (destroy(int) устарел)
+            serviceStubFactory.getChannel().shutdown();
+            serviceStubFactory = null;
         }
-    }
-
-    protected InvestApi createApi(String token) {
-        return InvestApi.create(token);
     }
 
     @Override

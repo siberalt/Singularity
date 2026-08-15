@@ -5,33 +5,42 @@ import com.siberalt.singularity.broker.contract.service.instrument.request.GetRe
 import com.siberalt.singularity.broker.contract.service.instrument.response.GetResponse;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.exception.ExceptionConverter;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.InstrumentTranslator;
-import ru.tinkoff.piapi.core.InstrumentsService;
+import ru.tinkoff.piapi.contract.v1.FindInstrumentRequest;
+import ru.tinkoff.piapi.contract.v1.InstrumentIdType;
+import ru.tinkoff.piapi.contract.v1.InstrumentRequest;
+import ru.tinkoff.piapi.contract.v1.InstrumentsServiceGrpc;
 
 public class InstrumentService implements com.siberalt.singularity.broker.contract.service.instrument.InstrumentService {
-    protected InstrumentsService instrumentsService;
+    protected InstrumentsServiceGrpc.InstrumentsServiceBlockingStub instrumentsService;
 
-    public InstrumentService(InstrumentsService instrumentsService) {
+    public InstrumentService(InstrumentsServiceGrpc.InstrumentsServiceBlockingStub instrumentsService) {
         this.instrumentsService = instrumentsService;
     }
 
     @Override
     public GetResponse get(GetRequest request) throws AbstractException {
         var findInstrumentResponse = ExceptionConverter.rethrowContractExceptionOnError(
-                () -> instrumentsService.findInstrumentSync(request.getId())
+            () -> instrumentsService.findInstrument(FindInstrumentRequest.newBuilder().setQuery(request.getId()).build())
         );
-        var instrument = findInstrumentResponse.stream().findFirst().orElse(null);
+        var instrument = findInstrumentResponse.getInstrumentsList().stream().findFirst().orElse(null);
         var getResponse = new GetResponse();
 
         if (null != instrument) {
             var getInstrumentResponse = ExceptionConverter.rethrowContractExceptionOnError(
-                    () -> instrumentsService.getInstrumentByTickerSync(instrument.getTicker(), instrument.getClassCode())
+                () -> instrumentsService.getInstrumentBy(InstrumentRequest.newBuilder()
+                    .setId(instrument.getTicker())
+                    .setIdType(InstrumentIdType.INSTRUMENT_ID_TYPE_TICKER)
+                    .setClassCode(instrument.getClassCode())
+                    .build()
+                )
             );
+            var instrumentShort = getInstrumentResponse.getInstrument();
 
             getResponse.setInstrument(
-                    InstrumentTranslator.toContract(instrument)
-                            .setLot(getInstrumentResponse.getLot())
-                            .setIsin(getInstrumentResponse.getIsin())
-                            .setCurrency(getInstrumentResponse.getCurrency())
+                InstrumentTranslator.toContract(instrument)
+                    .setLot(instrumentShort.getLot())
+                    .setIsin(instrumentShort.getIsin())
+                    .setCurrency(instrumentShort.getCurrency())
             );
         }
 

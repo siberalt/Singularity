@@ -3,7 +3,7 @@ package com.siberalt.singularity.broker.impl.tinkoff.shared.exception;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.ExceptionBuilder;
-import ru.tinkoff.piapi.core.exception.ApiRuntimeException;
+import ru.ttech.piapi.core.connector.exception.ServiceRuntimeException;
 
 import java.util.function.Supplier;
 
@@ -11,13 +11,13 @@ public class ExceptionConverter {
     public static <T> T rethrowContractExceptionOnError(Supplier<T> supplier) throws AbstractException {
         try {
             return supplier.get();
-        } catch (ApiRuntimeException exception) {
-            throw toContractException(exception);
+        } catch (Throwable throwable) {
+            throw toContractException(new ServiceRuntimeException(throwable));
         }
     }
 
-    public static AbstractException toContractException(ApiRuntimeException exception) {
-        int code = Integer.parseInt(exception.getCode());
+    public static AbstractException toContractException(ServiceRuntimeException exception) {
+        int code = Integer.parseInt(exception.getErrorCode());
 
         var errorCode = switch (code) {
             case 12001 -> ErrorCode.UNIMPLEMENTED; //Method is unimplemented	Метод не реализован.
@@ -27,6 +27,7 @@ public class ExceptionConverter {
             case 30002 -> ErrorCode.PERIOD_WEEK_EXCEED; //The required period should not exceed 7 days
             case 30003 -> ErrorCode.FROM_LESS_THAN_CURRENT_DATE; //from can
             case 30004 -> ErrorCode.MISSING_PARAMETER_TO; //Missing parameter
+            case 30006 -> ErrorCode.MISSING_PARAMETER_ID_TYPE; //Missing parameter
             case 30007 -> ErrorCode.MISSING_PARAMETER_ID; //Missing parameter
             case 30009 -> ErrorCode.INVALID_PARAMETER_FROM; //from is invalid
             case 30010 -> ErrorCode.INVALID_PARAMETER_TO; //to is invalid

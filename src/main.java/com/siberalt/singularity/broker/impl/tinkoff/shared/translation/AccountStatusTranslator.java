@@ -9,6 +9,7 @@ public class AccountStatusTranslator {
             case NEW -> ru.tinkoff.piapi.contract.v1.AccountStatus.ACCOUNT_STATUS_NEW;
             case OPEN -> ru.tinkoff.piapi.contract.v1.AccountStatus.ACCOUNT_STATUS_OPEN;
             case CLOSED -> ru.tinkoff.piapi.contract.v1.AccountStatus.ACCOUNT_STATUS_CLOSED;
+            case ALL -> ru.tinkoff.piapi.contract.v1.AccountStatus.ACCOUNT_STATUS_ALL;
         };
     }
 
@@ -18,6 +19,7 @@ public class AccountStatusTranslator {
             case ACCOUNT_STATUS_NEW -> AccountStatus.NEW;
             case ACCOUNT_STATUS_OPEN -> AccountStatus.OPEN;
             case ACCOUNT_STATUS_CLOSED -> AccountStatus.CLOSED;
+            case ACCOUNT_STATUS_ALL -> AccountStatus.ALL;
             case UNRECOGNIZED -> null;
         };
     }

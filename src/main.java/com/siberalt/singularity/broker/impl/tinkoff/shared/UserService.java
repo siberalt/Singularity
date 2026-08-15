@@ -6,21 +6,24 @@ import com.siberalt.singularity.broker.shared.ListTranslator;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.exception.ExceptionConverter;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.AccountTranslator;
-import ru.tinkoff.piapi.core.UsersService;
+import ru.tinkoff.piapi.contract.v1.UsersServiceGrpc;
 
 public class UserService implements com.siberalt.singularity.broker.contract.service.user.UserService {
 
-    protected UsersService usersService;
+    protected UsersServiceGrpc.UsersServiceBlockingStub usersService;
 
-    public UserService(UsersService usersService) {
+    public UserService(
+        UsersServiceGrpc.UsersServiceBlockingStub usersService) {
         this.usersService = usersService;
     }
 
     @Override
     public GetAccountsResponse getAccounts(GetAccountsRequest request) throws AbstractException {
-        var response = ExceptionConverter.rethrowContractExceptionOnError(() -> usersService.getAccountsSync());
+        var response = ExceptionConverter.rethrowContractExceptionOnError(() ->
+            usersService.getAccounts(ru.tinkoff.piapi.contract.v1.GetAccountsRequest.newBuilder().build())
+        );
 
         return new GetAccountsResponse()
-                .setAccounts(ListTranslator.translate(response, AccountTranslator::toContract));
+            .setAccounts(ListTranslator.translate(response.getAccountsList(), AccountTranslator::toContract));
     }
 }

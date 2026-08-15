@@ -90,6 +90,7 @@ public enum ErrorCode {
     STRATEGY_ID_UUID(ErrorType.INVALID_REQUEST), //strategy_id not in UUID format	Входной параметр strategy_id имеет некорректное значение. Укажите параметр strategy_id в UUID формате. Максимальная длина — 36 символов.
     INVALID_STRATEGY_TYPE(ErrorType.INVALID_REQUEST), //strategy_type is not valid	Входной параметр strategy_type имеет некорректное значение.
     INVALID_PARAMETER_ACTIVE(ErrorType.INVALID_REQUEST), //active is not valid	Входной параметр active имеет некорректное значение.
+    MISSING_PARAMETER_ID_TYPE(ErrorType.INVALID_REQUEST), //id_type is missing	Входной параметр id_type отсутствует.
     INSUFFICIENT_PRIVILEGES(ErrorType.PERMISSION_DENIED), //Insufficient privileges	Недостаточно прав для совершения операции.
     INVALID_AUTHENTICATION_TOKEN(ErrorType.PERMISSION_DENIED), //Authentication token is missing or invalid	Токен доступа не найден или неактивен.
     ORDERS_ARE_NOT_AVAILABLE_ON_THIS_ACCOUNT(ErrorType.PERMISSION_DENIED), //Working with orders is not available with this account	Выставление заявок недоступно с текущего аккаунта.

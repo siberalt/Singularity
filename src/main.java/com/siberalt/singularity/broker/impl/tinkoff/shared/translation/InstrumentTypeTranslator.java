@@ -17,6 +17,7 @@ public class InstrumentTypeTranslator {
                     ru.tinkoff.piapi.contract.v1.InstrumentType.INSTRUMENT_TYPE_CLEARING_CERTIFICATE;
             case INDEX -> ru.tinkoff.piapi.contract.v1.InstrumentType.INSTRUMENT_TYPE_INDEX;
             case COMMODITY -> ru.tinkoff.piapi.contract.v1.InstrumentType.INSTRUMENT_TYPE_COMMODITY;
+            case DFA -> ru.tinkoff.piapi.contract.v1.InstrumentType.INSTRUMENT_TYPE_DFA;
         };
     }
 
@@ -33,6 +34,7 @@ public class InstrumentTypeTranslator {
             case INSTRUMENT_TYPE_CLEARING_CERTIFICATE -> InstrumentType.CLEARING_CERTIFICATE;
             case INSTRUMENT_TYPE_INDEX -> InstrumentType.INDEX;
             case INSTRUMENT_TYPE_COMMODITY -> InstrumentType.COMMODITY;
+            case INSTRUMENT_TYPE_DFA -> InstrumentType.DFA;
         };
     }
 }

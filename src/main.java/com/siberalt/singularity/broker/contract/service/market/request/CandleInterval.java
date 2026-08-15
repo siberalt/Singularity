@@ -19,7 +19,10 @@ public enum CandleInterval {
     HOUR_4(ChronoUnit.HOURS, 4),
     DAY(ChronoUnit.DAYS, 1),
     WEEK(ChronoUnit.WEEKS, 1),
-    MONTH(ChronoUnit.MONTHS, 1);
+    MONTH(ChronoUnit.MONTHS, 1),
+    SEC_5(ChronoUnit.SECONDS, 5),
+    SEC_10(ChronoUnit.SECONDS, 10),
+    SEC_30(ChronoUnit.SECONDS, 30);
 
     private final ChronoUnit chronoUnit;
     private final int chronoUnitValue;

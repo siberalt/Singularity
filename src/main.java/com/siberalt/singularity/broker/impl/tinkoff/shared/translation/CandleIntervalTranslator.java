@@ -19,6 +19,9 @@ public class CandleIntervalTranslator {
             case HOUR_4 -> ru.tinkoff.piapi.contract.v1.CandleInterval.CANDLE_INTERVAL_4_HOUR;
             case WEEK -> ru.tinkoff.piapi.contract.v1.CandleInterval.CANDLE_INTERVAL_WEEK;
             case MONTH -> ru.tinkoff.piapi.contract.v1.CandleInterval.CANDLE_INTERVAL_MONTH;
+            case SEC_5 -> ru.tinkoff.piapi.contract.v1.CandleInterval.CANDLE_INTERVAL_5_SEC;
+            case SEC_10 -> ru.tinkoff.piapi.contract.v1.CandleInterval.CANDLE_INTERVAL_10_SEC;
+            case SEC_30 -> ru.tinkoff.piapi.contract.v1.CandleInterval.CANDLE_INTERVAL_30_SEC;
         };
     }
 
@@ -38,6 +41,9 @@ public class CandleIntervalTranslator {
             case CANDLE_INTERVAL_4_HOUR -> CandleInterval.HOUR_4;
             case CANDLE_INTERVAL_WEEK -> CandleInterval.WEEK;
             case CANDLE_INTERVAL_MONTH -> CandleInterval.MONTH;
+            case CANDLE_INTERVAL_5_SEC -> CandleInterval.SEC_5;
+            case CANDLE_INTERVAL_10_SEC -> CandleInterval.SEC_10;
+            case CANDLE_INTERVAL_30_SEC -> CandleInterval.SEC_30;
             case UNRECOGNIZED -> null;
         };
     }

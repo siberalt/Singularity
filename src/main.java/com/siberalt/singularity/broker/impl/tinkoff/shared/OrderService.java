@@ -7,7 +7,11 @@ import com.siberalt.singularity.broker.contract.service.order.CommissionTransact
 import com.siberalt.singularity.broker.contract.service.order.OrderTransactionSpecProvider;
 import com.siberalt.singularity.broker.contract.service.order.TransactionService;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
+import com.siberalt.singularity.broker.contract.service.order.request.PostOrderRequest;
 import com.siberalt.singularity.broker.contract.service.order.response.*;
+import com.siberalt.singularity.broker.contract.service.order.response.CancelOrderResponse;
+import com.siberalt.singularity.broker.contract.service.order.response.OrderState;
+import com.siberalt.singularity.broker.contract.service.order.response.PostOrderResponse;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.exception.ExceptionConverter;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.*;
 import com.siberalt.singularity.broker.shared.ListTranslator;
@@ -17,8 +21,8 @@ import com.siberalt.singularity.entity.transaction.Transaction;
 import com.siberalt.singularity.entity.transaction.TransactionSpec;
 import com.siberalt.singularity.strategy.context.execution.time.RealTimeClock;
 import ru.tinkoff.piapi.contract.v1.OrderExecutionReportStatus;
+import ru.tinkoff.piapi.contract.v1.OrdersServiceGrpc;
 import ru.tinkoff.piapi.contract.v1.Quotation;
-import ru.tinkoff.piapi.core.OrdersService;
 
 import java.util.Collections;
 import java.util.List;
@@ -27,12 +31,15 @@ import static com.siberalt.singularity.broker.impl.tinkoff.shared.translation.Or
 
 public class OrderService implements com.siberalt.singularity.broker.contract.service.order.OrderService {
     public static final double DEFAULT_COMMISSION_RATE = 0.003; // 0.3% commission rate
-    private final OrdersService ordersServiceApi;
+    private final OrdersServiceGrpc.OrdersServiceBlockingStub ordersServiceApi;
     private final AbstractTinkoffBroker broker;
     private final TransactionService transactionService;
     private final CommissionTransactionSpecProvider commissionTransactionSpecProvider;
 
-    public OrderService(OrdersService ordersServiceApi, AbstractTinkoffBroker broker) {
+    public OrderService(
+        OrdersServiceGrpc.OrdersServiceBlockingStub ordersServiceApi,
+        AbstractTinkoffBroker broker
+    ) {
         this.ordersServiceApi = ordersServiceApi;
         this.broker = broker;
         this.commissionTransactionSpecProvider = new CommissionTransactionSpecProvider(DEFAULT_COMMISSION_RATE);
@@ -64,27 +71,38 @@ public class OrderService implements com.siberalt.singularity.broker.contract.se
     @Override
     public PostOrderResponse post(PostOrderRequest request) throws AbstractException {
         var price = request.getPrice() == null ? Quotation.newBuilder().build() : QuotationTranslator.toTinkoff(request.getPrice());
-        var response = ExceptionConverter.rethrowContractExceptionOnError(() -> ordersServiceApi.postOrderSync(
-            request.getInstrumentId(), request.getQuantity(), price,
-            OrderDirectionTranslator.toTinkoff(request.getDirection()),
-            request.getAccountId(), OrderTypeTranslator.toTinkoff(request.getOrderType()),
-            request.getIdempotencyKey()
+        var response = ExceptionConverter.rethrowContractExceptionOnError(() -> ordersServiceApi.postOrder(
+            ru.tinkoff.piapi.contract.v1.PostOrderRequest.newBuilder()
+                .setInstrumentId(request.getInstrumentId())
+                .setQuantity(request.getQuantity())
+                .setPrice(price)
+                .setDirection(OrderDirectionTranslator.toTinkoff(request.getDirection()))
+                .setAccountId(request.getAccountId())
+                .setOrderType(OrderTypeTranslator.toTinkoff(request.getOrderType()))
+                .build()
         ));
         return toContractPostOrderResponse(request.getAccountId(), response);
     }
 
     @Override
     public CancelOrderResponse cancel(CancelOrderRequest request) throws AbstractException {
-        var response = ExceptionConverter.rethrowContractExceptionOnError(() -> ordersServiceApi.cancelOrderSync(
-            request.getAccountId(), request.getOrderId()
+        var response = ExceptionConverter.rethrowContractExceptionOnError(() -> ordersServiceApi.cancelOrder(
+            ru.tinkoff.piapi.contract.v1.CancelOrderRequest.newBuilder()
+                .setOrderId(request.getOrderId())
+                .setAccountId(request.getAccountId())
+                .build()
+
         ));
-        return new CancelOrderResponse().setTime(response);
+        return new CancelOrderResponse().setTime(TimestampTranslator.toContract(response.getTime()));
     }
 
     @Override
     public OrderState getState(GetOrderStateRequest request) throws AbstractException {
-        var response = ExceptionConverter.rethrowContractExceptionOnError(() -> ordersServiceApi.getOrderStateSync(
-            request.getAccountId(), request.getOrderId()
+        var response = ExceptionConverter.rethrowContractExceptionOnError(() -> ordersServiceApi.getOrderState(
+            ru.tinkoff.piapi.contract.v1.GetOrderStateRequest.newBuilder()
+                .setAccountId(request.getAccountId())
+                .setOrderId(request.getOrderId())
+                .build()
         ));
         return OrderStateTranslator.toContract(response);
     }
@@ -92,10 +110,12 @@ public class OrderService implements com.siberalt.singularity.broker.contract.se
     @Override
     public GetOrdersResponse get(GetOrdersRequest request) throws AbstractException {
         var response = ExceptionConverter.rethrowContractExceptionOnError(
-            () -> ordersServiceApi.getOrdersSync(request.getAccountId())
+            () -> ordersServiceApi.getOrders(ru.tinkoff.piapi.contract.v1.GetOrdersRequest.newBuilder()
+                .setAccountId(request.getAccountId())
+                .build())
         );
 
-        return new GetOrdersResponse().setOrders(ListTranslator.translate(response, OrderStateTranslator::toContract));
+        return new GetOrdersResponse().setOrders(ListTranslator.translate(response.getOrdersList(), OrderStateTranslator::toContract));
     }
 
     private Order createOrder(PostOrderRequest request) throws AbstractException {

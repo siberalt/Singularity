@@ -11,59 +11,68 @@ import com.siberalt.singularity.broker.contract.service.order.stop.response.Post
 import com.siberalt.singularity.broker.contract.service.order.stop.StopOrderServiceInterface;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.exception.ExceptionConverter;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.*;
-import ru.tinkoff.piapi.core.StopOrdersService;
+import ru.tinkoff.piapi.contract.v1.StopOrdersServiceGrpc;
 
 public class StopOrderService implements StopOrderServiceInterface {
-    protected StopOrdersService stopOrdersServiceApi;
+    protected StopOrdersServiceGrpc.StopOrdersServiceBlockingStub stopOrdersServiceApi;
 
-    public StopOrderService(StopOrdersService stopOrdersServiceApi) {
+    public StopOrderService(StopOrdersServiceGrpc.StopOrdersServiceBlockingStub stopOrdersServiceApi) {
         this.stopOrdersServiceApi = stopOrdersServiceApi;
     }
 
     @Override
     public PostStopOrderResponse post(PostStopOrderRequest request) throws AbstractException {
         var response = ExceptionConverter.rethrowContractExceptionOnError(
-                () -> stopOrdersServiceApi.postStopSync(
-                        request.getInstrumentId(),
-                        request.getQuantity(),
-                        QuotationTranslator.toTinkoff(request.getPrice()),
-                        QuotationTranslator.toTinkoff(request.getStopPrice()),
-                        StopOrderDirectionTranslator.toTinkoff(request.getDirection()),
-                        request.getAccountId(),
-                        StopOrderTypeTranslator.toTinkoff(request.getStopOrderType()),
-                        StopOrderExpirationTypeTranslator.toTinkoff(request.getExpirationType()),
-                        TakeProfitTypeTranslator.toTinkoff(request.getTakeProfitType()),
-                        PostStopOrderTrailingDataTranslator.toTinkoff(request.getTrailingData()),
-                        request.getExpireDate()
-                )
+            () -> stopOrdersServiceApi.postStopOrder(
+                ru.tinkoff.piapi.contract.v1.PostStopOrderRequest.newBuilder()
+                    .setInstrumentId(request.getInstrumentId())
+                    .setQuantity(request.getQuantity())
+                    .setPrice(QuotationTranslator.toTinkoff(request.getPrice()))
+                    .setStopPrice(QuotationTranslator.toTinkoff(request.getStopPrice()))
+                    .setDirection(StopOrderDirectionTranslator.toTinkoff(request.getDirection()))
+                    .setAccountId(request.getAccountId())
+                    .setStopOrderType(StopOrderTypeTranslator.toTinkoff(request.getStopOrderType()))
+                    .setExpirationType(StopOrderExpirationTypeTranslator.toTinkoff(request.getExpirationType()))
+                    .setTakeProfitType(TakeProfitTypeTranslator.toTinkoff(request.getTakeProfitType()))
+                    .setTrailingData(PostStopOrderTrailingDataTranslator.toTinkoff(request.getTrailingData()))
+                    .setExpireDate(TimestampTranslator.toTinkoff(request.getExpireDate()))
+                    .build()
+            )
         );
 
         return new PostStopOrderResponse()
-                .setStopOrderId(response);
+            .setStopOrderId(response.getStopOrderId());
     }
 
     @Override
     public GetStopOrdersResponse get(GetStopOrdersRequest request) throws AbstractException {
         var response = ExceptionConverter.rethrowContractExceptionOnError(
-                () -> stopOrdersServiceApi.getStopOrdersSync(
-                        request.getAccountId(),
-                        request.getFrom(),
-                        request.getTo(),
-                        StopOrderStatusOptionTranslator.toTinkoff(request.getStatus())
-                )
+            () -> stopOrdersServiceApi.getStopOrders(
+                ru.tinkoff.piapi.contract.v1.GetStopOrdersRequest.newBuilder()
+                    .setAccountId(request.getAccountId())
+                    .setFrom(TimestampTranslator.toTinkoff(request.getFrom()))
+                    .setTo(TimestampTranslator.toTinkoff(request.getTo()))
+                    .setStatus(StopOrderStatusOptionTranslator.toTinkoff(request.getStatus()))
+                    .build()
+            )
         );
 
         return new GetStopOrdersResponse()
-                .setStopOrders(ListTranslator.translate(response, StopOrderTranslator::toContract));
+            .setStopOrders(ListTranslator.translate(response.getStopOrdersList(), StopOrderTranslator::toContract));
     }
 
     @Override
     public CancelStopOrderResponse cancel(CancelStopOrderRequest request) throws AbstractException {
         var response = ExceptionConverter.rethrowContractExceptionOnError(
-                () -> stopOrdersServiceApi.cancelStopOrderSync(request.getAccountId(), request.getStopOrderId())
+            () -> stopOrdersServiceApi.cancelStopOrder(
+                ru.tinkoff.piapi.contract.v1.CancelStopOrderRequest.newBuilder()
+                    .setAccountId(request.getAccountId())
+                    .setStopOrderId(request.getStopOrderId())
+                    .build()
+            )
         );
 
         return new CancelStopOrderResponse()
-                .setTime(response);
+            .setTime(TimestampTranslator.toContract(response.getTime()));
     }
 }

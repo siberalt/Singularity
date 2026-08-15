@@ -4,18 +4,20 @@ import com.siberalt.singularity.broker.contract.execution.StopOrderServiceAwareB
 import com.siberalt.singularity.broker.impl.tinkoff.shared.AbstractTinkoffBroker;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.StopOrderService;
 import com.siberalt.singularity.broker.contract.service.order.stop.StopOrderServiceInterface;
+import ru.tinkoff.piapi.contract.v1.StopOrdersServiceGrpc;
+import ru.ttech.piapi.core.connector.ConnectorConfiguration;
 
 public class TinkoffBroker extends AbstractTinkoffBroker implements StopOrderServiceAwareBroker {
     protected StopOrderServiceInterface stopOrderService;
 
-    public TinkoffBroker(String token) {
-        super(token);
+    public TinkoffBroker(ConnectorConfiguration configuration) {
+        super(configuration);
     }
 
     @Override
-    protected void init(String token) {
-        super.init(token);
-        stopOrderService = new StopOrderService(api.getStopOrdersService());
+    protected void init(ConnectorConfiguration configuration) {
+        super.init(configuration);
+        stopOrderService = new StopOrderService(StopOrdersServiceGrpc.newBlockingStub(serviceStubFactory.getChannel()));
     }
 
     @Override

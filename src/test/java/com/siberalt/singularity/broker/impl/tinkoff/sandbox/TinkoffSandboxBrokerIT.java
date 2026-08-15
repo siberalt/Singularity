@@ -5,8 +5,10 @@ import com.siberalt.singularity.broker.contract.service.exception.PermissionDeni
 import com.siberalt.singularity.broker.contract.service.operation.request.GetPositionsRequest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import ru.ttech.piapi.core.connector.ConnectorConfiguration;
 
 import java.io.IOException;
+import java.util.Properties;
 
 public class TinkoffSandboxBrokerIT extends AbstractTinkoffSanboxIT {
     @Test
@@ -29,9 +31,10 @@ public class TinkoffSandboxBrokerIT extends AbstractTinkoffSanboxIT {
 
     @Test
     public void permissionDeniedExceptionHandling() throws IOException {
-        try (TinkoffSandboxBroker finalTinkoffBroker = new TinkoffSandboxBroker(
-            getConfiguration().get("sandboxToken") + "123"
-        )) {
+        Properties properties = new Properties();
+        properties.put("token",getConfiguration().get("sandboxToken") + "123");
+        ConnectorConfiguration connectorConfiguration = ConnectorConfiguration.loadFromProperties(properties);
+        try (TinkoffSandboxBroker finalTinkoffBroker = new TinkoffSandboxBroker(connectorConfiguration)) {
             Assertions.assertThrows(
                 PermissionDeniedException.class, () -> finalTinkoffBroker.getUserService().getAccounts(null)
             );
