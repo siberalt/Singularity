@@ -9,8 +9,15 @@ import java.util.Objects;
  * Represents a monetary value with a specific currency.
  */
 public class Money {
+    public static final Money DEFAULT_INSTANCE = new Money(null, Quotation.ZERO);
+
     protected String currencyIso;
     protected Quotation quotation;
+
+    public Money(String currencyIso, Quotation quotation) {
+        this.currencyIso = currencyIso;
+        this.quotation = quotation;
+    }
 
     public Money setQuotation(Quotation quotation) {
         Objects.requireNonNull(quotation);
@@ -134,9 +141,7 @@ public class Money {
     }
 
     public static Money of(String currencyIso, Quotation value) {
-        return new Money()
-            .setCurrencyIso(currencyIso)
-            .setQuotation(value);
+        return new Money(currencyIso, value);
     }
 
     public static Money of(String currencyIso, String value) {
@@ -148,9 +153,7 @@ public class Money {
     }
 
     public static Money of(String currencyIso, BigDecimal value) {
-        return new Money()
-            .setQuotation(Quotation.of(value))
-            .setCurrencyIso(currencyIso);
+        return new Money(currencyIso, Quotation.of(value));
     }
 
     @Override

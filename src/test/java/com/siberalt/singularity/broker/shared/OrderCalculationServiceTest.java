@@ -9,15 +9,13 @@ import com.siberalt.singularity.broker.contract.service.market.response.GetCurre
 import com.siberalt.singularity.broker.contract.service.operation.OperationsService;
 import com.siberalt.singularity.broker.contract.service.operation.response.GetPositionsResponse;
 import com.siberalt.singularity.broker.contract.service.order.OrderService;
-import com.siberalt.singularity.broker.contract.service.order.request.CalculateRequest;
-import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
+import com.siberalt.singularity.broker.contract.service.order.request.GetPriceRequest;
 import com.siberalt.singularity.broker.contract.service.order.request.PostOrderRequest;
-import com.siberalt.singularity.broker.contract.service.order.response.CalculateResponse;
+import com.siberalt.singularity.broker.contract.service.order.response.GetPriceResponse;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.shared.dto.BuyRequest;
 import com.siberalt.singularity.entity.instrument.Instrument;
-import com.siberalt.singularity.entity.order.Order;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
@@ -57,19 +55,16 @@ class OrderCalculationServiceTest {
         Quotation balance = Quotation.of("1000");
         Quotation instrumentPrice = Quotation.of("100");
 
-        when(orderServiceMock.calculate(any())).thenReturn(new CalculateResponse(
-            "instrumentId",
+        when(orderServiceMock.getPrice(any())).thenReturn(new GetPriceResponse(
             Quotation.of("1000"),
-            instrumentPrice,
-            10,
-            List.of() // Assuming no transactions for simplicity
+            instrumentPrice
         ));
 
-        long result = orderCalculationService.calculatePossibleBuyQuantity(
+        long result = orderCalculationService.calculateMaxBuyQuantity(
             orderServiceMock,
             balance,
             instrumentPrice,
-            new BuyRequest("accountId", "instrumentId", OrderType.MARKET)
+            new BuyRequest("accountId", "instrumentId")
         );
 
         assertEquals(10, result);
@@ -80,11 +75,11 @@ class OrderCalculationServiceTest {
         Quotation balance = Quotation.of("0");
         Quotation instrumentPrice = Quotation.of("100");
 
-        long result = orderCalculationService.calculatePossibleBuyQuantity(
+        long result = orderCalculationService.calculateMaxBuyQuantity(
             orderServiceMock,
             balance,
             instrumentPrice,
-            new BuyRequest("accountId", "instrumentId", OrderType.MARKET)
+            new BuyRequest("accountId", "instrumentId")
         );
 
         assertEquals(0, result);
@@ -97,11 +92,11 @@ class OrderCalculationServiceTest {
 
         assertThrows(
             ArithmeticException.class,
-            () -> orderCalculationService.calculatePossibleBuyQuantity(
+            () -> orderCalculationService.calculateMaxBuyQuantity(
                 orderServiceMock,
                 balance,
                 instrumentPrice,
-                new BuyRequest("accountId", "instrumentId", OrderType.MARKET)
+                new BuyRequest("accountId", "instrumentId")
             )
         );
     }
@@ -111,14 +106,14 @@ class OrderCalculationServiceTest {
         Quotation balance = Quotation.of("1000");
         Quotation instrumentPrice = Quotation.of("100");
 
-        when(orderServiceMock.calculate(any()))
+        when(orderServiceMock.getPrice(any()))
             .thenAnswer(invocation -> mockCalculateResponse(invocation, instrumentPrice));
 
-        long result = orderCalculationService.calculatePossibleBuyQuantity(
+        long result = orderCalculationService.calculateMaxBuyQuantity(
             orderServiceMock,
             balance,
             instrumentPrice,
-            new BuyRequest("accountId", "instrumentId", OrderType.MARKET)
+            new BuyRequest("accountId", "instrumentId")
         );
 
         assertEquals(9, result);
@@ -126,22 +121,18 @@ class OrderCalculationServiceTest {
 
     @Test
     void calculatesPossibleBuyQuantityWithValidInputsForBroker() throws Exception {
-        when(instrumentServiceMock.get(any())).thenReturn(instrumentResponse("USD"));
+        when(instrumentServiceMock.get(any())).thenReturn(instrumentResponse());
         when(operationsServiceMock.getPositions(any()))
-            .thenReturn(positionsResponse("USD", Quotation.of(1000)));
+            .thenReturn(positionsResponse(Quotation.of(1000)));
         Quotation pricePerOne = Quotation.of(100);
         when(marketDataServiceMock.getCurrentPrice(any()))
             .thenReturn(priceResponse("instrumentId", pricePerOne));
-        when(orderServiceMock.calculate(any()))
+        when(orderServiceMock.getPrice(any()))
             .thenAnswer(invocation -> mockCalculateResponse(invocation, pricePerOne));
 
-        long result = orderCalculationService.calculatePossibleBuyQuantity(
+        long result = orderCalculationService.calculateMaxBuyQuantity(
             brokerMock,
-            new BuyRequest(
-                "accountId",
-                "instrumentId",
-                OrderType.MARKET
-            )
+            new BuyRequest("accountId", "instrumentId")
         );
 
         assertEquals(9, result);
@@ -149,19 +140,15 @@ class OrderCalculationServiceTest {
 
     @Test
     void calculatesPossibleBuyQuantityWhenBalanceIsZeroForBroker() throws Exception {
-        when(instrumentServiceMock.get(any())).thenReturn(instrumentResponse("USD"));
+        when(instrumentServiceMock.get(any())).thenReturn(instrumentResponse());
         when(operationsServiceMock.getPositions(any()))
-            .thenReturn(positionsResponse("USD", Quotation.of(0)));
+            .thenReturn(positionsResponse(Quotation.of(0)));
         when(marketDataServiceMock.getCurrentPrice(any()))
             .thenReturn(priceResponse("instrumentId", Quotation.of(100)));
 
-        long result = orderCalculationService.calculatePossibleBuyQuantity(
+        long result = orderCalculationService.calculateMaxBuyQuantity(
             brokerMock,
-            new BuyRequest(
-                "accountId",
-                "instrumentId",
-                OrderType.MARKET
-            )
+            new BuyRequest("accountId", "instrumentId")
         );
 
         assertEquals(0, result);
@@ -169,42 +156,34 @@ class OrderCalculationServiceTest {
 
     @Test
     void calculatesPossibleBuyQuantityWhenPriceIsZeroForBroker() throws AbstractException {
-        when(instrumentServiceMock.get(any())).thenReturn(instrumentResponse("USD"));
+        when(instrumentServiceMock.get(any())).thenReturn(instrumentResponse());
         when(operationsServiceMock.getPositions(any()))
-            .thenReturn(positionsResponse("USD", Quotation.of("1000")));
+            .thenReturn(positionsResponse(Quotation.of("1000")));
         when(marketDataServiceMock.getCurrentPrice(any()))
             .thenReturn(priceResponse("instrumentId", Quotation.of("0")));
 
         assertThrows(
             ArithmeticException.class,
-            () -> orderCalculationService.calculatePossibleBuyQuantity(
+            () -> orderCalculationService.calculateMaxBuyQuantity(
                 brokerMock,
-                new BuyRequest(
-                    "accountId",
-                    "instrumentId",
-                    OrderType.MARKET
-                )
+                new BuyRequest("accountId", "instrumentId")
             )
         );
     }
 
     @Test
     void calculatesPossibleBuyQuantityWhenTotalPriceExceedsBalanceForBroker() throws Exception {
-        when(instrumentServiceMock.get(any())).thenReturn(instrumentResponse("USD"));
+        when(instrumentServiceMock.get(any())).thenReturn(instrumentResponse());
         when(operationsServiceMock.getPositions(any()))
-            .thenReturn(positionsResponse("USD", Quotation.of("1000")));
+            .thenReturn(positionsResponse(Quotation.of("1000")));
         when(marketDataServiceMock.getCurrentPrice(any()))
             .thenReturn(priceResponse("instrumentId", Quotation.of("100")));
-        when(orderServiceMock.calculate(any()))
+        when(orderServiceMock.getPrice(any()))
             .thenAnswer(invocation -> mockCalculateResponse(invocation, Quotation.of("2000")));
 
-        long result = orderCalculationService.calculatePossibleBuyQuantity(
+        long result = orderCalculationService.calculateMaxBuyQuantity(
             brokerMock,
-            new BuyRequest(
-                "accountId",
-                "instrumentId",
-                OrderType.MARKET
-            )
+            new BuyRequest("accountId", "instrumentId")
         );
 
         assertEquals(0, result);
@@ -214,19 +193,16 @@ class OrderCalculationServiceTest {
     void calculatePossibleBuyQuantityWithValidInputs() throws Exception {
         Quotation limit = Quotation.of("1000");
         Quotation instrumentPrice = Quotation.of("100");
-        BuyRequest request = new BuyRequest("accountId", "instrumentId", OrderType.MARKET);
+        BuyRequest request = new BuyRequest("accountId", "instrumentId");
 
         when(marketDataServiceMock.getCurrentPrice(any()))
             .thenReturn(new GetCurrentPriceResponse().setPrice(instrumentPrice));
-        when(orderServiceMock.calculate(any())).thenReturn(new CalculateResponse(
-            "instrumentId",
+        when(orderServiceMock.getPrice(any())).thenReturn(new GetPriceResponse(
             Quotation.of("1000"),
-            instrumentPrice,
-            10,
-            List.of() // Assuming no transactions for simplicity
+            instrumentPrice
         ));
 
-        long result = orderCalculationService.calculatePossibleBuyQuantity(brokerMock, limit, request);
+        long result = orderCalculationService.calculateMaxBuyQuantity(brokerMock, limit, request);
 
         assertEquals(10, result);
     }
@@ -235,50 +211,46 @@ class OrderCalculationServiceTest {
     void calculatePossibleBuyQuantityWithValidInputsAndExtraRatio() throws Exception {
         Quotation limit = Quotation.of(1000);
         Quotation instrumentPrice = Quotation.of(100);
-        BuyRequest request = new BuyRequest("accountId", "instrumentId", OrderType.MARKET);
+        BuyRequest request = new BuyRequest("accountId", "instrumentId");
+
+        Quotation totalBalanceChange = instrumentPrice.multiply(9);
+        Quotation commission = totalBalanceChange.multiply(0.03); // Simulating commission of 3%
+        totalBalanceChange = totalBalanceChange.add(commission);
+
 
         when(marketDataServiceMock.getCurrentPrice(any()))
             .thenReturn(new GetCurrentPriceResponse().setPrice(instrumentPrice));
-        when(orderServiceMock.calculate(any()))
-            .thenReturn(new CalculateResponse(
-                "instrumentId",
-                instrumentPrice.multiply(9).multiply(1.03), // Simulating commission of 3%
-                instrumentPrice,
-                9,
-                List.of() // Assuming no transactions for simplicity
-            ));
+        when(orderServiceMock.getPrice(any()))
+            .thenReturn(new GetPriceResponse(totalBalanceChange, commission));
 
         OrderCalculationService serviceWithExtraRatio = new OrderCalculationService(0.005); // Setting a small extra ratio to simulate the effect
 
-        long result = serviceWithExtraRatio.calculatePossibleBuyQuantity(brokerMock, limit, request);
+        long result = serviceWithExtraRatio.calculateMaxBuyQuantity(brokerMock, limit, request);
 
         assertEquals(9, result); // Expecting 9 due to the extra ratio
     }
 
     private Object mockCalculateResponse(InvocationOnMock invocation, Quotation instrumentPrice) {
-        CalculateRequest calculateRequest = invocation.getArgument(0);
+        GetPriceRequest calculateRequest = invocation.getArgument(0);
         PostOrderRequest request = calculateRequest.getPostOrderRequest();
         long quantity = request.getQuantity();
         Quotation initialPrice = instrumentPrice.multiply(quantity);
         Quotation totalBalanceChange = initialPrice.add(initialPrice.multiply(0.03)); // Simulating commission of 3%
 
-        return new CalculateResponse(
-            "instrumentId",
+        return new GetPriceResponse(
             totalBalanceChange,
-            instrumentPrice,
-            quantity,
-            List.of() // Assuming no transactions for simplicity
+            instrumentPrice
         );
     }
 
-    private GetPositionsResponse positionsResponse(String currency, Quotation balance) {
-        return new GetPositionsResponse().setMoney(List.of(Money.of(currency, balance)));
+    private GetPositionsResponse positionsResponse(Quotation balance) {
+        return new GetPositionsResponse().setMoney(List.of(Money.of("USD", balance)));
     }
 
-    private GetResponse instrumentResponse(String currency) {
+    private GetResponse instrumentResponse() {
         GetResponse response = new GetResponse();
         Instrument instrument = new Instrument();
-        instrument.setCurrency(currency);
+        instrument.setCurrency("USD");
         response.setInstrument(instrument);
         return response;
     }

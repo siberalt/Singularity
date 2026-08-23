@@ -13,7 +13,6 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.shared.exception.MockBrokerException;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.AccountBalance;
 import com.siberalt.singularity.broker.impl.mock.shared.user.AccountState;
-import com.siberalt.singularity.entity.transaction.Transaction;
 import com.siberalt.singularity.entity.transaction.TransactionSpec;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.instrument.Instrument;
@@ -32,29 +31,36 @@ public class MockOrderService implements OrderService {
     protected double sellBestPriceRatio = 0.7;
     protected Duration limitOrderLifeTime = Duration.ofDays(1);
     protected OrderRepository orderRepository;
-    protected CommissionTransactionSpecProvider commissionTransactionSpecProvider = new CommissionTransactionSpecProvider(DEFAULT_COMMISSION_RATIO);
-    protected TransactionService transactionService = new TransactionService()
-        .addProvider(new OrderTransactionSpecProvider())
-        .addProvider(commissionTransactionSpecProvider);
+    protected TransactionSpecProvider commissionTransactionSpecProvider = new CommissionTransactionSpecProvider(DEFAULT_COMMISSION_RATIO);
+    private TransactionSpecProvider orderTransactionSpecProvider = new OrderTransactionSpecProvider();
 
     public MockOrderService(MockBroker mockBroker, OrderRepository orderRepository) {
         this.mockBroker = mockBroker;
         this.orderRepository = orderRepository;
     }
 
+    public MockOrderService(
+        MockBroker mockBroker,
+        OrderRepository orderRepository,
+        TransactionSpecProvider commissionTransactionSpecProvider,
+        TransactionSpecProvider orderTransactionSpecProvider
+    ) {
+        this.mockBroker = mockBroker;
+        this.orderRepository = orderRepository;
+        this.commissionTransactionSpecProvider = commissionTransactionSpecProvider;
+        this.orderTransactionSpecProvider = orderTransactionSpecProvider;
+    }
+
     @Override
-    public CalculateResponse calculate(CalculateRequest request) throws AbstractException {
+    public GetPriceResponse getPrice(GetPriceRequest request) throws AbstractException {
         validatePostOrderRequest(request.getPostOrderRequest());
 
         Order order = createOrder(request.getPostOrderRequest());
-        List<TransactionSpec> transactionSpecs = calculateTransactions(order);
+        calculateTransactions(order);
 
-        return new CalculateResponse(
-            order.getInstrument().getUid(),
+        return new GetPriceResponse(
             order.getBalanceChange(),
-            order.getInstrumentPrice(),
-            order.getLotsRequested(),
-            transactionSpecs
+            order.getExecutedCommission()
         );
     }
 
@@ -149,18 +155,11 @@ public class MockOrderService implements OrderService {
         return this;
     }
 
-    public void setCommissionRatio(double commissionRatio) {
-        if (commissionRatio < 0 || commissionRatio > 1) {
-            throw new IllegalArgumentException("Commission ratio must be between 0 and 1");
-        }
-
-        commissionTransactionSpecProvider.setCommissionRatio(commissionRatio);
-    }
-
     protected void cancel(Order order) {
         order
             .setLotsExecuted(0)
             .setExecutionStatus(ExecutionStatus.CANCELLED);
+        orderRepository.save(order);
     }
 
     protected void validatePostOrderRequest(PostOrderRequest request) throws AbstractException {
@@ -237,13 +236,12 @@ public class MockOrderService implements OrderService {
         registerOrder(order);
 
         AccountBalance balance = operationsService.getAccountBalance(order.getAccountId());
-        List<Transaction> transactions = balance.applyTransactions(transactionSpecs);
+        balance.applyTransactions(transactionSpecs);
         operationsService.subtractFromPosition(
             order.getAccountId(),
             order.getInstrument().getUid(),
             order.getLotsRequested() * order.getInstrument().getLot()
         );
-        order.setTransactions(transactions);
 
         return toServiceResponse(order);
     }
@@ -257,13 +255,12 @@ public class MockOrderService implements OrderService {
         registerOrder(order);
 
         AccountBalance balance = operationsService.getAccountBalance(order.getAccountId());
-        List<Transaction> transactions = balance.applyTransactions(transactionSpecs);
+        balance.applyTransactions(transactionSpecs);
         operationsService.addToPosition(
             order.getAccountId(),
             order.getInstrument().getUid(),
             order.getLotsRequested() * order.getInstrument().getLot()
         );
-        order.setTransactions(transactions);
     }
 
     protected PostOrderResponse sell(PostOrderRequest request) throws AbstractException {
@@ -379,7 +376,7 @@ public class MockOrderService implements OrderService {
             .setOrderId(order.getId())
             .setIdempotencyKey(order.getIdempotencyKey())
             .setDirection(order.getDirection())
-            .setTransactions(order.getTransactions())
+            .setExecutedCommission(Money.of(currency, order.getExecutedCommission()))
             .setInstrumentUid(order.getInstrument().getUid())
             .setOrderType(order.getOrderType())
             .setLotsExecuted(order.getLotsExecuted())
@@ -390,10 +387,27 @@ public class MockOrderService implements OrderService {
     }
 
     protected List<TransactionSpec> calculateTransactions(Order order) {
-        List<TransactionSpec> transactionSpecs = transactionService.calculateSpecs(order);
+        Optional<TransactionSpec> commissionTransactionSpec = commissionTransactionSpecProvider.provide(order);
+        Optional<TransactionSpec> orderTransactionSpec = orderTransactionSpecProvider.provide(order);
 
-        Quotation balanceChange = transactionService.sumSpecs(transactionSpecs);
-        order.setBalanceChange(balanceChange);
+        List<TransactionSpec> transactionSpecs = new ArrayList<>();
+        List<Quotation> balanceChanges = new ArrayList<>();
+
+        orderTransactionSpec.ifPresent(
+            spec -> {
+                Quotation amount = spec.amount().getQuotation();
+                balanceChanges.add(amount);
+                order.setExecutedCommission(amount);
+                transactionSpecs.add(spec);
+            }
+        );
+        commissionTransactionSpec.ifPresent(
+            spec -> {
+                balanceChanges.add(spec.amount().getQuotation());
+                transactionSpecs.add(spec);
+            }
+        );
+        order.setBalanceChange(Quotation.sum(balanceChanges));
 
         return transactionSpecs;
     }

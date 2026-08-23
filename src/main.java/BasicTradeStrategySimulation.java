@@ -99,13 +99,14 @@ public class BasicTradeStrategySimulation {
         Money initialInvestment = Money.of("RUB", 1000000.00);
 
         SimulationClock clock = new SimpleSimulationClock();
-        EventMockBroker broker = new EventMockBroker(
+        EventMockBroker broker = EventMockBroker.builder(
             candleRepository,
             instrumentRepository,
             orderRepository,
             clock
-        );
-        broker.getOrderService().setCommissionRatio(commission);
+        )
+            .setCommissionRatio(commission)
+            .build();
 
         StrategyStarter strategyStarter = (timeRange, account, observer) ->
         {

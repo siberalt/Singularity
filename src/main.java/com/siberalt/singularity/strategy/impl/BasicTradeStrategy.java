@@ -110,7 +110,7 @@ public class BasicTradeStrategy implements Strategy {
 
             try {
                 if (upside.signal() >= buyThreshold) {
-                    long possibleToBuy = broker.getPossibleBuyQuantity(accountId, instrumentId, OrderType.BEST_PRICE);
+                    long possibleToBuy = broker.getMaxBuyQuantity(accountId, instrumentId);
                     long quantityToBuy = (long) (possibleToBuy * upside.signal());
 
                     if (quantityToBuy > 0) {

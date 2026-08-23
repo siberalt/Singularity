@@ -4,9 +4,9 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.ErrorType;
 import com.siberalt.singularity.broker.contract.service.exception.InvalidRequestException;
+import com.siberalt.singularity.broker.contract.service.order.GetMaxLotsOrderService;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
-import com.siberalt.singularity.broker.impl.tinkoff.shared.OrderService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import ru.tinkoff.piapi.contract.v1.MoneyValue;
@@ -38,16 +38,17 @@ public class OrderServiceIT extends AbstractTinkoffSanboxIT {
             );
         } catch (InvalidRequestException exception) {
             ErrorCode errorCode = exception.getErrorCode();
-            Assertions.assertEquals(errorCode, ErrorCode.INSUFFICIENT_BALANCE);
+            Assertions.assertEquals(ErrorCode.INSUFFICIENT_BALANCE, errorCode);
             Assertions.assertEquals(errorCode.getCode(), ErrorCode.INSUFFICIENT_BALANCE.getCode());
-            Assertions.assertEquals(errorCode.getErrorType(), ErrorType.INVALID_REQUEST);
+            Assertions.assertEquals(ErrorType.INVALID_REQUEST, errorCode.getErrorType());
             caught = true;
         }
 
         Assertions.assertTrue(caught);
     }
+
     @Test
-    public void calculateOrder() throws IOException, AbstractException {
+    public void getPrice() throws IOException, AbstractException {
         var orderService = getTinkoffSandbox().getOrderService();
         var share = getTestShare();
         var testAccountId = openTestAccount("TestAccount");
@@ -55,8 +56,8 @@ public class OrderServiceIT extends AbstractTinkoffSanboxIT {
         System.out.println("Testing share: ");
         System.out.println(share);
         System.out.println("\nTesting method calculate: ");
-        var calculateResponse = orderService.calculate(
-            new CalculateRequest(
+        var getPriceResponse = orderService.getPrice(
+            new GetPriceRequest(
                 new PostOrderRequest()
                     .setAccountId(testAccountId)
                     .setInstrumentId(share.getUid())
@@ -65,15 +66,10 @@ public class OrderServiceIT extends AbstractTinkoffSanboxIT {
                     .setQuantity(120)
             )
         );
-        Quotation totalOrderPrice = calculateResponse.instrumentPrice().multiply(120);
-        Quotation expectedTotalBalanceChange = totalOrderPrice
-            .add(totalOrderPrice.multiply(OrderService.DEFAULT_COMMISSION_RATE))
-            .multiply(-1);
-        Assertions.assertEquals(share.getUid(), calculateResponse.instrumentUid());
-        Assertions.assertEquals(expectedTotalBalanceChange, calculateResponse.totalBalanceChange());
-        Assertions.assertEquals(120, calculateResponse.quantity());
-        Assertions.assertFalse(calculateResponse.transactionTemplates().isEmpty());
-        System.out.println("calculateResponse: " + calculateResponse);
+
+        Assertions.assertNotEquals(Quotation.ZERO, getPriceResponse.executedCommission());
+        Assertions.assertNotEquals(Quotation.ZERO, getPriceResponse.totalBalanceChange());
+        System.out.println("getPriceResponse: " + getPriceResponse);
     }
 
     @Test
@@ -207,5 +203,34 @@ public class OrderServiceIT extends AbstractTinkoffSanboxIT {
             System.out.printf("direction: %s\n", order.getDirection());
             System.out.println();
         }
+    }
+
+    @Test
+    public void getMaxLots() throws IOException, AbstractException {
+        var orderService = (GetMaxLotsOrderService) getTinkoffSandbox().getOrderService();
+        var share = getTestShare();
+        var testAccountId = openTestAccount("TestAccount");
+
+        var getMaxLotsResponse = orderService.getMaxLots(
+            new GetMaxLotsRequest(
+                testAccountId,
+                share.getUid(),
+                Quotation.of(BigDecimal.valueOf(122))
+            )
+        );
+
+        Assertions.assertNotNull(getMaxLotsResponse);
+        Assertions.assertNotNull(getMaxLotsResponse.buyLimits());
+        Assertions.assertNotNull(getMaxLotsResponse.sellLimits());
+        Assertions.assertNotNull(getMaxLotsResponse.buyMarginLimits());
+        Assertions.assertNotNull(getMaxLotsResponse.sellMarginLimits());
+        Assertions.assertNotNull(getMaxLotsResponse.currency());
+
+        System.out.println("getMaxLotsResponse: " + getMaxLotsResponse);
+        System.out.println("buyLimits: " + getMaxLotsResponse.buyLimits());
+        System.out.println("sellLimits: " + getMaxLotsResponse.sellLimits());
+        System.out.println("buyMarginLimits: " + getMaxLotsResponse.buyMarginLimits());
+        System.out.println("sellMarginLimits: " + getMaxLotsResponse.sellMarginLimits());
+        System.out.println("currency: " + getMaxLotsResponse.currency());
     }
 }

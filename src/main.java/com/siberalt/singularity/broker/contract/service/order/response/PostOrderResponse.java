@@ -3,9 +3,6 @@ package com.siberalt.singularity.broker.contract.service.order.response;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
 import com.siberalt.singularity.broker.contract.value.money.Money;
-import com.siberalt.singularity.entity.transaction.Transaction;
-
-import java.util.List;
 
 public class PostOrderResponse {
     protected String orderId;
@@ -20,7 +17,8 @@ public class PostOrderResponse {
     protected String message;
     protected String instrumentUid;
     protected String idempotencyKey;
-    protected List<Transaction> transactions;
+    protected Money executedCommission;
+    protected Money initialCommission;
 
     public String getOrderId() {
         return orderId;
@@ -28,6 +26,24 @@ public class PostOrderResponse {
 
     public PostOrderResponse setOrderId(String orderId) {
         this.orderId = orderId;
+        return this;
+    }
+
+    public Money getExecutedCommission() {
+        return executedCommission;
+    }
+
+    public PostOrderResponse setExecutedCommission(Money executedCommission) {
+        this.executedCommission = executedCommission;
+        return this;
+    }
+
+    public Money getInitialCommission() {
+        return initialCommission;
+    }
+
+    public PostOrderResponse setInitialCommission(Money initialCommission) {
+        this.initialCommission = initialCommission;
         return this;
     }
 
@@ -127,15 +143,6 @@ public class PostOrderResponse {
 
     public PostOrderResponse setIdempotencyKey(String idempotencyKey) {
         this.idempotencyKey = idempotencyKey;
-        return this;
-    }
-
-    public List<Transaction> getTransactions() {
-        return transactions;
-    }
-
-    public PostOrderResponse setTransactions(List<Transaction> transactions) {
-        this.transactions = transactions;
         return this;
     }
 }

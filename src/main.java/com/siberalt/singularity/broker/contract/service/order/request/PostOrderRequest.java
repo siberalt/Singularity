@@ -7,7 +7,7 @@ public class PostOrderRequest {
     protected Quotation price;
     protected OrderDirection direction;
     protected String accountId;
-    protected OrderType orderType;
+    protected OrderType orderType = OrderType.MARKET;
     protected String idempotencyKey;
     protected String instrumentId;
     protected PriceType priceType;

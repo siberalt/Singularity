@@ -1,70 +1,75 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
-import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
-import com.siberalt.singularity.broker.contract.service.market.request.GetCurrentPriceRequest;
-import com.siberalt.singularity.broker.contract.service.order.CommissionTransactionSpecProvider;
-import com.siberalt.singularity.broker.contract.service.order.OrderTransactionSpecProvider;
-import com.siberalt.singularity.broker.contract.service.order.TransactionService;
+import com.siberalt.singularity.broker.contract.service.order.GetMaxLotsOrderService;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
+import com.siberalt.singularity.broker.contract.service.order.request.CancelOrderRequest;
+import com.siberalt.singularity.broker.contract.service.order.request.GetMaxLotsRequest;
+import com.siberalt.singularity.broker.contract.service.order.request.GetOrderStateRequest;
+import com.siberalt.singularity.broker.contract.service.order.request.GetOrdersRequest;
 import com.siberalt.singularity.broker.contract.service.order.request.PostOrderRequest;
 import com.siberalt.singularity.broker.contract.service.order.response.*;
 import com.siberalt.singularity.broker.contract.service.order.response.CancelOrderResponse;
+import com.siberalt.singularity.broker.contract.service.order.response.GetMaxLotsResponse;
+import com.siberalt.singularity.broker.contract.service.order.response.GetOrdersResponse;
 import com.siberalt.singularity.broker.contract.service.order.response.OrderState;
 import com.siberalt.singularity.broker.contract.service.order.response.PostOrderResponse;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.exception.ExceptionConverter;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.*;
 import com.siberalt.singularity.broker.shared.ListTranslator;
-import com.siberalt.singularity.entity.instrument.Instrument;
-import com.siberalt.singularity.entity.order.Order;
-import com.siberalt.singularity.entity.transaction.Transaction;
-import com.siberalt.singularity.entity.transaction.TransactionSpec;
-import com.siberalt.singularity.strategy.context.execution.time.RealTimeClock;
-import ru.tinkoff.piapi.contract.v1.OrderExecutionReportStatus;
-import ru.tinkoff.piapi.contract.v1.OrdersServiceGrpc;
-import ru.tinkoff.piapi.contract.v1.Quotation;
+import ru.tinkoff.piapi.contract.v1.*;
 
-import java.util.Collections;
-import java.util.List;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
-import static com.siberalt.singularity.broker.impl.tinkoff.shared.translation.OrderStateTranslator.calculateCommission;
-
-public class OrderService implements com.siberalt.singularity.broker.contract.service.order.OrderService {
-    public static final double DEFAULT_COMMISSION_RATE = 0.003; // 0.3% commission rate
+public class OrderService implements com.siberalt.singularity.broker.contract.service.order.OrderService, GetMaxLotsOrderService {
     private final OrdersServiceGrpc.OrdersServiceBlockingStub ordersServiceApi;
-    private final AbstractTinkoffBroker broker;
-    private final TransactionService transactionService;
-    private final CommissionTransactionSpecProvider commissionTransactionSpecProvider;
+    private final MarketDataServiceGrpc.MarketDataServiceBlockingStub marketDataServiceApi;
 
-    public OrderService(
-        OrdersServiceGrpc.OrdersServiceBlockingStub ordersServiceApi,
-        AbstractTinkoffBroker broker
-    ) {
+    public OrderService(OrdersServiceGrpc.OrdersServiceBlockingStub ordersServiceApi, MarketDataServiceGrpc.MarketDataServiceBlockingStub marketDataServiceStub) {
         this.ordersServiceApi = ordersServiceApi;
-        this.broker = broker;
-        this.commissionTransactionSpecProvider = new CommissionTransactionSpecProvider(DEFAULT_COMMISSION_RATE);
-        this.transactionService = new TransactionService()
-            .addProvider(new OrderTransactionSpecProvider())
-            .addProvider(commissionTransactionSpecProvider);
-    }
-
-    public OrderService setCommissionRate(double commissionRate) {
-        commissionTransactionSpecProvider.setCommissionRatio(commissionRate);
-        return this;
+        this.marketDataServiceApi = marketDataServiceStub;
     }
 
     @Override
-    public CalculateResponse calculate(CalculateRequest request) throws AbstractException {
-        Order order = createOrder(request.getPostOrderRequest());
-        List<TransactionSpec> transactionSpecs = transactionService.calculateSpecs(order);
-        order.setBalanceChange(transactionService.sumSpecs(transactionSpecs));
+    public GetPriceResponse getPrice(GetPriceRequest request) throws AbstractException {
+        PostOrderRequest postOrderRequest = request.getPostOrderRequest();
 
-        return new CalculateResponse(
-            order.getInstrument().getUid(),
-            order.getBalanceChange(),
-            order.getInstrumentPrice(),
-            order.getLotsRequested(),
-            transactionSpecs
+        if (postOrderRequest.getPrice() == null
+            || postOrderRequest.getPrice().equals(com.siberalt.singularity.broker.contract.value.quotation.Quotation.ZERO)) {
+            Instant to = Instant.now();
+            Instant from = to.minus(5, ChronoUnit.MINUTES);
+
+            var candles = marketDataServiceApi.getCandles(
+                GetCandlesRequest.newBuilder()
+                    .setFrom(TimestampTranslator.toTinkoff(from))
+                    .setTo(TimestampTranslator.toTinkoff(to))
+                    .setInstrumentId(request.getPostOrderRequest().getInstrumentId())
+                    .setLimit(5)
+                    .setInterval(CandleInterval.CANDLE_INTERVAL_1_MIN)
+                    .build()
+            );
+
+            if (!candles.getCandlesList().isEmpty()) {
+                var closePrice = candles.getCandlesList().getLast().getClose();
+                postOrderRequest.setPrice(QuotationTranslator.toContract(closePrice));
+            }
+        }
+
+        var response = ExceptionConverter.rethrowContractExceptionOnError(() -> ordersServiceApi.getOrderPrice(
+                GetOrderPriceRequest.newBuilder()
+                    .setPrice(QuotationTranslator.toTinkoff(postOrderRequest.getPrice()))
+                    .setAccountId(postOrderRequest.getAccountId())
+                    .setQuantity(postOrderRequest.getQuantity())
+                    .setDirection(OrderDirectionTranslator.toTinkoff(postOrderRequest.getDirection()))
+                    .setInstrumentId(postOrderRequest.getInstrumentId())
+                    .build()
+            )
+        );
+
+        return new GetPriceResponse(
+            MoneyValueTranslator.toContract(response.getTotalOrderAmount()).getQuotation(),
+            MoneyValueTranslator.toContract(response.getExecutedCommission()).getQuotation()
         );
     }
 
@@ -81,7 +86,7 @@ public class OrderService implements com.siberalt.singularity.broker.contract.se
                 .setOrderType(OrderTypeTranslator.toTinkoff(request.getOrderType()))
                 .build()
         ));
-        return toContractPostOrderResponse(request.getAccountId(), response);
+        return toContractPostOrderResponse(response);
     }
 
     @Override
@@ -118,51 +123,38 @@ public class OrderService implements com.siberalt.singularity.broker.contract.se
         return new GetOrdersResponse().setOrders(ListTranslator.translate(response.getOrdersList(), OrderStateTranslator::toContract));
     }
 
-    private Order createOrder(PostOrderRequest request) throws AbstractException {
-        Instrument instrument = broker.getInstrumentService().get(GetRequest.of(request.getInstrumentId())).getInstrument();
-        var currentPrice = broker
-            .getMarketDataService()
-            .getCurrentPrice(new GetCurrentPriceRequest(request.getInstrumentId())).getPrice();
+    @Override
+    public GetMaxLotsResponse getMaxLots(GetMaxLotsRequest request) throws AbstractException {
+        var response = ExceptionConverter.rethrowContractExceptionOnError(
+            () -> ordersServiceApi.getMaxLots(
+                ru.tinkoff.piapi.contract.v1.GetMaxLotsRequest.newBuilder()
+                    .setAccountId(request.accountId())
+                    .setInstrumentId(request.instrumentId())
+                    .setPrice(QuotationTranslator.toTinkoff(request.price()))
+                    .build()
+            )
+        );
 
-        return new Order()
-            .setLotsRequested(request.getQuantity())
-            .setAccountId(request.getAccountId())
-            .setDirection(request.getDirection())
-            .setOrderType(request.getOrderType())
-            .setInstrument(instrument)
-            .setInstrumentPrice(currentPrice);
+        return GetMaxLotsResponse.builder()
+            .sellLimits(new GetMaxLotsResponse.SellLimits(response.getSellLimits().getSellMaxLots()))
+            .sellMarginLimits(new GetMaxLotsResponse.SellLimits(response.getSellMarginLimits().getSellMaxLots()))
+            .buyMarginLimits(BuyLimitsTranslator.toContract(response.getBuyMarginLimits()))
+            .buyLimits(BuyLimitsTranslator.toContract(response.getBuyLimits()))
+            .currency(response.getCurrency())
+            .build();
     }
 
     protected PostOrderResponse toContractPostOrderResponse(
-        String accountId,
         ru.tinkoff.piapi.contract.v1.PostOrderResponse response
     ) {
-        List<Transaction> transactions;
-
-        if (response.getExecutionReportStatus() == OrderExecutionReportStatus.EXECUTION_REPORT_STATUS_FILL) {
-            List<TransactionSpec> transactionSpecs = List.of(
-                calculateCommission(
-                    response.getExecutedCommission(),
-                    response.getInitialCommission()
-                )
-            );
-            transactions = transactionService.create(
-                transactionSpecs,
-                accountId,
-                "tinkoff",
-                new RealTimeClock()
-            );
-        } else {
-            transactions = Collections.emptyList();
-        }
-
         return new PostOrderResponse()
             .setOrderId(response.getOrderId())
             .setExecutionStatus(OrderExecutionReportStatusTranslator.toContract(response.getExecutionReportStatus()))
             .setLotsRequested(response.getLotsRequested())
             .setLotsExecuted(response.getLotsExecuted())
             .setTotalBalanceChange(MoneyValueTranslator.toContract(response.getTotalOrderAmount()))
-            .setTransactions(transactions)
+            .setExecutedCommission(MoneyValueTranslator.toContract(response.getExecutedCommission()))
+            .setInitialCommission(MoneyValueTranslator.toContract(response.getInitialCommission()))
             .setAciValue(MoneyValueTranslator.toContract(response.getAciValue()))
             .setDirection(OrderDirectionTranslator.toContract(response.getDirection()))
             .setInstrumentPrice(MoneyValueTranslator.toContract(response.getInitialSecurityPrice()))

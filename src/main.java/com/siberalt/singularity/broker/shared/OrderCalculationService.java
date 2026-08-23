@@ -5,11 +5,14 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
 import com.siberalt.singularity.broker.contract.service.market.request.GetCurrentPriceRequest;
 import com.siberalt.singularity.broker.contract.service.operation.request.GetPositionsRequest;
+import com.siberalt.singularity.broker.contract.service.order.GetMaxLotsOrderService;
 import com.siberalt.singularity.broker.contract.service.order.OrderService;
-import com.siberalt.singularity.broker.contract.service.order.request.CalculateRequest;
+import com.siberalt.singularity.broker.contract.service.order.request.GetMaxLotsRequest;
+import com.siberalt.singularity.broker.contract.service.order.request.GetPriceRequest;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.broker.contract.service.order.request.PostOrderRequest;
-import com.siberalt.singularity.broker.contract.service.order.response.CalculateResponse;
+import com.siberalt.singularity.broker.contract.service.order.response.GetMaxLotsResponse;
+import com.siberalt.singularity.broker.contract.service.order.response.GetPriceResponse;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.shared.dto.BuyRequest;
@@ -24,17 +27,23 @@ public class OrderCalculationService {
     public OrderCalculationService() {
     }
 
-    public long calculatePossibleBuyQuantity(Broker broker, Quotation limit, BuyRequest request) throws AbstractException {
+    public long calculateMaxBuyQuantity(Broker broker, Quotation limit, BuyRequest request) throws AbstractException {
         // Retrieve the current price of the instrument
         Quotation instrumentPrice = broker.getMarketDataService()
             .getCurrentPrice(new GetCurrentPriceRequest(request.instrumentId()))
             .getPrice();
 
+        if (broker.getOrderService() instanceof GetMaxLotsOrderService) {
+            GetMaxLotsResponse response = ((GetMaxLotsOrderService) broker.getOrderService())
+                .getMaxLots(new GetMaxLotsRequest(request.accountId(), request.instrumentId(), Quotation.ZERO));
+            return response.buyLimits().buyMaxLots();
+        }
+
         // Call the refactored method
-        return calculatePossibleBuyQuantity(broker.getOrderService(), limit, instrumentPrice, request);
+        return calculateMaxBuyQuantity(broker.getOrderService(), limit, instrumentPrice, request);
     }
 
-    public long calculatePossibleBuyQuantity(Broker broker, BuyRequest request) throws AbstractException {
+    public long calculateMaxBuyQuantity(Broker broker, BuyRequest request) throws AbstractException {
         // Retrieve the currency of the instrument
         String instrumentCurrency = broker.getInstrumentService()
             .get(GetRequest.of(request.instrumentId()))
@@ -57,15 +66,15 @@ public class OrderCalculationService {
             .getPrice();
 
         // Call the refactored method
-        return calculatePossibleBuyQuantity(
+        return calculateMaxBuyQuantity(
             broker.getOrderService(),
             balance,
             instrumentPrice,
-            new BuyRequest(request.accountId(), request.instrumentId(), request.orderType())
+            new BuyRequest(request.accountId(), request.instrumentId())
         );
     }
 
-    public long calculatePossibleBuyQuantity(
+    public long calculateMaxBuyQuantity(
         OrderService orderService,
         Quotation limit,
         Quotation instrumentPrice,
@@ -73,7 +82,7 @@ public class OrderCalculationService {
     )
         throws AbstractException {
         long amount;
-        CalculateResponse response;
+        GetPriceResponse response;
         String accountId = request.accountId();
         String instrumentId = request.instrumentId();
 
@@ -101,13 +110,13 @@ public class OrderCalculationService {
             }
 
             // Get the response for the calculated order
-            response = orderService.calculate(CalculateRequest.of(
+            response = orderService.getPrice(GetPriceRequest.of(
                 new PostOrderRequest()
                     .setAccountId(accountId)
                     .setInstrumentId(instrumentId)
                     .setQuantity(amount)
                     .setDirection(OrderDirection.BUY)
-                    .setOrderType(request.orderType()))
+                )
             );
 
             // Update the price per unit based on the response

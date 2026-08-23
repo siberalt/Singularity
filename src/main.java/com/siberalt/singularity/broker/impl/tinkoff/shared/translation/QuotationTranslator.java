@@ -4,6 +4,10 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 
 public class QuotationTranslator {
     public static ru.tinkoff.piapi.contract.v1.Quotation toTinkoff(Quotation quotation) {
+        if (Quotation.ZERO.equals(quotation) || quotation == null) {
+            return ru.tinkoff.piapi.contract.v1.Quotation.getDefaultInstance();
+        }
+
         return ru.tinkoff.piapi.contract.v1.Quotation.newBuilder()
                 .setNano(quotation.getNano())
                 .setUnits(quotation.getUnits())
@@ -11,6 +15,10 @@ public class QuotationTranslator {
     }
 
     public static Quotation toContract(ru.tinkoff.piapi.contract.v1.Quotation quotation) {
+        if (ru.tinkoff.piapi.contract.v1.Quotation.getDefaultInstance().equals(quotation) || quotation == null) {
+            return Quotation.ZERO;
+        }
+
         return new Quotation()
                 .setNano(quotation.getNano())
                 .setUnits(quotation.getUnits());

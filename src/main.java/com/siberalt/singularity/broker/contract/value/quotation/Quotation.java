@@ -5,6 +5,7 @@ import com.siberalt.singularity.entity.candle.ComparisonOperator;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
+import java.util.List;
 
 public class Quotation {
     public static final Quotation ZERO = Quotation.of(BigDecimal.ZERO);
@@ -155,6 +156,20 @@ public class Quotation {
         }
 
         return value;
+    }
+
+    public static Quotation sum(List<Quotation> quotations) {
+        Quotation result = Quotation.ZERO;
+
+        for (Quotation quotation : quotations) {
+            result = result.add(quotation);
+        }
+
+        return result;
+    }
+
+    public static Quotation sum(Quotation... quotations) {
+        return sum(List.of(quotations));
     }
 
     public boolean compare(Quotation quotationB, ComparisonOperator operator) {

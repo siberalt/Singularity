@@ -4,7 +4,7 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.InvalidRequestException;
 import com.siberalt.singularity.broker.contract.service.exception.NotFoundException;
-import com.siberalt.singularity.broker.contract.service.order.response.CalculateResponse;
+import com.siberalt.singularity.broker.contract.service.order.response.GetPriceResponse;
 import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.entity.position.Position;
@@ -121,7 +121,7 @@ public abstract class MockOrderServiceTest {
     }
 
     @Test
-    public void calculateReturnsCorrectTransactionsForValidRequest() throws AbstractException {
+    public void getPriceReturnsCorrectTransactionsForValidRequest() throws AbstractException {
         PostOrderRequest postOrderRequest = new PostOrderRequest()
             .setInstrumentId(config.getInstrument().getUid())
             .setQuantity(10)
@@ -129,7 +129,7 @@ public abstract class MockOrderServiceTest {
             .setDirection(OrderDirection.BUY)
             .setOrderType(OrderType.MARKET);
 
-        CalculateRequest calculateRequest = new CalculateRequest(postOrderRequest);
+        GetPriceRequest calculateRequest = new GetPriceRequest(postOrderRequest);
 
         Candle testCandle = createCandle(
             currentTime, 10, 15, 5, 10, 100
@@ -139,11 +139,9 @@ public abstract class MockOrderServiceTest {
             .thenReturn(List.of(testCandle));
         when(clock.currentTime()).thenReturn(currentTime);
 
-        CalculateResponse response = orderService.calculate(calculateRequest);
+        GetPriceResponse response = orderService.getPrice(calculateRequest);
 
-        assertNotNull(response.transactionTemplates());
-        assertEquals(10, response.quantity());
-
+        assertNotEquals(Quotation.ZERO, response.executedCommission());
         Quotation expectedBalanceChange = testCandle.open()
             .multiply(10)
             .add(testCandle.open().multiply(10).multiply(commissionRatio))
@@ -153,7 +151,7 @@ public abstract class MockOrderServiceTest {
     }
 
     @Test
-    public void calculateThrowsExceptionForMissingInstrument() {
+    public void getPriceThrowsExceptionForMissingInstrument() {
         PostOrderRequest postOrderRequest = new PostOrderRequest()
             .setInstrumentId("invalidInstrumentId")
             .setQuantity(10)
@@ -161,17 +159,17 @@ public abstract class MockOrderServiceTest {
             .setDirection(OrderDirection.BUY)
             .setOrderType(OrderType.MARKET);
 
-        CalculateRequest calculateRequest = new CalculateRequest(postOrderRequest);
+        GetPriceRequest calculateRequest = new GetPriceRequest(postOrderRequest);
 
         assertThrowsWithErrorCode(
             NotFoundException.class,
             ErrorCode.INSTRUMENT_NOT_FOUND,
-            () -> orderService.calculate(calculateRequest)
+            () -> orderService.getPrice(calculateRequest)
         );
     }
 
     @Test
-    public void calculateThrowsExceptionForMissingAccount() {
+    public void getPriceThrowsExceptionForMissingAccount() {
         PostOrderRequest postOrderRequest = new PostOrderRequest()
             .setInstrumentId(config.getInstrument().getUid())
             .setQuantity(10)
@@ -179,17 +177,17 @@ public abstract class MockOrderServiceTest {
             .setDirection(OrderDirection.BUY)
             .setOrderType(OrderType.MARKET);
 
-        CalculateRequest calculateRequest = new CalculateRequest(postOrderRequest);
+        GetPriceRequest calculateRequest = new GetPriceRequest(postOrderRequest);
 
         assertThrowsWithErrorCode(
             NotFoundException.class,
             ErrorCode.ACCOUNT_NOT_FOUND,
-            () -> orderService.calculate(calculateRequest)
+            () -> orderService.getPrice(calculateRequest)
         );
     }
 
     @Test
-    public void calculateThrowsExceptionForNegativeQuantity() {
+    public void getPriceThrowsExceptionForNegativeQuantity() {
         PostOrderRequest postOrderRequest = new PostOrderRequest()
             .setInstrumentId(config.getInstrument().getUid())
             .setQuantity(-10)
@@ -197,17 +195,17 @@ public abstract class MockOrderServiceTest {
             .setDirection(OrderDirection.BUY)
             .setOrderType(OrderType.MARKET);
 
-        CalculateRequest calculateRequest = new CalculateRequest(postOrderRequest);
+        GetPriceRequest calculateRequest = new GetPriceRequest(postOrderRequest);
 
         assertThrowsWithErrorCode(
             InvalidRequestException.class,
             ErrorCode.QUANTITY_MUST_BE_POSITIVE,
-            () -> orderService.calculate(calculateRequest)
+            () -> orderService.getPrice(calculateRequest)
         );
     }
 
     @Test
-    public void calculateThrowsExceptionForZeroQuantity() {
+    public void getPriceThrowsExceptionForZeroQuantity() {
         PostOrderRequest postOrderRequest = new PostOrderRequest()
             .setInstrumentId(config.getInstrument().getUid())
             .setQuantity(0)
@@ -215,12 +213,12 @@ public abstract class MockOrderServiceTest {
             .setDirection(OrderDirection.BUY)
             .setOrderType(OrderType.MARKET);
 
-        CalculateRequest calculateRequest = new CalculateRequest(postOrderRequest);
+        GetPriceRequest calculateRequest = new GetPriceRequest(postOrderRequest);
 
         assertThrowsWithErrorCode(
             InvalidRequestException.class,
             ErrorCode.QUANTITY_MUST_BE_POSITIVE,
-            () -> orderService.calculate(calculateRequest)
+            () -> orderService.getPrice(calculateRequest)
         );
     }
 
@@ -510,7 +508,7 @@ public abstract class MockOrderServiceTest {
         );
     }
 
-    protected Quotation calculateInstrumentPrice(
+    protected Quotation getPriceInstrumentPrice(
         Candle priceCandle,
         OrderType orderType,
         double bestPriceRatio
@@ -568,7 +566,7 @@ public abstract class MockOrderServiceTest {
         Money avialableMoney = operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
 
         PostOrderResponse postResponse = ordersService.post(request);
-        Quotation instrumentPrice = calculateInstrumentPrice(
+        Quotation instrumentPrice = getPriceInstrumentPrice(
             priceCandle,
             orderType,
             orderService.getSellBestPriceRatio()
@@ -648,7 +646,7 @@ public abstract class MockOrderServiceTest {
         var position = operationsService.getPositionByInstrumentId(testAccount.getId(), instrumentConfig.getUid());
         var instrumentBalance = (position != null) ? position.getBalance() : 0;
         var avialableMoney = operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
-        Quotation instrumentPrice = calculateInstrumentPrice(
+        Quotation instrumentPrice = getPriceInstrumentPrice(
             priceCandle,
             orderType,
             orderService.getBuyBestPriceRatio()

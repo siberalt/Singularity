@@ -29,13 +29,12 @@ public abstract class AbstractTinkoffBroker implements EventSubscriptionBroker, 
 
     protected void init(ConnectorConfiguration configuration) {
         serviceStubFactory = ServiceStubFactory.create(configuration);
+        var marketDataServiceStub = serviceStubFactory.newSyncService(MarketDataServiceGrpc::newBlockingStub).getStub();
 
         orderService = new com.siberalt.singularity.broker.impl.tinkoff.shared.OrderService(
-            serviceStubFactory.newSyncService(OrdersServiceGrpc::newBlockingStub).getStub(), this
+            serviceStubFactory.newSyncService(OrdersServiceGrpc::newBlockingStub).getStub(), marketDataServiceStub
         );
-        marketDataService = new com.siberalt.singularity.broker.impl.tinkoff.shared.MarketDataService(
-            serviceStubFactory.newSyncService(MarketDataServiceGrpc::newBlockingStub).getStub()
-        );
+        marketDataService = new com.siberalt.singularity.broker.impl.tinkoff.shared.MarketDataService(marketDataServiceStub);
         operationsService = new com.siberalt.singularity.broker.impl.tinkoff.shared.OperationsService(
             serviceStubFactory.newSyncService(OperationsServiceGrpc::newBlockingStub).getStub()
         );

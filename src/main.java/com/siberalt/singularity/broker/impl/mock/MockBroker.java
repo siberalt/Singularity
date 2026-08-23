@@ -2,6 +2,8 @@ package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.execution.SandboxServiceAwareBroker;
 import com.siberalt.singularity.broker.contract.execution.StopOrderServiceAwareBroker;
+import com.siberalt.singularity.broker.contract.service.order.CommissionTransactionSpecProvider;
+import com.siberalt.singularity.broker.contract.service.order.OrderTransactionSpecProvider;
 import com.siberalt.singularity.broker.contract.service.order.stop.StopOrderServiceInterface;
 import com.siberalt.singularity.broker.contract.service.sandbox.SandboxService;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
@@ -9,10 +11,13 @@ import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.strategy.context.Clock;
 
-class MockBroker implements
+public class MockBroker implements
     StopOrderServiceAwareBroker,
     SandboxServiceAwareBroker
 {
+    public static final double DEFAULT_COMMISSION_RATIO = 0.003;
+    public static final String DEFAULT_ID = "mock-broker";
+
     protected Clock clock;
     protected MockMarketDataService marketDataService;
     protected MockOrderService orderService;
@@ -20,7 +25,30 @@ class MockBroker implements
     protected MockInstrumentService instrumentService;
     protected MockUserService userService;
     protected MockSandboxService sandboxService;
-    private String id = "mock-broker";
+    protected String id;
+
+    public MockBroker(
+        ReadCandleRepository candleRepository,
+        ReadInstrumentRepository instrumentStorage,
+        OrderRepository orderRepository,
+        Clock clock,
+        double commissionRatio,
+        String id
+    ) {
+        this.clock = clock;
+        orderService = new MockOrderService(
+            this,
+            orderRepository,
+            new CommissionTransactionSpecProvider(commissionRatio),
+            new OrderTransactionSpecProvider()
+        );
+        marketDataService = new MockMarketDataService(this, candleRepository);
+        operationsService = new MockOperationsService(this);
+        instrumentService = new MockInstrumentService(this, instrumentStorage);
+        userService = new MockUserService(this);
+        sandboxService = new MockSandboxService(this);
+        this.id = id;
+    }
 
     public MockBroker(
         ReadCandleRepository candleRepository,
@@ -28,13 +56,7 @@ class MockBroker implements
         OrderRepository orderRepository,
         Clock clock
     ) {
-        this.clock = clock;
-        orderService = new MockOrderService(this, orderRepository);
-        marketDataService = new MockMarketDataService(this, candleRepository);
-        operationsService = new MockOperationsService(this);
-        instrumentService = new MockInstrumentService(this, instrumentStorage);
-        userService = new MockUserService(this);
-        sandboxService = new MockSandboxService(this);
+        this(candleRepository, instrumentStorage, orderRepository, clock, DEFAULT_COMMISSION_RATIO, DEFAULT_ID);
     }
 
     @Override
@@ -74,10 +96,5 @@ class MockBroker implements
 
     public String getId() {
         return id;
-    }
-
-    public MockBroker setId(String id) {
-        this.id = id;
-        return this;
     }
 }

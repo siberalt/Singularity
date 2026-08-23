@@ -8,10 +8,8 @@ import com.siberalt.singularity.broker.contract.service.order.response.OrderStat
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.instrument.Instrument;
-import com.siberalt.singularity.entity.transaction.Transaction;
 
 import java.time.Instant;
-import java.util.List;
 
 public class Order {
     protected String id;
@@ -30,14 +28,24 @@ public class Order {
     protected Instant expirationTime;
     protected Instant executedTime;
     protected Quotation instrumentPrice;
-    protected List<Transaction> transactions;
+    private Quotation executedCommission;
+    private Quotation initialPrice;
 
-    public List<Transaction> getTransactions() {
-        return transactions;
+    public Quotation getExecutedCommission() {
+        return executedCommission;
     }
 
-    public Order setTransactions(List<Transaction> transactions) {
-        this.transactions = transactions;
+    public Order setExecutedCommission(Quotation executedCommission) {
+        this.executedCommission = executedCommission;
+        return this;
+    }
+
+    public Quotation getInitialPrice() {
+        return initialPrice;
+    }
+
+    public Order setInitialPrice(Quotation initialPrice) {
+        this.initialPrice = initialPrice;
         return this;
     }
 

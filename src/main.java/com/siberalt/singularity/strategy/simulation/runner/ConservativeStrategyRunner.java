@@ -1,7 +1,6 @@
 package com.siberalt.singularity.strategy.simulation.runner;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
-import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.impl.mock.EventMockBroker;
 import com.siberalt.singularity.broker.shared.BrokerFacade;
@@ -53,7 +52,7 @@ public class ConservativeStrategyRunner {
             (timeRange, account, eventSimulator) -> {
                 UserActionSimulator<Map<String, Object>> actionSimulator = new UserActionSimulator<>(new HashMap<>());
                 actionSimulator.planAction(timing.buyTime(), x ->
-                    BrokerFacade.of(broker).buyFullBalanceUnchecked(account.getId(), instrumentId, OrderType.MARKET));
+                    BrokerFacade.of(broker).buyFullBalanceUnchecked(account.getId(), instrumentId));
                 actionSimulator.planAction(timing.sellTime(), x ->
                     BrokerFacade.of(broker).closePositionUnchecked(account.getId(), instrumentId));
                 eventSimulator.addSimulationUnit(actionSimulator);
@@ -64,14 +63,14 @@ public class ConservativeStrategyRunner {
     }
 
     private EventMockBroker createBroker(SimulationClock clock) {
-        EventMockBroker broker = new EventMockBroker(
-            candleRepository,
-            instrumentRepository,
-            new InMemoryOrderRepository(),
-            clock
-        );
-        broker.getOrderService().setCommissionRatio(brokerCommission);
-        return broker;
+        return EventMockBroker.builder(
+                candleRepository,
+                instrumentRepository,
+                new InMemoryOrderRepository(),
+                clock
+            )
+            .setCommissionRatio(brokerCommission)
+            .build();
     }
 
     private TradeTiming findTradePoints(Instant startTime, Instant endTime) {

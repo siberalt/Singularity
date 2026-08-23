@@ -1,9 +1,9 @@
 package com.siberalt.singularity.broker.contract.service.order.request;
 
-public class CalculateRequest {
+public class GetPriceRequest {
     private PostOrderRequest postOrderRequest;
 
-    public CalculateRequest(PostOrderRequest postOrderRequest) {
+    public GetPriceRequest(PostOrderRequest postOrderRequest) {
         this.postOrderRequest = postOrderRequest;
     }
 
@@ -11,12 +11,12 @@ public class CalculateRequest {
         return postOrderRequest;
     }
 
-    public CalculateRequest setPostOrderRequest(PostOrderRequest postOrderRequest) {
+    public GetPriceRequest setPostOrderRequest(PostOrderRequest postOrderRequest) {
         this.postOrderRequest = postOrderRequest;
         return this;
     }
 
-    public static CalculateRequest of(PostOrderRequest postOrderRequest) {
-        return new CalculateRequest(postOrderRequest);
+    public static GetPriceRequest of(PostOrderRequest postOrderRequest) {
+        return new GetPriceRequest(postOrderRequest);
     }
 }

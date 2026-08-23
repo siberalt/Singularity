@@ -5,7 +5,7 @@ import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.order.response.*;
 
 public interface OrderService {
-    CalculateResponse calculate(CalculateRequest request) throws AbstractException;
+    GetPriceResponse getPrice(GetPriceRequest request) throws AbstractException;
 
     PostOrderResponse post(PostOrderRequest request) throws AbstractException;
 

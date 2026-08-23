@@ -77,11 +77,12 @@ public class EventSimulatedOrderServiceIT {
         instrumentRepository.save(instrument);
         OrderRepository orderRepository = new InMemoryOrderRepository();
         clock = new SimpleSimulationClock();
-        broker = new EventMockBroker(candleStorage, instrumentRepository, orderRepository, clock);
+        broker = EventMockBroker.builder(candleStorage, instrumentRepository, orderRepository, clock)
+            .setCommissionRatio(0)
+            .build();
 
         EventSimulatedOrderService orderService = broker.getOrderService();
         operationsService = broker.getOperationsService();
-        orderService.setCommissionRatio(0);
 
         eventSimulator = new EventSimulator(clock);
         eventSimulator.addEventInvoker(orderService);

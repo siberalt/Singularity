@@ -2,6 +2,8 @@ package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
+import com.siberalt.singularity.broker.contract.service.order.CommissionTransactionSpecProvider;
+import com.siberalt.singularity.broker.contract.service.order.OrderTransactionSpecProvider;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.broker.contract.service.order.request.PostOrderRequest;
 import com.siberalt.singularity.broker.contract.service.order.response.ExecutionStatus;
@@ -39,6 +41,16 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
 
     public EventSimulatedOrderService(EventMockBroker mockBroker, OrderRepository orderRepository) {
         super(mockBroker, orderRepository);
+        this.mockBroker = mockBroker;
+    }
+
+    public EventSimulatedOrderService(
+        EventMockBroker mockBroker,
+        OrderRepository orderRepository,
+        CommissionTransactionSpecProvider commissionTransactionSpecProvider,
+        OrderTransactionSpecProvider orderTransactionSpecProvider
+    ) {
+        super(mockBroker, orderRepository, commissionTransactionSpecProvider, orderTransactionSpecProvider);
         this.mockBroker = mockBroker;
     }
 
@@ -113,7 +125,7 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
                 order.getLotsRequested(),
                 order.getInstrumentPrice(),
                 order.getBalanceChange(),
-                transactionSpecs
+                order.getExecutedCommission()
             )
         );
         return super.sellInstrument(order, transactionSpecs);
