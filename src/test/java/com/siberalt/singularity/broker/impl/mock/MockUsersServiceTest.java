@@ -17,7 +17,7 @@ public class MockUsersServiceTest {
         var openDate = Instant.parse("2020-12-30T07:00:00Z");
         ClockStub clock = new ClockStub();
         clock.syncCurrentTime(openDate);
-        var mockBroker = new MockBroker(null, null, null, clock);
+        var mockBroker = new MockBroker(null, null, null, null, clock);
 
         var userService = mockBroker.getUserService();
         var accountName = "testAccount";

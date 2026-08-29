@@ -61,7 +61,7 @@ class MockMarketDataServiceIT {
         );
 
         clock = new SimpleSimulationClock();
-        broker = new MockBroker(storageHandler.create(), instrumentRepository, null, clock);
+        broker = new MockBroker(storageHandler.create(), instrumentRepository, null, null, clock);
         marketDataService = broker.getMarketDataService();
     }
 

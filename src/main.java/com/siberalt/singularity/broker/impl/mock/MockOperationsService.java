@@ -5,22 +5,29 @@ import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.ExceptionBuilder;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
 import com.siberalt.singularity.broker.contract.service.operation.OperationsService;
+import com.siberalt.singularity.broker.contract.service.operation.request.GetOperationsRequest;
 import com.siberalt.singularity.broker.contract.service.operation.request.GetPositionsRequest;
+import com.siberalt.singularity.broker.contract.service.operation.response.GetOperationsResponse;
 import com.siberalt.singularity.broker.contract.service.operation.response.GetPositionsResponse;
+import com.siberalt.singularity.entity.operation.ReadOperationRepository;
 import com.siberalt.singularity.entity.position.Position;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.AccountBalance;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.OpenPosition;
 import com.siberalt.singularity.entity.instrument.Instrument;
+import com.siberalt.singularity.shared.TimeRange;
 
+import java.time.Instant;
 import java.util.*;
 
 public class MockOperationsService implements OperationsService {
     private final Map<String, AccountBalance> accountBalances = new HashMap<>();
     private final MockBroker mockBroker;
+    private final ReadOperationRepository operationRepository;
 
-    public MockOperationsService(MockBroker virtualBroker) {
+    public MockOperationsService(MockBroker virtualBroker, ReadOperationRepository operationRepository) {
         this.mockBroker = virtualBroker;
+        this.operationRepository = operationRepository;
     }
 
     public AccountBalance getAccountBalance(String accountId) throws AbstractException {
@@ -39,6 +46,20 @@ public class MockOperationsService implements OperationsService {
             .setSecurities(balance.getPositions())
             .setMoney(balance.getAvailableMoney())
             .setBlocked(balance.getBlockedMonies());
+    }
+
+    @Override
+    public GetOperationsResponse getOperations(GetOperationsRequest request) throws AbstractException {
+        checkAccountExists(request.getAccountId());
+
+        TimeRange timeRange = new TimeRange(
+            request.getFrom() != null ? request.getFrom() : Instant.MIN,
+            request.getTo() != null ? request.getTo() : Instant.MAX
+        );
+
+        var operations = operationRepository.getByAccountId(request.getAccountId(), timeRange);
+
+        return new GetOperationsResponse().setOperations(operations);
     }
 
     public Position getPositionByInstrumentId(String accountId, String instrumentUid) throws AbstractException {

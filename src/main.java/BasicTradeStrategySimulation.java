@@ -14,15 +14,19 @@ import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.entity.instrument.InstrumentRepository;
+import com.siberalt.singularity.entity.operation.InMemoryOperationRepository;
+import com.siberalt.singularity.entity.operation.Operation;
+import com.siberalt.singularity.entity.operation.OperationRepository;
+import com.siberalt.singularity.entity.operation.OperationState;
+import com.siberalt.singularity.entity.operation.ReadOperationRepository;
 import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
-import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.entity.order.OrderRepository;
-import com.siberalt.singularity.entity.order.ReadOrderRepository;
 import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.VolumeChart;
 import com.siberalt.singularity.presenter.google.series.FunctionGroupSeriesProvider;
 import com.siberalt.singularity.presenter.google.series.OrderSeriesProvider;
 import com.siberalt.singularity.service.ConfigFacade;
+import com.siberalt.singularity.shared.TimeRange;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
 import com.siberalt.singularity.strategy.Strategy;
@@ -73,6 +77,7 @@ public class BasicTradeStrategySimulation {
         );
 
         OrderRepository orderRepository = new InMemoryOrderRepository();
+        OperationRepository operationRepository = new InMemoryOperationRepository();
         boolean enableTracing = false;
 
         InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
@@ -103,6 +108,7 @@ public class BasicTradeStrategySimulation {
             candleRepository,
             instrumentRepository,
             orderRepository,
+            operationRepository,
             clock
         )
             .setCommissionRatio(commission)
@@ -111,7 +117,7 @@ public class BasicTradeStrategySimulation {
         StrategyStarter strategyStarter = (timeRange, account, observer) ->
         {
             Strategy strategy = createLevelsStrategy(
-                orderRepository,
+                operationRepository,
                 candleRepository,
                 broker,
                 account,
@@ -139,9 +145,11 @@ public class BasicTradeStrategySimulation {
 
         System.out.println("----------------------------");
 
-        List<Order> orders = orderRepository.getByAccountId(report.accountId())
+        List<Operation> orders = operationRepository.getByAccountId(report.accountId(), new TimeRange(startTime, endTime))
             .stream()
-            .sorted(Comparator.comparing(Order::getCreatedTime)).toList();
+            .filter(operation -> operation.state() == OperationState.EXECUTED)
+            .filter(operation -> operation.direction().isBuy() || operation.direction().isSell())
+            .sorted(Comparator.comparing(Operation::date)).toList();
 
         StrategyResult strategyResult = report.mainStrategyResult();
         StrategyResult conservativeStrategyResult = report.conservativeStrategyResult();
@@ -183,7 +191,7 @@ public class BasicTradeStrategySimulation {
     }
 
     private static Strategy createLevelsStrategy(
-        ReadOrderRepository readOrderRepository,
+        ReadOperationRepository readOperationRepository,
         ReadCandleRepository candleRepository,
         EventSubscriptionBroker broker,
         Account account,
@@ -248,7 +256,7 @@ public class BasicTradeStrategySimulation {
 
         PositionRiskManagerUpsideCalculator riskManagerUpsideCalculator = new PositionRiskManagerUpsideCalculator(
             account.getId(),
-            new BaseEntryPriceCalculator(readOrderRepository),
+            new BaseEntryPriceCalculator(readOperationRepository),
             ATRVolatilityCalculator.ofMultiplier(2)
         );
         SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(5);
@@ -277,7 +285,7 @@ public class BasicTradeStrategySimulation {
     private static void drawOrdersChart(
         List<SnapshotLevelGroup> supportLevelsSnapshots,
         List<SnapshotLevelGroup> resistanceLevelsSnapshots,
-        List<Order> orders,
+        List<Operation> ordersOperations,
         ReadCandleRepository candleRepository,
         String instrumentUid,
         Instant startTime,
@@ -285,7 +293,7 @@ public class BasicTradeStrategySimulation {
         List<LevelPairsSnapshot> levelPairsSnapshots
     ) {
         List<Candle> candles = candleRepository.getPeriod(instrumentUid, startTime, endTime);
-        OrderSeriesProvider orderSeriesProvider = new OrderSeriesProvider(orders, candles)
+        OrderSeriesProvider orderSeriesProvider = new OrderSeriesProvider(ordersOperations, candles)
             .setBuyPointsSize(4)
             .setSellPointsSize(4)
             .setIncludeOutOfRangeOrders(true);

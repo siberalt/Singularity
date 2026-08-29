@@ -23,7 +23,7 @@ public class MockOperationsServiceTest {
     @Test
     void testBasic() throws AbstractException {
         ClockStub clock = new ClockStub();
-        MockBroker mockBroker = new MockBroker(null, null, null, clock);
+        MockBroker mockBroker = new MockBroker(null, null, null, null, clock);
         clock.syncCurrentTime(Instant.parse("2020-12-30T07:00:00Z"));
         MockOperationsService operationsService = mockBroker.getOperationsService();
 

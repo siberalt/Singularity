@@ -8,6 +8,7 @@ import com.siberalt.singularity.broker.contract.service.order.stop.StopOrderServ
 import com.siberalt.singularity.broker.contract.service.sandbox.SandboxService;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
+import com.siberalt.singularity.entity.operation.OperationRepository;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.strategy.context.Clock;
 
@@ -31,6 +32,7 @@ public class MockBroker implements
         ReadCandleRepository candleRepository,
         ReadInstrumentRepository instrumentStorage,
         OrderRepository orderRepository,
+        OperationRepository operationRepository,
         Clock clock,
         double commissionRatio,
         String id
@@ -39,11 +41,12 @@ public class MockBroker implements
         orderService = new MockOrderService(
             this,
             orderRepository,
+            operationRepository,
             new CommissionTransactionSpecProvider(commissionRatio),
             new OrderTransactionSpecProvider()
         );
         marketDataService = new MockMarketDataService(this, candleRepository);
-        operationsService = new MockOperationsService(this);
+        operationsService = new MockOperationsService(this, operationRepository);
         instrumentService = new MockInstrumentService(this, instrumentStorage);
         userService = new MockUserService(this);
         sandboxService = new MockSandboxService(this);
@@ -54,9 +57,10 @@ public class MockBroker implements
         ReadCandleRepository candleRepository,
         ReadInstrumentRepository instrumentStorage,
         OrderRepository orderRepository,
+        OperationRepository operationRepository,
         Clock clock
     ) {
-        this(candleRepository, instrumentStorage, orderRepository, clock, DEFAULT_COMMISSION_RATIO, DEFAULT_ID);
+        this(candleRepository, instrumentStorage, orderRepository, operationRepository, clock, DEFAULT_COMMISSION_RATIO, DEFAULT_ID);
     }
 
     @Override

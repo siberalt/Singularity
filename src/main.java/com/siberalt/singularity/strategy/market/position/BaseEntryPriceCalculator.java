@@ -2,9 +2,11 @@ package com.siberalt.singularity.strategy.market.position;
 
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.TimePoint;
-import com.siberalt.singularity.entity.order.Order;
-import com.siberalt.singularity.entity.order.ReadOrderRepository;
+import com.siberalt.singularity.entity.operation.Operation;
+import com.siberalt.singularity.entity.operation.OperationState;
+import com.siberalt.singularity.entity.operation.ReadOperationRepository;
 import com.siberalt.singularity.shared.TimePointRange;
+import com.siberalt.singularity.shared.TimeRange;
 
 import java.lang.ref.SoftReference;
 import java.time.Instant;
@@ -13,15 +15,15 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class BaseEntryPriceCalculator implements EntryPriceCalculator {
-    private final ReadOrderRepository orderRepository;
+    private final ReadOperationRepository operationRepository;
 
     private static final ConcurrentHashMap<String, SoftReference<CachedEntry>> cache = new ConcurrentHashMap<>();
 
     private record CachedEntry(EntryPrice state, Instant lastProcessedTime) {
     }
 
-    public BaseEntryPriceCalculator(ReadOrderRepository orderRepository) {
-        this.orderRepository = orderRepository;
+    public BaseEntryPriceCalculator(ReadOperationRepository operationRepository) {
+        this.operationRepository = operationRepository;
     }
 
     public EntryPrice calculate(String accountId, String instrumentUid) {
@@ -29,88 +31,91 @@ public class BaseEntryPriceCalculator implements EntryPriceCalculator {
 
         SoftReference<CachedEntry> ref = cache.get(key);
         CachedEntry cached = (ref != null) ? ref.get() : null;
-        List<Order> orders;
+        List<Operation> operations;
         EntryPrice state;
         EntryPrice initialState;
 
         if (cached != null) {
-            orders = orderRepository.getByAccountIdAndInstrumentUidAfterTime(
-                accountId, instrumentUid, cached.lastProcessedTime()
-            );
+            // plusNanos(1) keeps this exclusive of the already-processed checkpoint operation -
+            // TimeRange bounds are inclusive, so without it the last-seen operation would be
+            // re-applied to the running average on every subsequent call.
+            TimeRange sinceCache = new TimeRange(cached.lastProcessedTime().plusNanos(1), Instant.MAX);
+            operations = operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, sinceCache);
             initialState = cached.state();
         } else {
-            orders = orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid);
+            operations = operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX);
             initialState = EntryPrice.EMPTY;
         }
 
-        orders = orders.stream()
-            .filter(Order::isFilled)
-            .filter(o -> o.getExecutedTime() != null) // защита от null
-            .sorted(Comparator.comparing(Order::getExecutedTime))
+        operations = operations.stream()
+            .filter(o -> o.state() == OperationState.EXECUTED)
+            .filter(o -> o.direction().isBuy() || o.direction().isSell())
+            .filter(o -> o.executedDate() != null) // защита от null
+            .sorted(Comparator.comparing(Operation::executedDate))
             .toList();
 
-        if (orders.isEmpty()) {
+        if (operations.isEmpty()) {
             return initialState;
         }
 
-        state = aggregateOrders(initialState, orders);
+        state = aggregateOperations(initialState, operations);
 
-        Instant lastTime = orders.getLast().getExecutedTime();
+        Instant lastTime = operations.getLast().executedDate();
         cache.put(key, new SoftReference<>(new CachedEntry(state, lastTime)));
         return state;
     }
 
-    private EntryPrice aggregateOrders(EntryPrice previous, List<Order> orders) {
+    private EntryPrice aggregateOperations(EntryPrice previous, List<Operation> operations) {
         EntryPrice state = previous;
 
-        for (Order order : orders) {
-            state = applyOrder(state, order);
+        for (Operation operation : operations) {
+            state = applyOperation(state, operation);
         }
 
         return state;
     }
 
-    private EntryPrice applyOrder(EntryPrice previous, Order order) {
+    private EntryPrice applyOperation(EntryPrice previous, Operation operation) {
         long previousQuantity = previous.quantity();
         double previousPrice = previous.averagePrice().toDouble();
 
-        double orderPrice = order.getInstrumentPrice().toDouble();
-        long orderLots = order.getLotsExecuted();
-        boolean isBuy = order.getDirection().isBuy();
+        double operationPrice = operation.price().toDouble();
+        long operationLots = operation.quantityDone();
+        boolean isBuy = operation.direction().isBuy();
 
         if (previousQuantity == 0) {
             return new EntryPrice(
-                isBuy ? orderLots : -orderLots,
-                Quotation.of(orderPrice),
-                new TimePointRange(new TimePoint(order.getExecutedTime()))
+                isBuy ? operationLots : -operationLots,
+                Quotation.of(operationPrice),
+                new TimePointRange(new TimePoint(operation.executedDate()))
             );
         }
 
         if ((previousQuantity > 0 && isBuy) || (previousQuantity < 0 && !isBuy)) {
             long oldVolume = Math.abs(previousQuantity);
-            long newVolume = oldVolume + orderLots;
-            double newAvg = (previousPrice * oldVolume + orderPrice * orderLots) / newVolume;
+            long newVolume = oldVolume + operationLots;
+            double newAvg = (previousPrice * oldVolume + operationPrice * operationLots) / newVolume;
 
             return new EntryPrice(
                 previousQuantity > 0 ? newVolume : -newVolume,
                 Quotation.of(newAvg),
                 TimePointRange.unionByInstants(
                     previous.timePointRange(),
-                    new TimePointRange(new TimePoint(order.getExecutedTime()))
+                    new TimePointRange(new TimePoint(operation.executedDate()))
                 )
             );
         } else {
             long oppositeVolume = Math.abs(previousQuantity);
-            if (orderLots > oppositeVolume) {
-                long remaining = orderLots - oppositeVolume;
+            if (operationLots > oppositeVolume) {
+                long remaining = operationLots - oppositeVolume;
 
                 return new EntryPrice(
                     isBuy ? remaining : -remaining,
-                    Quotation.of(orderPrice),
-                    new TimePointRange(new TimePoint(order.getExecutedTime()))
+                    Quotation.of(operationPrice),
+                    new TimePointRange(new TimePoint(operation.executedDate()))
                 );
-            } else if (orderLots < oppositeVolume) {
-                long newQty = previousQuantity + (isBuy ? orderLots : -orderLots);
+            } else if (operationLots < oppositeVolume) {
+                long newQty = previousQuantity + (isBuy ? operationLots : -operationLots);
 
                 return new EntryPrice(newQty, Quotation.of(previousPrice), previous.timePointRange());
             } else {

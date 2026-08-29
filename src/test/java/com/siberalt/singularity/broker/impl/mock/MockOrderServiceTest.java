@@ -19,11 +19,16 @@ import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.config.InstrumentConfig;
 import com.siberalt.singularity.broker.impl.mock.config.MockBrokerConfig;
+import com.siberalt.singularity.entity.operation.InMemoryOperationRepository;
+import com.siberalt.singularity.entity.operation.Operation;
+import com.siberalt.singularity.entity.operation.OperationRepository;
+import com.siberalt.singularity.entity.operation.OperationState;
 import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.shared.TimeRange;
 import com.siberalt.singularity.strategy.context.Clock;
 import com.siberalt.singularity.test.util.ConfigLoader;
 import org.junit.jupiter.api.Assertions;
@@ -32,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -49,6 +55,7 @@ public abstract class MockOrderServiceTest {
     protected Quotation commissionRatio;
     protected ReadInstrumentRepository instrumentStorage;
     protected OrderRepository orderRepository;
+    protected OperationRepository operationRepository;
     protected Clock clock;
 
     @BeforeEach
@@ -63,11 +70,12 @@ public abstract class MockOrderServiceTest {
         when(instrumentStorage.get(instrument.getUid())).thenReturn(instrument);
         candleStorage = mock(ReadCandleRepository.class);
         orderRepository = new InMemoryOrderRepository();
+        operationRepository = new InMemoryOperationRepository();
 
         clock = mock(Clock.class);
         when(clock.currentTime()).thenReturn(currentTime);
 
-        broker = createBroker(candleStorage, instrumentStorage, orderRepository, clock);
+        broker = createBroker(candleStorage, instrumentStorage, orderRepository, operationRepository, clock);
         testAccount = broker.getUserService().openAccount(
             "testAccount",
             AccountType.ORDINARY,
@@ -81,6 +89,7 @@ public abstract class MockOrderServiceTest {
         ReadCandleRepository candleStorage,
         ReadInstrumentRepository instrumentStorage,
         OrderRepository orderRepository,
+        OperationRepository operationRepository,
         Clock clock
     );
 
@@ -227,23 +236,35 @@ public abstract class MockOrderServiceTest {
         PostOrderResponse[] postOrderResponses = requestsForTestGet();
         GetOrdersResponse response = orderService.get(GetOrdersRequest.of(testAccount.getId()));
 
-        for (int i = 0; i < response.getOrders().size(); i++) {
-            var postOrderResponse = postOrderResponses[i];
+        // Every request in requestsForTestGet() resolves immediately (see subclass fixtures), so
+        // nothing should remain active in OrderRepository once they've all posted.
+        assertTrue(response.getOrders().isEmpty());
 
-            for (var order : response.getOrders()) {
-                if (order.getOrderId().equals(postOrderResponse.getOrderId())) {
-                    assertEquals(postOrderResponse.getOrderId(), order.getOrderId());
-                    assertEquals(postOrderResponse.getDirection(), order.getDirection());
-                    assertEquals(postOrderResponse.getOrderType(), order.getOrderType());
-                    assertEquals(postOrderResponse.getLotsRequested(), order.getLotsRequested());
-                    assertEquals(postOrderResponse.getLotsExecuted(), order.getLotsExecuted());
-                    assertEquals(postOrderResponse.getTotalBalanceChange(), order.getBalanceChange());
-                    assertEquals(postOrderResponse.getExecutionStatus(), order.getExecutionStatus());
+        // Operations no longer share an id with the order that produced them (one order maps to a
+        // price operation plus a fee operation), so correlate by field signature instead, consuming
+        // matches one-to-one to keep the check meaningful even when two orders share a signature.
+        List<Operation> remainingTradeOperations = new ArrayList<>(
+            operationRepository.getByAccountId(testAccount.getId(), TimeRange.MAX)
+                .stream()
+                .filter(operation -> operation.direction().isBuy() || operation.direction().isSell())
+                .toList()
+        );
 
-                    break;
-                }
-            }
+        for (PostOrderResponse postOrderResponse : postOrderResponses) {
+            Operation match = remainingTradeOperations.stream()
+                .filter(operation -> operation.state() == OperationState.EXECUTED)
+                .filter(operation -> operation.direction().isBuy() == postOrderResponse.getDirection().isBuy())
+                .filter(operation -> operation.instrumentUid().equals(postOrderResponse.getInstrumentUid()))
+                .filter(operation -> operation.quantity() == postOrderResponse.getLotsRequested())
+                .filter(operation -> operation.quantityDone() == postOrderResponse.getLotsExecuted())
+                .findFirst()
+                .orElse(null);
+
+            assertNotNull(match, "No matching trade operation found for order " + postOrderResponse.getOrderId());
+            remainingTradeOperations.remove(match);
         }
+
+        assertTrue(remainingTradeOperations.isEmpty());
     }
 
     @Test
@@ -420,29 +441,30 @@ public abstract class MockOrderServiceTest {
 
         var postResponse = assertBuyOrder(validCandle, OrderType.MARKET, 10, validCandle.open());
 
-        var state = orderService.getState(
-            new GetOrderStateRequest()
-                .setOrderId(postResponse.getOrderId())
-                .setAccountId(testAccount.getId())
-        );
-
-        assertEquals(postResponse.getOrderId(), state.getOrderId());
-        assertEquals(postResponse.getDirection(), state.getDirection());
-        assertEquals(postResponse.getOrderType(), state.getOrderType());
-        assertEquals(postResponse.getLotsRequested(), state.getLotsRequested());
-        assertEquals(postResponse.getLotsExecuted(), state.getLotsExecuted());
-        assertEquals(postResponse.getTotalBalanceChange(), state.getBalanceChange());
-        assertEquals(postResponse.getExecutionStatus(), state.getExecutionStatus());
-
+        // MARKET orders fill immediately and are evicted from OrderRepository right away in favor
+        // of an Operation record - getState() on a resolved order is now indistinguishable from
+        // one that never existed.
         assertThrowsWithErrorCode(
             NotFoundException.class,
             ErrorCode.ORDER_NOT_FOUND,
             () -> orderService.getState(
                 new GetOrderStateRequest()
-                    .setOrderId("invalidOrderId")
+                    .setOrderId(postResponse.getOrderId())
                     .setAccountId(testAccount.getId())
             )
         );
+
+        Optional<Operation> tradeOperation = operationRepository.getByAccountId(testAccount.getId(), TimeRange.MAX)
+            .stream()
+            .filter(operation -> operation.state() == OperationState.EXECUTED)
+            .filter(operation -> operation.direction().isBuy() || operation.direction().isSell())
+            .findFirst();
+
+        assertTrue(tradeOperation.isPresent());
+        assertEquals(postResponse.getDirection().isBuy(), tradeOperation.get().direction().isBuy());
+        assertEquals(postResponse.getInstrumentUid(), tradeOperation.get().instrumentUid());
+        assertEquals(postResponse.getLotsRequested(), tradeOperation.get().quantity());
+        assertEquals(postResponse.getLotsExecuted(), tradeOperation.get().quantityDone());
 
         assertThrowsWithErrorCode(
             NotFoundException.class,

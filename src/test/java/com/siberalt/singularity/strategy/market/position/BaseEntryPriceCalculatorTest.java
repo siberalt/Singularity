@@ -1,13 +1,13 @@
 package com.siberalt.singularity.strategy.market.position;
 
-import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
-import com.siberalt.singularity.broker.contract.service.order.response.ExecutionStatus;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.TimePoint;
-import com.siberalt.singularity.entity.instrument.Instrument;
-import com.siberalt.singularity.entity.order.Order;
-import com.siberalt.singularity.entity.order.ReadOrderRepository;
+import com.siberalt.singularity.entity.operation.Operation;
+import com.siberalt.singularity.entity.operation.OperationState;
+import com.siberalt.singularity.entity.operation.OperationType;
+import com.siberalt.singularity.entity.operation.ReadOperationRepository;
 import com.siberalt.singularity.shared.TimePointRange;
+import com.siberalt.singularity.shared.TimeRange;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,18 +29,23 @@ import static org.mockito.Mockito.when;
 
 @DisplayName("BaseEntryPriceCalculator Тесты")
 class BaseEntryPriceCalculatorTest {
-    private ReadOrderRepository orderRepository;
+    private ReadOperationRepository operationRepository;
     private BaseEntryPriceCalculator calculator;
 
     @BeforeEach
     void setUp() {
-        orderRepository = mock(ReadOrderRepository.class);
-        calculator = new BaseEntryPriceCalculator(orderRepository);
+        operationRepository = mock(ReadOperationRepository.class);
+        calculator = new BaseEntryPriceCalculator(operationRepository);
     }
 
     @AfterEach
     void tearDown() {
         BaseEntryPriceCalculator.clearCache();
+    }
+
+    /** Mirrors BaseEntryPriceCalculator's own "since cache checkpoint" range construction. */
+    private static TimeRange sinceCache(Instant checkpoint) {
+        return new TimeRange(checkpoint.plusNanos(1), Instant.MAX);
     }
 
     // ==================== Тесты базовой агрегации ====================
@@ -54,14 +59,15 @@ class BaseEntryPriceCalculatorTest {
         void testEmptyStateWhenNoOrders() {
             String accountId = "test-account";
             String instrumentUid = "test-instrument";
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
                 .thenReturn(Collections.emptyList());
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
             assertTrue(state.isEmpty());
             assertEquals(EntryPrice.EMPTY, state);
-            verify(orderRepository, times(1)).getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid));
+            verify(operationRepository, times(1))
+                .getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid), eq(TimeRange.MAX));
         }
 
         @Test
@@ -73,17 +79,18 @@ class BaseEntryPriceCalculatorTest {
             Instant time1 = Instant.parse("2024-09-28T18:00:00Z");
             Instant time2 = Instant.parse("2024-09-29T18:00:00Z");
 
-            Order buyOrder1 = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, time1);
-            Order buyOrder2 = createOrder(50, 12.0, OrderDirection.BUY, ExecutionStatus.FILL, time2);
+            Operation buyOperation1 = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, time1);
+            Operation buyOperation2 = createOperation(50, 12.0, OperationType.BUY, OperationState.EXECUTED, time2);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(Arrays.asList(buyOrder1, buyOrder2));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(Arrays.asList(buyOperation1, buyOperation2));
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
             assertEquals(150, state.quantity());
             assertEquals(10.666666666666666, state.averagePrice().toDouble(), 0.0001);
-            verify(orderRepository, times(1)).getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid));
+            verify(operationRepository, times(1))
+                .getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid), eq(TimeRange.MAX));
         }
 
         @Test
@@ -95,18 +102,19 @@ class BaseEntryPriceCalculatorTest {
             Instant time1 = Instant.parse("2024-09-28T18:00:00Z");
             Instant time2 = Instant.parse("2024-09-29T18:00:00Z");
 
-            Order filledOrder = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, time1);
-            Order unfilledOrder = createOrder(50, 15.0, OrderDirection.BUY, ExecutionStatus.CANCELLED, time2);
+            Operation filledOperation = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, time1);
+            Operation unfilledOperation = createOperation(50, 15.0, OperationType.BUY, OperationState.CANCELED, time2);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(Arrays.asList(filledOrder, unfilledOrder));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(Arrays.asList(filledOperation, unfilledOperation));
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
             assertEquals(100, state.quantity());
             assertEquals(10.0, state.averagePrice().toDouble());
             assertEquals(new TimePointRange(new TimePoint(time1)), state.timePointRange());
-            verify(orderRepository, times(1)).getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid));
+            verify(operationRepository, times(1))
+                .getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid), eq(TimeRange.MAX));
         }
 
         @Test
@@ -119,12 +127,12 @@ class BaseEntryPriceCalculatorTest {
             Instant time2 = Instant.parse("2024-09-29T18:00:00Z");
             Instant time3 = Instant.parse("2024-10-30T18:00:00Z");
 
-            Order buyOrder1 = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, time1);
-            Order buyOrder2 = createOrder(100, 12.0, OrderDirection.BUY, ExecutionStatus.FILL, time2);
-            Order buyOrder3 = createOrder(100, 14.0, OrderDirection.BUY, ExecutionStatus.FILL, time3);
+            Operation buyOperation1 = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, time1);
+            Operation buyOperation2 = createOperation(100, 12.0, OperationType.BUY, OperationState.EXECUTED, time2);
+            Operation buyOperation3 = createOperation(100, 14.0, OperationType.BUY, OperationState.EXECUTED, time3);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(Arrays.asList(buyOrder1, buyOrder2, buyOrder3));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(Arrays.asList(buyOperation1, buyOperation2, buyOperation3));
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
@@ -135,7 +143,8 @@ class BaseEntryPriceCalculatorTest {
             assertEquals(300, state.quantity());
             assertEquals(12.0, state.averagePrice().toDouble());
             assertEquals(expectedRange, state.timePointRange());
-            verify(orderRepository, times(1)).getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid));
+            verify(operationRepository, times(1))
+                .getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid), eq(TimeRange.MAX));
         }
     }
 
@@ -154,11 +163,11 @@ class BaseEntryPriceCalculatorTest {
             Instant time1 = Instant.parse("2024-09-28T18:00:00Z");
             Instant time2 = Instant.parse("2024-09-29T18:00:00Z");
 
-            Order buyOrder = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, time1);
-            Order sellOrder = createOrder(50, 12.0, OrderDirection.SELL, ExecutionStatus.FILL, time2);
+            Operation buyOperation = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, time1);
+            Operation sellOperation = createOperation(50, 12.0, OperationType.SELL, OperationState.EXECUTED, time2);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(Arrays.asList(buyOrder, sellOrder));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(Arrays.asList(buyOperation, sellOperation));
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
@@ -175,11 +184,11 @@ class BaseEntryPriceCalculatorTest {
             Instant time1 = Instant.parse("2024-09-28T18:00:00Z");
             Instant time2 = Instant.parse("2024-09-29T18:00:00Z");
 
-            Order buyOrder = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, time1);
-            Order sellOrder = createOrder(150, 12.0, OrderDirection.SELL, ExecutionStatus.FILL, time2);
+            Operation buyOperation = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, time1);
+            Operation sellOperation = createOperation(150, 12.0, OperationType.SELL, OperationState.EXECUTED, time2);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(Arrays.asList(buyOrder, sellOrder));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(Arrays.asList(buyOperation, sellOperation));
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
@@ -197,11 +206,11 @@ class BaseEntryPriceCalculatorTest {
             Instant time1 = Instant.parse("2024-09-28T18:00:00Z");
             Instant time2 = Instant.parse("2024-09-29T18:00:00Z");
 
-            Order buyOrder = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, time1);
-            Order sellOrder = createOrder(100, 10.0, OrderDirection.SELL, ExecutionStatus.FILL, time2);
+            Operation buyOperation = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, time1);
+            Operation sellOperation = createOperation(100, 10.0, OperationType.SELL, OperationState.EXECUTED, time2);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(Arrays.asList(buyOrder, sellOrder));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(Arrays.asList(buyOperation, sellOperation));
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
@@ -218,12 +227,12 @@ class BaseEntryPriceCalculatorTest {
             Instant time2 = Instant.parse("2024-09-29T18:00:00Z");
             Instant time3 = Instant.parse("2024-09-30T23:00:00Z");
 
-            Order sellOrder1 = createOrder(100, 10.0, OrderDirection.SELL, ExecutionStatus.FILL, time1);
-            Order sellOrder2 = createOrder(100, 12.0, OrderDirection.SELL, ExecutionStatus.FILL, time2);
-            Order sellOrder3 = createOrder(100, 14.0, OrderDirection.SELL, ExecutionStatus.FILL, time3);
+            Operation sellOperation1 = createOperation(100, 10.0, OperationType.SELL, OperationState.EXECUTED, time1);
+            Operation sellOperation2 = createOperation(100, 12.0, OperationType.SELL, OperationState.EXECUTED, time2);
+            Operation sellOperation3 = createOperation(100, 14.0, OperationType.SELL, OperationState.EXECUTED, time3);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(Arrays.asList(sellOrder1, sellOrder2, sellOrder3));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(Arrays.asList(sellOperation1, sellOperation2, sellOperation3));
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
@@ -234,7 +243,8 @@ class BaseEntryPriceCalculatorTest {
             assertEquals(-300, state.quantity());
             assertEquals(12.0, state.averagePrice().toDouble());
             assertEquals(expectedRange, state.timePointRange());
-            verify(orderRepository, times(1)).getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid));
+            verify(operationRepository, times(1))
+                .getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid), eq(TimeRange.MAX));
         }
 
         @Test
@@ -246,18 +256,19 @@ class BaseEntryPriceCalculatorTest {
             Instant time1 = Instant.parse("2024-09-28T18:00:00Z");
             Instant time2 = Instant.parse("2024-09-29T18:00:00Z");
 
-            Order buyOrder = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, time1);
-            Order sellOrder = createOrder(60, 12.0, OrderDirection.SELL, ExecutionStatus.FILL, time2);
+            Operation buyOperation = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, time1);
+            Operation sellOperation = createOperation(60, 12.0, OperationType.SELL, OperationState.EXECUTED, time2);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(Arrays.asList(buyOrder, sellOrder));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(Arrays.asList(buyOperation, sellOperation));
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
             assertEquals(40, state.quantity());
             assertEquals(10.0, state.averagePrice().toDouble());
             assertEquals(new TimePointRange(new TimePoint(time1)), state.timePointRange());
-            verify(orderRepository, times(1)).getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid));
+            verify(operationRepository, times(1))
+                .getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid), eq(TimeRange.MAX));
         }
 
         @Test
@@ -269,16 +280,17 @@ class BaseEntryPriceCalculatorTest {
             Instant time1 = Instant.parse("2024-09-28T18:00:00Z");
             Instant time2 = Instant.parse("2024-09-29T18:00:00Z");
 
-            Order buyOrder = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, time1);
-            Order sellOrder = createOrder(100, 15.0, OrderDirection.SELL, ExecutionStatus.FILL, time2);
+            Operation buyOperation = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, time1);
+            Operation sellOperation = createOperation(100, 15.0, OperationType.SELL, OperationState.EXECUTED, time2);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(Arrays.asList(buyOrder, sellOrder));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(Arrays.asList(buyOperation, sellOperation));
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
             assertTrue(state.isEmpty());
-            verify(orderRepository, times(1)).getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid));
+            verify(operationRepository, times(1))
+                .getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid), eq(TimeRange.MAX));
         }
     }
 
@@ -293,7 +305,7 @@ class BaseEntryPriceCalculatorTest {
         void testEmptyTimePointRangeWhenNoOrders() {
             String accountId = "test-account";
             String instrumentUid = "test-instrument";
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
                 .thenReturn(Collections.emptyList());
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
@@ -309,11 +321,11 @@ class BaseEntryPriceCalculatorTest {
             Instant time1 = Instant.parse("2025-01-01T10:00:00Z");
             Instant time2 = Instant.parse("2025-01-01T11:00:00Z");
 
-            Order buyOrder1 = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, time1);
-            Order buyOrder2 = createOrder(50, 12.0, OrderDirection.BUY, ExecutionStatus.FILL, time2);
+            Operation buyOperation1 = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, time1);
+            Operation buyOperation2 = createOperation(50, 12.0, OperationType.BUY, OperationState.EXECUTED, time2);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(Arrays.asList(buyOrder1, buyOrder2));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(Arrays.asList(buyOperation1, buyOperation2));
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
@@ -327,27 +339,28 @@ class BaseEntryPriceCalculatorTest {
             String accountId = "test-account";
             String instrumentUid = "test-instrument";
 
-            Instant oldBuyOrderTime = Instant.parse("2025-01-01T10:00:00Z");
-            Instant newBuyOrderTime = Instant.parse("2025-01-01T15:00:00Z");
+            Instant oldBuyOperationTime = Instant.parse("2025-01-01T10:00:00Z");
+            Instant newBuyOperationTime = Instant.parse("2025-01-01T15:00:00Z");
 
-            Order oldBuyOrder = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, oldBuyOrderTime);
-            Order newBuyOrder = createOrder(50, 12.0, OrderDirection.BUY, ExecutionStatus.FILL, newBuyOrderTime);
+            Operation oldBuyOperation = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, oldBuyOperationTime);
+            Operation newBuyOperation = createOperation(50, 12.0, OperationType.BUY, OperationState.EXECUTED, newBuyOperationTime);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(List.of(oldBuyOrder));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(List.of(oldBuyOperation));
 
             EntryPrice entryPrice1 = calculator.calculate(accountId, instrumentUid);
-            assertEquals(oldBuyOrderTime, entryPrice1.timePointRange().fromTime());
-            assertEquals(oldBuyOrderTime, entryPrice1.timePointRange().toTime());
+            assertEquals(oldBuyOperationTime, entryPrice1.timePointRange().fromTime());
+            assertEquals(oldBuyOperationTime, entryPrice1.timePointRange().toTime());
 
-            when(orderRepository.getByAccountIdAndInstrumentUidAfterTime(eq(accountId), eq(instrumentUid), eq(oldBuyOrderTime)))
-                .thenReturn(List.of(newBuyOrder));
+            when(operationRepository.getByAccountIdAndInstrumentUid(
+                eq(accountId), eq(instrumentUid), eq(sinceCache(oldBuyOperationTime))
+            )).thenReturn(List.of(newBuyOperation));
 
             EntryPrice entryPrice = calculator.calculate(accountId, instrumentUid);
 
             // Время объединяется: от старой заявки до новой
-            assertEquals(oldBuyOrderTime, entryPrice.timePointRange().fromTime());
-            assertEquals(newBuyOrderTime, entryPrice.timePointRange().toTime());
+            assertEquals(oldBuyOperationTime, entryPrice.timePointRange().fromTime());
+            assertEquals(newBuyOperationTime, entryPrice.timePointRange().toTime());
         }
 
         @Test
@@ -359,12 +372,12 @@ class BaseEntryPriceCalculatorTest {
             Instant time2 = Instant.parse("2025-01-01T10:00:00Z");
             Instant time3 = Instant.parse("2025-01-01T11:00:00Z");
 
-            Order buyOrder1 = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, time1);
-            Order buyOrder2 = createOrder(100, 12.0, OrderDirection.BUY, ExecutionStatus.FILL, time2);
-            Order buyOrder3 = createOrder(100, 14.0, OrderDirection.BUY, ExecutionStatus.FILL, time3);
+            Operation buyOperation1 = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, time1);
+            Operation buyOperation2 = createOperation(100, 12.0, OperationType.BUY, OperationState.EXECUTED, time2);
+            Operation buyOperation3 = createOperation(100, 14.0, OperationType.BUY, OperationState.EXECUTED, time3);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(Arrays.asList(buyOrder1, buyOrder2, buyOrder3));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(Arrays.asList(buyOperation1, buyOperation2, buyOperation3));
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
@@ -381,11 +394,11 @@ class BaseEntryPriceCalculatorTest {
             Instant time1 = Instant.parse("2025-01-01T09:00:00Z");
             Instant time2 = Instant.parse("2025-01-01T12:00:00Z");
 
-            Order buyOrder = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, time1);
-            Order sellOrder = createOrder(50, 12.0, OrderDirection.SELL, ExecutionStatus.FILL, time2);
+            Operation buyOperation = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, time1);
+            Operation sellOperation = createOperation(50, 12.0, OperationType.SELL, OperationState.EXECUTED, time2);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(Arrays.asList(buyOrder, sellOrder));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(Arrays.asList(buyOperation, sellOperation));
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
@@ -403,11 +416,11 @@ class BaseEntryPriceCalculatorTest {
             Instant time1 = Instant.parse("2025-01-01T08:00:00Z");
             Instant time2 = Instant.parse("2025-01-01T14:00:00Z");
 
-            Order buyOrder = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, time1);
-            Order sellOrder = createOrder(150, 12.0, OrderDirection.SELL, ExecutionStatus.FILL, time2);
+            Operation buyOperation = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, time1);
+            Operation sellOperation = createOperation(150, 12.0, OperationType.SELL, OperationState.EXECUTED, time2);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(Arrays.asList(buyOrder, sellOrder));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(Arrays.asList(buyOperation, sellOperation));
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
@@ -431,22 +444,25 @@ class BaseEntryPriceCalculatorTest {
             String instrumentUid = "test-instrument";
             Instant baseTime = Instant.parse("2025-01-01T10:00:00Z");
 
-            Order buyOrder = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, baseTime);
+            Operation buyOperation = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, baseTime);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(List.of(buyOrder));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(List.of(buyOperation));
 
             calculator.calculate(accountId, instrumentUid);
 
-            when(orderRepository.getByAccountIdAndInstrumentUidAfterTime(eq(accountId), eq(instrumentUid), eq(baseTime)))
-                .thenReturn(Collections.emptyList());
+            when(operationRepository.getByAccountIdAndInstrumentUid(
+                eq(accountId), eq(instrumentUid), eq(sinceCache(baseTime))
+            )).thenReturn(Collections.emptyList());
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
             assertEquals(100, state.quantity());
             assertEquals(10.0, state.averagePrice().toDouble());
-            verify(orderRepository, times(1)).getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid));
-            verify(orderRepository, times(1)).getByAccountIdAndInstrumentUidAfterTime(eq(accountId), eq(instrumentUid), eq(baseTime));
+            verify(operationRepository, times(1))
+                .getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid), eq(TimeRange.MAX));
+            verify(operationRepository, times(1))
+                .getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid), eq(sinceCache(baseTime)));
         }
 
         @Test
@@ -455,29 +471,32 @@ class BaseEntryPriceCalculatorTest {
             String accountId = "test-account";
             String instrumentUid = "test-instrument";
 
-            Instant oldBuyOrderTime = Instant.parse("2025-01-01T10:00:00Z");
-            Instant newBuyOrderTime = Instant.parse("2025-01-01T15:00:00Z");
+            Instant oldBuyOperationTime = Instant.parse("2025-01-01T10:00:00Z");
+            Instant newBuyOperationTime = Instant.parse("2025-01-01T15:00:00Z");
 
-            Order oldBuyOrder = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, oldBuyOrderTime);
-            Order newBuyOrder = createOrder(50, 12.0, OrderDirection.BUY, ExecutionStatus.FILL, newBuyOrderTime);
+            Operation oldBuyOperation = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, oldBuyOperationTime);
+            Operation newBuyOperation = createOperation(50, 12.0, OperationType.BUY, OperationState.EXECUTED, newBuyOperationTime);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(List.of(oldBuyOrder));
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(List.of(oldBuyOperation));
 
             calculator.calculate(accountId, instrumentUid);
 
-            when(orderRepository.getByAccountIdAndInstrumentUidAfterTime(eq(accountId), eq(instrumentUid), eq(oldBuyOrderTime)))
-                .thenReturn(List.of(newBuyOrder));
+            when(operationRepository.getByAccountIdAndInstrumentUid(
+                eq(accountId), eq(instrumentUid), eq(sinceCache(oldBuyOperationTime))
+            )).thenReturn(List.of(newBuyOperation));
 
             EntryPrice state = calculator.calculate(accountId, instrumentUid);
 
             assertEquals(150, state.quantity());
             assertEquals(10.666666666666666, state.averagePrice().toDouble(), 0.0001);
             // Время объединяется: от старой заявки до новой
-            assertEquals(oldBuyOrderTime, state.timePointRange().fromTime());
-            assertEquals(newBuyOrderTime, state.timePointRange().toTime());
-            verify(orderRepository, times(1)).getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid));
-            verify(orderRepository, times(1)).getByAccountIdAndInstrumentUidAfterTime(eq(accountId), eq(instrumentUid), eq(oldBuyOrderTime));
+            assertEquals(oldBuyOperationTime, state.timePointRange().fromTime());
+            assertEquals(newBuyOperationTime, state.timePointRange().toTime());
+            verify(operationRepository, times(1))
+                .getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid), eq(TimeRange.MAX));
+            verify(operationRepository, times(1))
+                .getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid), eq(sinceCache(oldBuyOperationTime)));
         }
 
         @Test
@@ -486,25 +505,26 @@ class BaseEntryPriceCalculatorTest {
             String accountId = "test-account";
             String instrumentUid = "test-instrument";
 
-            Instant buyOrderTime = Instant.parse("2020-09-08T17:00:00Z");
-            Order buyOrder = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, buyOrderTime);
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(List.of(buyOrder));
+            Instant buyOperationTime = Instant.parse("2020-09-08T17:00:00Z");
+            Operation buyOperation = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, buyOperationTime);
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(List.of(buyOperation));
 
             EntryPrice state1 = calculator.calculate(accountId, instrumentUid);
             assertEquals(100, state1.quantity());
 
             BaseEntryPriceCalculator.invalidate(accountId, instrumentUid);
 
-            Instant sellOrderTime = Instant.parse("2020-09-09T17:00:00Z");
-            Order sellOrder = createOrder(50, 12.0, OrderDirection.SELL, ExecutionStatus.FILL, sellOrderTime);
-            when(orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid))
-                .thenReturn(Arrays.asList(buyOrder, sellOrder));
+            Instant sellOperationTime = Instant.parse("2020-09-09T17:00:00Z");
+            Operation sellOperation = createOperation(50, 12.0, OperationType.SELL, OperationState.EXECUTED, sellOperationTime);
+            when(operationRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid, TimeRange.MAX))
+                .thenReturn(Arrays.asList(buyOperation, sellOperation));
 
             EntryPrice state2 = calculator.calculate(accountId, instrumentUid);
 
             assertEquals(50, state2.quantity());
-            verify(orderRepository, times(2)).getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid));
+            verify(operationRepository, times(2))
+                .getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid), eq(TimeRange.MAX));
         }
 
         @Test
@@ -512,12 +532,12 @@ class BaseEntryPriceCalculatorTest {
         void testClearCache() {
             String accountId = "account-1";
             String instrumentUid = "instrument-1";
-            Instant orderTime = Instant.parse("2021-04-07T19:14:00Z");
+            Instant operationTime = Instant.parse("2021-04-07T19:14:00Z");
 
-            Order order1 = createOrder(100, 10.0, OrderDirection.BUY, ExecutionStatus.FILL, orderTime);
+            Operation operation1 = createOperation(100, 10.0, OperationType.BUY, OperationState.EXECUTED, operationTime);
 
-            when(orderRepository.getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid)))
-                .thenReturn(List.of(order1));
+            when(operationRepository.getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid), eq(TimeRange.MAX)))
+                .thenReturn(List.of(operation1));
 
             EntryPrice state1 = calculator.calculate(accountId, instrumentUid);
             assertEquals(100, state1.quantity());
@@ -526,20 +546,26 @@ class BaseEntryPriceCalculatorTest {
 
             EntryPrice state2 = calculator.calculate(accountId, instrumentUid);
 
-            verify(orderRepository, times(2)).getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid));
+            verify(operationRepository, times(2))
+                .getByAccountIdAndInstrumentUid(eq(accountId), eq(instrumentUid), eq(TimeRange.MAX));
             assertEquals(100, state2.quantity());
         }
     }
 
-    private Order createOrder(long lots, double price, OrderDirection direction, ExecutionStatus status, Instant time) {
-        Order order = new Order();
-        order.setLotsExecuted(lots);
-        order.setInstrumentPrice(Quotation.of(price));
-        order.setDirection(direction);
-        order.setExecutionStatus(status);
-        order.setInstrument(new Instrument());
-        order.setExecutedTime(time);
-        order.getInstrument().setUid("test-instrument");
-        return order;
+    private Operation createOperation(
+        long quantityDone,
+        double price,
+        OperationType direction,
+        OperationState state,
+        Instant executedDate
+    ) {
+        return Operation.builder()
+            .instrumentUid("test-instrument")
+            .direction(direction)
+            .quantityDone(quantityDone)
+            .price(Quotation.of(price))
+            .state(state)
+            .executedDate(executedDate)
+            .build();
     }
 }

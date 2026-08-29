@@ -1,6 +1,5 @@
 package com.siberalt.singularity.entity.order;
 
-import java.time.Instant;
 import java.util.List;
 
 public interface ReadOrderRepository {
@@ -13,6 +12,4 @@ public interface ReadOrderRepository {
     List<Order> getByAccountId(String accountId);
 
     List<Order> getByAccountIdAndInstrumentUid(String accountId, String instrumentUid);
-
-    List<Order> getByAccountIdAndInstrumentUidAfterTime(String accountId, String instrumentUid, Instant after);
 }

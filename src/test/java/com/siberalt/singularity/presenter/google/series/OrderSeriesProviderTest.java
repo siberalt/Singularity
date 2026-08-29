@@ -1,9 +1,9 @@
 package com.siberalt.singularity.presenter.google.series;
 
-import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.entity.order.Order;
+import com.siberalt.singularity.entity.operation.Operation;
+import com.siberalt.singularity.entity.operation.OperationType;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -23,13 +23,14 @@ public class OrderSeriesProviderTest {
 
     @Test
     void provideSkipsOrdersOutsideCandleRange() {
-        Order order = new Order()
-            .setCreatedTime(Instant.parse("2023-01-01T00:00:00Z"))
-            .setDirection(OrderDirection.BUY)
-            .setInstrumentPrice(Quotation.of(BigDecimal.ONE));
+        Operation order = Operation.builder()
+            .date(Instant.parse("2023-01-01T00:00:00Z"))
+            .direction(OperationType.BUY)
+            .price(Quotation.of(BigDecimal.ONE))
+            .build();
         Candle candle = Candle.of(Instant.parse("2023-01-02T00:00:00Z"), 100, 10);
 
-        List<Order> orders = List.of(order);
+        List<Operation> orders = List.of(order);
         List<Candle> candles = List.of(candle);
 
         OrderSeriesProvider provider = new OrderSeriesProvider(orders, candles);
@@ -39,15 +40,17 @@ public class OrderSeriesProviderTest {
 
     @Test
     void provideAddsBuyAndSellOrdersCorrectly() {
-        List<Order> orders = List.of(
-            new Order()
-                .setCreatedTime(Instant.parse("2023-01-01T00:00:00Z"))
-                .setDirection(OrderDirection.SELL)
-                .setInstrumentPrice(Quotation.of(100)),
-            new Order()
-                .setCreatedTime(Instant.parse("2023-01-01T00:01:00Z"))
-                .setDirection(OrderDirection.BUY)
-                .setInstrumentPrice(Quotation.of(200))
+        List<Operation> orders = List.of(
+            Operation.builder()
+                .date(Instant.parse("2023-01-01T00:00:00Z"))
+                .direction(OperationType.SELL)
+                .price(Quotation.of(100))
+                .build(),
+            Operation.builder()
+                .date(Instant.parse("2023-01-01T00:01:00Z"))
+                .direction(OperationType.BUY)
+                .price(Quotation.of(200))
+                .build()
         );
 
         Candle candle1 = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 150, 10);
@@ -67,20 +70,22 @@ public class OrderSeriesProviderTest {
 
     @Test
     void provideHandlesOrdersWithClosestCandleIndex() {
-        Order order1 = new Order();
-        order1.setCreatedTime(Instant.parse("2023-01-01T00:00:30Z"));
-        order1.setDirection(OrderDirection.SELL);
-        order1.setInstrumentPrice(Quotation.of(150));
+        Operation order1 = Operation.builder()
+            .date(Instant.parse("2023-01-01T00:00:30Z"))
+            .direction(OperationType.SELL)
+            .price(Quotation.of(150))
+            .build();
 
-        Order order2 = new Order();
-        order2.setCreatedTime(Instant.parse("2023-01-01T00:01:30Z"));
-        order2.setDirection(OrderDirection.BUY);
-        order2.setInstrumentPrice(Quotation.of(250));
+        Operation order2 = Operation.builder()
+            .date(Instant.parse("2023-01-01T00:01:30Z"))
+            .direction(OperationType.BUY)
+            .price(Quotation.of(250))
+            .build();
 
         Candle candle1 = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 100, 10);
         Candle candle2 = Candle.of(Instant.parse("2023-01-01T00:02:00Z"), 200, 20);
 
-        List<Order> orders = List.of(order1, order2);
+        List<Operation> orders = List.of(order1, order2);
         List<Candle> candles = List.of(candle1, candle2);
         OrderSeriesProvider provider = new OrderSeriesProvider(orders, candles);
         Optional<SeriesChunk> result = provider.provide(0, 2, 1);
@@ -95,20 +100,22 @@ public class OrderSeriesProviderTest {
 
     @Test
     void provideIncludesOutOfRangeOrdersWhenFlagIsSet() {
-        Order outOfRangeOrder1 = new Order()
-            .setCreatedTime(Instant.parse("2023-01-01T00:00:00Z"))
-            .setDirection(OrderDirection.BUY)
-            .setInstrumentPrice(Quotation.of(300));
+        Operation outOfRangeOrder1 = Operation.builder()
+            .date(Instant.parse("2023-01-01T00:00:00Z"))
+            .direction(OperationType.BUY)
+            .price(Quotation.of(300))
+            .build();
 
-        Order outOfRangeOrder2 = new Order()
-            .setCreatedTime(Instant.parse("2023-01-02T00:00:00Z"))
-            .setDirection(OrderDirection.SELL)
-            .setInstrumentPrice(Quotation.of(400));
+        Operation outOfRangeOrder2 = Operation.builder()
+            .date(Instant.parse("2023-01-02T00:00:00Z"))
+            .direction(OperationType.SELL)
+            .price(Quotation.of(400))
+            .build();
 
         Candle candle1 = Candle.of(Instant.parse("2023-01-01T00:01:00Z"), 150, 10);
         Candle candle2 = Candle.of(Instant.parse("2023-01-01T00:02:00Z"), 150, 10);
 
-        List<Order> orders = List.of(outOfRangeOrder1, outOfRangeOrder2);
+        List<Operation> orders = List.of(outOfRangeOrder1, outOfRangeOrder2);
         List<Candle> candles = List.of(candle1, candle2);
 
         OrderSeriesProvider provider = new OrderSeriesProvider(orders, candles)

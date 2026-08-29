@@ -15,6 +15,7 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ComparisonOperator;
 import com.siberalt.singularity.entity.candle.FindPriceParams;
 import com.siberalt.singularity.entity.instrument.Instrument;
+import com.siberalt.singularity.entity.operation.OperationRepository;
 import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.entity.transaction.TransactionSpec;
@@ -39,18 +40,23 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
     protected Map<Instant, List<OrderEvent>> orderEventsByTime = new HashMap<>();
     protected Clock clock;
 
-    public EventSimulatedOrderService(EventMockBroker mockBroker, OrderRepository orderRepository) {
-        super(mockBroker, orderRepository);
+    public EventSimulatedOrderService(
+        EventMockBroker mockBroker,
+        OrderRepository orderRepository,
+        OperationRepository operationRepository
+    ) {
+        super(mockBroker, orderRepository, operationRepository);
         this.mockBroker = mockBroker;
     }
 
     public EventSimulatedOrderService(
         EventMockBroker mockBroker,
         OrderRepository orderRepository,
+        OperationRepository operationRepository,
         CommissionTransactionSpecProvider commissionTransactionSpecProvider,
         OrderTransactionSpecProvider orderTransactionSpecProvider
     ) {
-        super(mockBroker, orderRepository, commissionTransactionSpecProvider, orderTransactionSpecProvider);
+        super(mockBroker, orderRepository, operationRepository, commissionTransactionSpecProvider, orderTransactionSpecProvider);
         this.mockBroker = mockBroker;
     }
 

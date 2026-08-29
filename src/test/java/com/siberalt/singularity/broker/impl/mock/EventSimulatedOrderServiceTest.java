@@ -2,19 +2,21 @@ package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
-import com.siberalt.singularity.broker.contract.service.exception.InvalidRequestException;
+import com.siberalt.singularity.broker.contract.service.exception.NotFoundException;
 import com.siberalt.singularity.broker.contract.service.order.request.CancelOrderRequest;
 import com.siberalt.singularity.broker.contract.service.order.request.GetOrderStateRequest;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
 import com.siberalt.singularity.broker.contract.service.order.response.CancelOrderResponse;
-import com.siberalt.singularity.broker.contract.service.order.response.ExecutionStatus;
-import com.siberalt.singularity.broker.contract.service.order.response.OrderState;
 import com.siberalt.singularity.broker.contract.service.order.response.PostOrderResponse;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
+import com.siberalt.singularity.entity.operation.Operation;
+import com.siberalt.singularity.entity.operation.OperationRepository;
+import com.siberalt.singularity.entity.operation.OperationState;
 import com.siberalt.singularity.entity.order.OrderRepository;
+import com.siberalt.singularity.shared.TimeRange;
 import com.siberalt.singularity.simulation.EventObserver;
 import com.siberalt.singularity.strategy.context.Clock;
 import org.junit.jupiter.api.Test;
@@ -22,9 +24,11 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 
@@ -36,9 +40,10 @@ public class EventSimulatedOrderServiceTest extends MockOrderServiceTest {
         ReadCandleRepository candleStorage,
         ReadInstrumentRepository instrumentStorage,
         OrderRepository orderRepository,
+        OperationRepository operationRepository,
         Clock clock
     ) {
-        var broker = new EventMockBroker(candleStorage, instrumentStorage, orderRepository, clock);
+        var broker = new EventMockBroker(candleStorage, instrumentStorage, orderRepository, operationRepository, clock);
         eventObserver = new EventObserver();
         broker.getOrderService().observeEventsBy(eventObserver);
 
@@ -86,19 +91,34 @@ public class EventSimulatedOrderServiceTest extends MockOrderServiceTest {
 
         assertNotNull(cancelResponse);
 
-        OrderState state = orderService.getState(
-            new GetOrderStateRequest()
-                .setOrderId(postResponse.getOrderId())
-                .setAccountId(testAccount.getId())
-        );
-        assertEquals(ExecutionStatus.CANCELLED, state.getExecutionStatus());
-        assertEquals(10, state.getLotsRequested());
-        assertEquals(0, state.getLotsExecuted());
-        assertEquals(Quotation.of(0), state.getBalanceChange().getQuotation());
-
+        // The order is no longer in OrderRepository once cancelled - it was evicted in favor of a
+        // CANCELED Operation record, so getState() on it now reports not-found rather than CANCELLED.
         assertThrowsWithErrorCode(
-            InvalidRequestException.class,
-            ErrorCode.CANCEL_ORDER_ERROR,
+            NotFoundException.class,
+            ErrorCode.ORDER_NOT_FOUND,
+            () -> orderService.getState(
+                new GetOrderStateRequest()
+                    .setOrderId(postResponse.getOrderId())
+                    .setAccountId(testAccount.getId())
+            )
+        );
+
+        Optional<Operation> cancelOperation = operationRepository.getByAccountId(testAccount.getId(), TimeRange.MAX)
+            .stream()
+            .filter(operation -> operation.state() == OperationState.CANCELED)
+            .filter(operation -> operation.quantity() == postResponse.getLotsRequested())
+            .filter(operation -> operation.direction().isBuy() == postResponse.getDirection().isBuy())
+            .findFirst();
+
+        assertTrue(cancelOperation.isPresent());
+        assertEquals(0, cancelOperation.get().quantityDone());
+        assertEquals(Quotation.ZERO, cancelOperation.get().payment());
+
+        // The order is gone from OrderRepository entirely now, so a repeat cancel can't distinguish
+        // "already cancelled" from "never existed" - both surface as ORDER_NOT_FOUND.
+        assertThrowsWithErrorCode(
+            NotFoundException.class,
+            ErrorCode.ORDER_NOT_FOUND,
             () -> orderService.cancel(
                 new CancelOrderRequest()
                     .setOrderId(postResponse.getOrderId())

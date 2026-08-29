@@ -33,7 +33,7 @@ public class MockInstrumentServiceTest {
                 .setPositionUid(instrumentPositionUid)
         );
 
-        var mockBroker = new MockBroker(null, instrumentRepository, null, new ClockStub());
+        var mockBroker = new MockBroker(null, instrumentRepository, null, null, new ClockStub());
         var instrumentService = mockBroker.getInstrumentService();
 
         var response = instrumentService.get(GetRequest.of(instrumentUid));

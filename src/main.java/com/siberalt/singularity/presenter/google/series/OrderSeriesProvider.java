@@ -1,7 +1,7 @@
 package com.siberalt.singularity.presenter.google.series;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.entity.order.Order;
+import com.siberalt.singularity.entity.operation.Operation;
 
 import java.time.Instant;
 import java.util.List;
@@ -10,7 +10,7 @@ import java.util.Optional;
 import java.util.TreeMap;
 
 public class OrderSeriesProvider implements SeriesProvider {
-    private final List<Order> orders;
+    private final List<Operation> ordersOperations;
     private String buyOrdersTitle = "Buy Orders";
     private String sellOrdersTitle = "Sell Orders";
     private Shape buyOrderShape = Shape.DIAMOND;
@@ -22,8 +22,8 @@ public class OrderSeriesProvider implements SeriesProvider {
     private final TreeMap<Instant, Long> indexesByTime = new TreeMap<>();
     private boolean includeOutOfRangeOrders = false;
 
-    public OrderSeriesProvider(List<Order> orders, List<Candle> candles) {
-        this.orders = orders;
+    public OrderSeriesProvider(List<Operation> orders, List<Candle> candles) {
+        this.ordersOperations = orders;
 
         for (int i = 0; i < candles.size(); i++) {
             indexesByTime.put(candles.get(i).getTime(), (long) i);
@@ -85,7 +85,7 @@ public class OrderSeriesProvider implements SeriesProvider {
 
     @Override
     public Optional<SeriesChunk> provide(long start, long end, long stepInterval) {
-        if (orders == null || orders.isEmpty() || indexesByTime.isEmpty()) {
+        if (ordersOperations == null || ordersOperations.isEmpty() || indexesByTime.isEmpty()) {
             return Optional.empty();
         }
 
@@ -99,9 +99,9 @@ public class OrderSeriesProvider implements SeriesProvider {
             .setColor(sellOrdersColor)
             .setShape(sellOrderShape);
 
-        for (Order order : orders) {
-            Instant orderTime = order.getCreatedTime();
-            double orderPrice = order.getInstrumentPrice().toDouble();
+        for (Operation order : ordersOperations) {
+            Instant orderTime = order.date();
+            double orderPrice = order.price().toDouble();
 
             Map.Entry<Instant, Long> floorEntry = indexesByTime.floorEntry(orderTime);
             Map.Entry<Instant, Long> ceilingEntry = indexesByTime.ceilingEntry(orderTime);
@@ -112,7 +112,7 @@ public class OrderSeriesProvider implements SeriesProvider {
                         ? indexesByTime.firstEntry().getValue()
                         : indexesByTime.lastEntry().getValue();
 
-                    if (order.getDirection().isBuy()) {
+                    if (order.direction().isBuy()) {
                         buyPoints.addPoint(edgeIndex + start, orderPrice);
                     } else {
                         sellPoints.addPoint(edgeIndex + start, orderPrice);
@@ -127,7 +127,7 @@ public class OrderSeriesProvider implements SeriesProvider {
 
             long timeOrderIndex = closestEntry.getValue();
 
-            if (order.getDirection().isBuy()) {
+            if (order.direction().isBuy()) {
                 buyPoints.addPoint(timeOrderIndex + start, orderPrice);
             } else {
                 sellPoints.addPoint(timeOrderIndex + start, orderPrice);

@@ -4,7 +4,6 @@ import com.siberalt.singularity.broker.contract.execution.EventSubscriptionBroke
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.events.NewCandleEvent;
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.subscriptions.NewCandleSubscriptionSpec;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
-import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
 import com.siberalt.singularity.broker.shared.EventSubscriptionBrokerFacade;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;

@@ -7,6 +7,8 @@ import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.config.MockBrokerConfig;
 import com.siberalt.singularity.entity.instrument.InstrumentRepository;
+import com.siberalt.singularity.entity.operation.InMemoryOperationRepository;
+import com.siberalt.singularity.entity.operation.OperationRepository;
 import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.simulation.EventSimulator;
@@ -76,8 +78,9 @@ public class EventSimulatedOrderServiceIT {
         InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
         instrumentRepository.save(instrument);
         OrderRepository orderRepository = new InMemoryOrderRepository();
+        OperationRepository operationRepository = new InMemoryOperationRepository();
         clock = new SimpleSimulationClock();
-        broker = EventMockBroker.builder(candleStorage, instrumentRepository, orderRepository, clock)
+        broker = EventMockBroker.builder(candleStorage, instrumentRepository, orderRepository, operationRepository, clock)
             .setCommissionRatio(0)
             .build();
 

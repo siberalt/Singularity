@@ -1,6 +1,5 @@
 package com.siberalt.singularity.entity.order;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,12 +41,6 @@ public class InMemoryOrderRepository implements OrderRepository {
                 order -> order.getInstrument().getUid().equals(instrumentUid) && order.getAccountId().equals(accountId)
             )
             .collect(Collectors.toList());
-    }
-
-    @Override
-    public List<Order> getByAccountIdAndInstrumentUidAfterTime(String accountId, String instrumentUid, Instant after) {
-        return this.getByAccountIdAndInstrumentUid(accountId, instrumentUid).stream()
-            .filter(o -> o.getExecutedTime().isAfter(after)).toList();
     }
 
     @Override

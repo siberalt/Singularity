@@ -14,11 +14,15 @@ import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory
 import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.entity.instrument.InstrumentRepository;
+import com.siberalt.singularity.entity.operation.InMemoryOperationRepository;
+import com.siberalt.singularity.entity.operation.Operation;
+import com.siberalt.singularity.entity.operation.OperationRepository;
+import com.siberalt.singularity.entity.operation.OperationState;
 import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
-import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.series.OrderSeriesProvider;
+import com.siberalt.singularity.shared.TimeRange;
 import com.siberalt.singularity.simulation.EventSimulator;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
@@ -36,6 +40,7 @@ public class ProfitTakerStrategySimulation {
     public static void main(String[] args) throws AbstractException {
         CvsFileCandleRepositoryFactory factory = new CvsFileCandleRepositoryFactory();
         OrderRepository orderRepository = new InMemoryOrderRepository();
+        OperationRepository operationRepository = new InMemoryOperationRepository();
 
         CvsCandleRepository candleRepository = factory.create(
             "TMOS",
@@ -56,6 +61,7 @@ public class ProfitTakerStrategySimulation {
             candleRepository,
             instrumentRepository,
             orderRepository,
+            operationRepository,
             clock
         );
         EventSimulator simulator = new EventSimulator(clock);
@@ -97,21 +103,30 @@ public class ProfitTakerStrategySimulation {
 
         System.out.println("----------------------------");
 
-        List<Order> orders = orderRepository.getByAccountId(account.getId())
+        List<Operation> executedOperations = operationRepository.getByAccountId(account.getId(), new TimeRange(startTime, endTime))
             .stream()
-            .sorted(Comparator.comparing(Order::getCreatedTime)).toList();
+            .filter(operation -> operation.state() == OperationState.EXECUTED)
+            .sorted(Comparator.comparing(Operation::date))
+            .toList();
 
-        for (Order order : orders) {
-            System.out.println("Order ID: " + order.getId());
-            System.out.println("Direction: " + order.getDirection());
-            System.out.println("Instrument: " + order.getInstrument().getUid());
-            System.out.println("Status: " + order.getExecutionStatus());
-            System.out.println("Price: " + order.getBalanceChange());
-            System.out.println("Quantity: " + order.getLotsExecuted());
-            System.out.println("Created at: " + order.getCreatedTime());
+        List<Operation> orders = executedOperations.stream()
+            .filter(operation -> operation.direction().isBuy() || operation.direction().isSell())
+            .toList();
+
+        for (Operation order : orders) {
+            System.out.println("Operation ID: " + order.id());
+            System.out.println("Direction: " + order.direction());
+            System.out.println("Instrument: " + order.instrumentUid());
+            System.out.println("Status: " + order.state());
+            System.out.println("Price: " + order.payment());
+            System.out.println("Quantity: " + order.quantityDone());
+            System.out.println("Created at: " + order.date());
             System.out.println("----------------------------");
+        }
 
-            profit = profit.add(order.getBalanceChange());
+        // Profit sums every executed operation (trades and fees) to reproduce the old order-balance total.
+        for (Operation operation : executedOperations) {
+            profit = profit.add(operation.payment());
         }
 
         Quotation profitPercent = profit.divide(initialInvestment).multiply(100);
@@ -132,7 +147,7 @@ public class ProfitTakerStrategySimulation {
     }
 
     private static void drawOrdersChart(
-        List<Order> orders,
+        List<Operation> orders,
         ReadCandleRepository candleRepository,
         String instrumentUid,
         Instant startTime,

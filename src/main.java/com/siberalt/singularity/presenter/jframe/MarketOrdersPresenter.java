@@ -2,8 +2,10 @@ package com.siberalt.singularity.presenter.jframe;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
-import com.siberalt.singularity.entity.order.Order;
-import com.siberalt.singularity.entity.order.ReadOrderRepository;
+import com.siberalt.singularity.entity.operation.Operation;
+import com.siberalt.singularity.entity.operation.OperationState;
+import com.siberalt.singularity.entity.operation.ReadOperationRepository;
+import com.siberalt.singularity.shared.TimeRange;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
@@ -18,23 +20,24 @@ import javax.swing.*;
 import java.awt.*;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
+import java.util.List;
 
 public class MarketOrdersPresenter extends JFrame {
     private final ReadCandleRepository candleRepository;
     private final String instrumentUid;
     private final String accountId;
-    private final ReadOrderRepository orderRepository;
+    private final ReadOperationRepository operationRepository;
 
     public MarketOrdersPresenter(
         ReadCandleRepository candleRepository,
         String instrumentUid,
         String accountId,
-        ReadOrderRepository orderRepository
+        ReadOperationRepository operationRepository
     ) {
         this.candleRepository = candleRepository;
         this.instrumentUid = instrumentUid;
         this.accountId = accountId;
-        this.orderRepository = orderRepository;
+        this.operationRepository = operationRepository;
     }
 
     public void show(Instant from, Instant to) {
@@ -91,14 +94,19 @@ public class MarketOrdersPresenter extends JFrame {
             stockPrices.add((double) candle.getTime().getEpochSecond() * 1000, price);
         }
 
-        Iterable<Order> orders = orderRepository.getByAccountIdAndInstrumentUid(accountId, instrumentUid);
+        List<Operation> operations = operationRepository
+            .getByAccountIdAndInstrumentUid(accountId, instrumentUid, new TimeRange(from, to))
+            .stream()
+            .filter(operation -> operation.state() == OperationState.EXECUTED)
+            .filter(operation -> operation.direction().isBuy() || operation.direction().isSell())
+            .toList();
 
-        for (Order order : orders) {
-            double price = order.getInstrumentPrice().toDouble();
-            if (order.getDirection().isBuy()) {
-                buyOrders.add((double) order.getCreatedTime().getEpochSecond() * 1000, price);
-            } else if (order.getDirection().isSell()) {
-                sellOrders.add((double) order.getCreatedTime().getEpochSecond() * 1000, price);
+        for (Operation order : operations) {
+            double price = order.price().toDouble();
+            if (order.direction().isBuy()) {
+                buyOrders.add((double) order.date().getEpochSecond() * 1000, price);
+            } else if (order.direction().isSell()) {
+                sellOrders.add((double) order.date().getEpochSecond() * 1000, price);
             }
         }
 

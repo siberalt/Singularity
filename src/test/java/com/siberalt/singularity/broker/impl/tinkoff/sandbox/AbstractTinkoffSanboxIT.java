@@ -31,7 +31,7 @@ public abstract class AbstractTinkoffSanboxIT {
     protected void setUp() throws IOException, AbstractException {
         configuration = getConfiguration();
         Properties properties = new Properties();
-        properties.put("token", getConfiguration().get("sandboxToken"));
+        properties.put("token", configuration.get("sandboxToken"));
         properties.setProperty("sandbox.enabled", "true");
         tinkoffBroker = new TinkoffSandboxBroker(ConnectorConfiguration.loadFromProperties(properties));
     }

@@ -6,6 +6,7 @@ import com.siberalt.singularity.broker.impl.mock.EventMockBroker;
 import com.siberalt.singularity.broker.shared.BrokerFacade;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
+import com.siberalt.singularity.entity.operation.InMemoryOperationRepository;
 import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
@@ -67,6 +68,7 @@ public class ConservativeStrategyRunner {
                 candleRepository,
                 instrumentRepository,
                 new InMemoryOrderRepository(),
+                new InMemoryOperationRepository(),
                 clock
             )
             .setCommissionRatio(brokerCommission)

@@ -4,6 +4,10 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.ExceptionBuilder;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
+import com.siberalt.singularity.entity.operation.Operation;
+import com.siberalt.singularity.entity.operation.OperationRepository;
+import com.siberalt.singularity.entity.operation.OperationState;
+import com.siberalt.singularity.entity.operation.OperationType;
 import com.siberalt.singularity.entity.position.Position;
 import com.siberalt.singularity.broker.contract.service.order.*;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
@@ -14,6 +18,7 @@ import com.siberalt.singularity.broker.impl.mock.shared.exception.MockBrokerExce
 import com.siberalt.singularity.broker.impl.mock.shared.operation.AccountBalance;
 import com.siberalt.singularity.broker.impl.mock.shared.user.AccountState;
 import com.siberalt.singularity.entity.transaction.TransactionSpec;
+import com.siberalt.singularity.entity.transaction.TransactionType;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.entity.order.Order;
@@ -31,22 +36,26 @@ public class MockOrderService implements OrderService {
     protected double sellBestPriceRatio = 0.7;
     protected Duration limitOrderLifeTime = Duration.ofDays(1);
     protected OrderRepository orderRepository;
+    protected OperationRepository operationRepository;
     protected TransactionSpecProvider commissionTransactionSpecProvider = new CommissionTransactionSpecProvider(DEFAULT_COMMISSION_RATIO);
     private TransactionSpecProvider orderTransactionSpecProvider = new OrderTransactionSpecProvider();
 
-    public MockOrderService(MockBroker mockBroker, OrderRepository orderRepository) {
+    public MockOrderService(MockBroker mockBroker, OrderRepository orderRepository, OperationRepository operationRepository) {
         this.mockBroker = mockBroker;
         this.orderRepository = orderRepository;
+        this.operationRepository = operationRepository;
     }
 
     public MockOrderService(
         MockBroker mockBroker,
         OrderRepository orderRepository,
+        OperationRepository operationRepository,
         TransactionSpecProvider commissionTransactionSpecProvider,
         TransactionSpecProvider orderTransactionSpecProvider
     ) {
         this.mockBroker = mockBroker;
         this.orderRepository = orderRepository;
+        this.operationRepository = operationRepository;
         this.commissionTransactionSpecProvider = commissionTransactionSpecProvider;
         this.orderTransactionSpecProvider = orderTransactionSpecProvider;
     }
@@ -159,7 +168,8 @@ public class MockOrderService implements OrderService {
         order
             .setLotsExecuted(0)
             .setExecutionStatus(ExecutionStatus.CANCELLED);
-        orderRepository.save(order);
+        operationRepository.save(toCancelOperation(order));
+        orderRepository.delete(order);
     }
 
     protected void validatePostOrderRequest(PostOrderRequest request) throws AbstractException {
@@ -243,6 +253,8 @@ public class MockOrderService implements OrderService {
             order.getLotsRequested() * order.getInstrument().getLot()
         );
 
+        registerOperations(order, transactionSpecs);
+
         return toServiceResponse(order);
     }
 
@@ -261,6 +273,61 @@ public class MockOrderService implements OrderService {
             order.getInstrument().getUid(),
             order.getLotsRequested() * order.getInstrument().getLot()
         );
+
+        registerOperations(order, transactionSpecs);
+    }
+
+    protected void registerOperations(Order order, List<TransactionSpec> transactionSpecs) {
+        for (TransactionSpec spec : transactionSpecs) {
+            operationRepository.save(toOperation(order, spec, OperationState.EXECUTED));
+        }
+        orderRepository.delete(order);
+    }
+
+    protected Operation toOperation(Order order, TransactionSpec spec, OperationState state) {
+        OperationType type = mapTransactionType(spec.type());
+        boolean isTrade = type.isBuy() || type.isSell();
+
+        return Operation.builder()
+            .id(UUID.randomUUID().toString())
+            .accountId(order.getAccountId())
+            .instrumentUid(order.getInstrument().getUid())
+            .direction(type)
+            .quantity(isTrade ? order.getLotsRequested() : 0)
+            .quantityDone(isTrade ? order.getLotsExecuted() : 0)
+            .price(isTrade ? order.getInstrumentPrice() : null)
+            .payment(spec.amount().getQuotation())
+            .state(state)
+            .date(order.getCreatedTime())
+            .executedDate(order.getExecutedTime())
+            .build();
+    }
+
+    protected Operation toCancelOperation(Order order) {
+        OperationType type = order.getDirection().isBuy() ? OperationType.BUY : OperationType.SELL;
+
+        return Operation.builder()
+            .id(UUID.randomUUID().toString())
+            .accountId(order.getAccountId())
+            .instrumentUid(order.getInstrument().getUid())
+            .direction(type)
+            .quantity(order.getLotsRequested())
+            .quantityDone(0)
+            .price(order.getInstrumentPrice())
+            .payment(Quotation.ZERO)
+            .state(OperationState.CANCELED)
+            .date(order.getCreatedTime())
+            .executedDate(order.getExecutedTime())
+            .build();
+    }
+
+    protected OperationType mapTransactionType(TransactionType type) {
+        return switch (type) {
+            case BUY -> OperationType.BUY;
+            case SELL -> OperationType.SELL;
+            case COMMISSION -> OperationType.BROKER_FEE;
+            default -> OperationType.UNSPECIFIED;
+        };
     }
 
     protected PostOrderResponse sell(PostOrderRequest request) throws AbstractException {
