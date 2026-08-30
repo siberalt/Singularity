@@ -1,6 +1,6 @@
 package com.siberalt.singularity.service.factory.broker;
 
-import com.siberalt.singularity.broker.impl.tinkoff.execution.TinkoffBroker;
+import com.siberalt.singularity.broker.impl.tinkoff.execution.TinkoffExecutionBrokerFactory;
 import com.siberalt.singularity.service.DependencyManager;
 import com.siberalt.singularity.service.ServiceDetails;
 import com.siberalt.singularity.service.factory.Factory;
@@ -14,6 +14,6 @@ public class TinkoffBrokerFactory implements Factory {
         var properties = new Properties();
         properties.put("token", serviceDetails.config().get("token"));
 
-        return new TinkoffBroker(ConnectorConfiguration.loadFromProperties(properties));
+        return TinkoffExecutionBrokerFactory.create(ConnectorConfiguration.loadFromProperties(properties));
     }
 }

@@ -34,7 +34,7 @@ public class TinkoffSandboxBrokerIT extends AbstractTinkoffSanboxIT {
         Properties properties = new Properties();
         properties.put("token",getConfiguration().get("sandboxToken") + "123");
         ConnectorConfiguration connectorConfiguration = ConnectorConfiguration.loadFromProperties(properties);
-        try (TinkoffSandboxBroker finalTinkoffBroker = new TinkoffSandboxBroker(connectorConfiguration)) {
+        try (TinkoffSandboxBroker finalTinkoffBroker = TinkoffSandboxBrokerFactory.create(connectorConfiguration)) {
             Assertions.assertThrows(
                 PermissionDeniedException.class, () -> finalTinkoffBroker.getUserService().getAccounts(null)
             );

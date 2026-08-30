@@ -1,67 +1,44 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared;
 
 import com.siberalt.singularity.broker.contract.execution.EventSubscriptionBroker;
+import com.siberalt.singularity.broker.contract.service.instrument.InstrumentService;
 import com.siberalt.singularity.broker.contract.service.market.MarketDataService;
 import com.siberalt.singularity.broker.contract.service.operation.OperationsService;
 import com.siberalt.singularity.broker.contract.service.order.OrderService;
 import com.siberalt.singularity.broker.contract.service.user.UserService;
-import ru.tinkoff.piapi.contract.v1.*;
-import ru.ttech.piapi.core.connector.ConnectorConfiguration;
+import com.siberalt.singularity.event.subscription.SubscriptionManager;
 import ru.ttech.piapi.core.connector.ServiceStubFactory;
-import ru.ttech.piapi.core.connector.streaming.StreamManagerFactory;
-import ru.ttech.piapi.core.connector.streaming.StreamServiceStubFactory;
 
 import java.io.Closeable;
-import java.util.concurrent.Executors;
 
+/**
+ * Holds the services a Tinkoff broker exposes. All the gRPC/stub wiring that builds them lives
+ * in {@link TinkoffServicesFactory} (and the per-service factories in the {@code factory}
+ * subpackage) - this class (and its subclasses) just stores what it's given and hands it back
+ * out through the {@link EventSubscriptionBroker} getters.
+ */
 public abstract class AbstractTinkoffBroker implements EventSubscriptionBroker, Closeable {
-    protected ServiceStubFactory serviceStubFactory;
-    protected com.siberalt.singularity.broker.impl.tinkoff.shared.OrderService orderService;
-    protected com.siberalt.singularity.broker.impl.tinkoff.shared.MarketDataService marketDataService;
-    protected com.siberalt.singularity.broker.impl.tinkoff.shared.OperationsService operationsService;
-    protected com.siberalt.singularity.broker.impl.tinkoff.shared.UserService userService;
-    protected InstrumentService instrumentService;
-    protected SubscriptionManager subscriptionManager;
+    protected final ServiceStubFactory serviceStubFactory;
+    protected final OrderService orderService;
+    protected final MarketDataService marketDataService;
+    protected final OperationsService operationsService;
+    protected final UserService userService;
+    protected final InstrumentService instrumentService;
+    protected final SubscriptionManager subscriptionManager;
 
-    public AbstractTinkoffBroker(ConnectorConfiguration configuration) {
-        init(configuration);
-    }
-
-    protected void init(ConnectorConfiguration configuration) {
-        serviceStubFactory = ServiceStubFactory.create(configuration);
-        var marketDataServiceStub = serviceStubFactory.newSyncService(MarketDataServiceGrpc::newBlockingStub).getStub();
-
-        orderService = new com.siberalt.singularity.broker.impl.tinkoff.shared.OrderService(
-            serviceStubFactory.newSyncService(OrdersServiceGrpc::newBlockingStub).getStub(), marketDataServiceStub
-        );
-        marketDataService = new com.siberalt.singularity.broker.impl.tinkoff.shared.MarketDataService(marketDataServiceStub);
-        operationsService = new com.siberalt.singularity.broker.impl.tinkoff.shared.OperationsService(
-            serviceStubFactory.newSyncService(OperationsServiceGrpc::newBlockingStub).getStub()
-        );
-        userService = new com.siberalt.singularity.broker.impl.tinkoff.shared.UserService(
-            serviceStubFactory.newSyncService(UsersServiceGrpc::newBlockingStub).getStub()
-        );
-        instrumentService = new InstrumentService(
-            serviceStubFactory.newSyncService(InstrumentsServiceGrpc::newBlockingStub).getStub()
-        );
-
-        var streamFactory = StreamServiceStubFactory.create(serviceStubFactory);
-        var streamManagerFactory = StreamManagerFactory.create(streamFactory);
-
-        var executorService = Executors.newCachedThreadPool();
-        var scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
-        var marketDataStreamManager = streamManagerFactory.newMarketDataStreamManager(executorService, scheduledExecutorService);
-
-        subscriptionManager = new SubscriptionManager(marketDataStreamManager);
+    protected AbstractTinkoffBroker(TinkoffServices services) {
+        this.serviceStubFactory = services.serviceStubFactory();
+        this.orderService = services.orderService();
+        this.marketDataService = services.marketDataService();
+        this.operationsService = services.operationsService();
+        this.userService = services.userService();
+        this.instrumentService = services.instrumentService();
+        this.subscriptionManager = services.subscriptionManager();
     }
 
     @Override
     public void close() {
-        if (serviceStubFactory != null) {
-            // 4. Закрываем ресурсы через новый метод close() (destroy(int) устарел)
-            serviceStubFactory.getChannel().shutdown();
-            serviceStubFactory = null;
-        }
+        serviceStubFactory.getChannel().shutdown();
     }
 
     @Override

@@ -33,7 +33,7 @@ public abstract class AbstractTinkoffSanboxIT {
         Properties properties = new Properties();
         properties.put("token", configuration.get("sandboxToken"));
         properties.setProperty("sandbox.enabled", "true");
-        tinkoffBroker = new TinkoffSandboxBroker(ConnectorConfiguration.loadFromProperties(properties));
+        tinkoffBroker = TinkoffSandboxBrokerFactory.create(ConnectorConfiguration.loadFromProperties(properties));
     }
 
     @AfterEach

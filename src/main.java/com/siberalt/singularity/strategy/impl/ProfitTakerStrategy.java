@@ -27,6 +27,7 @@ public class ProfitTakerStrategy implements Strategy {
     private final Deque<Quotation> priceHistory = new ArrayDeque<>();
     private final EventSubscriptionBrokerFacade broker;
     private double sellOutRatio = 1;
+    private Subscription subscription;
 
     public ProfitTakerStrategy(
         String instrumentId,
@@ -84,7 +85,14 @@ public class ProfitTakerStrategy implements Strategy {
     @Override
     public void run(Observer observer) {
         SubscriptionSpec<NewCandleEvent> subscriptionSpec = new NewCandleSubscriptionSpec(Set.of(instrumentId));
-        broker.subscribe(subscriptionSpec, this::onNewCandle);
+        subscription = broker.subscribe(subscriptionSpec, this::onNewCandle);
+    }
+
+    @Override
+    public void stop() {
+        if (subscription != null && subscription.isActive()) {
+            subscription.stop();
+        }
     }
 
     private void onNewCandle(NewCandleEvent event, Subscription subscription) {

@@ -29,6 +29,7 @@ public class BasicTradeStrategy implements Strategy {
     private boolean isInitialized = false;
     private int step = 5; // Process every 'step' candles
     private List<Candle> lastCandles;
+    private Subscription subscription;
 
     public BasicTradeStrategy(
         EventSubscriptionBrokerFacade broker,
@@ -81,7 +82,14 @@ public class BasicTradeStrategy implements Strategy {
     @Override
     public void run(Observer observer) {
         SubscriptionSpec<NewCandleEvent> subscriptionSpec = new NewCandleSubscriptionSpec(Set.of(instrumentId));
-        broker.subscribe(subscriptionSpec, this::handleNewCandle);
+        subscription = broker.subscribe(subscriptionSpec, this::handleNewCandle);
+    }
+
+    @Override
+    public void stop() {
+        if (subscription != null && subscription.isActive()) {
+            subscription.stop();
+        }
     }
 
     public void handleNewCandle(NewCandleEvent event, Subscription subscription) {
