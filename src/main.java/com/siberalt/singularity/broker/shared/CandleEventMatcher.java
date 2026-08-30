@@ -5,7 +5,7 @@ import com.siberalt.singularity.broker.contract.service.event.dispatcher.subscri
 import com.siberalt.singularity.event.Event;
 import com.siberalt.singularity.event.subscription.SubscriptionSpec;
 
-public class EventMatcher implements com.siberalt.singularity.event.EventMatcher {
+public class CandleEventMatcher implements com.siberalt.singularity.event.EventMatcher {
     @Override
     public boolean matches(SubscriptionSpec<?> subscriptionSpec, Event event) {
         if (subscriptionSpec == null || event == null) {

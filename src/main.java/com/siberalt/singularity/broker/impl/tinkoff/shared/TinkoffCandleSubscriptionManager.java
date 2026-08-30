@@ -4,7 +4,7 @@ import com.siberalt.singularity.broker.contract.service.event.dispatcher.events.
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.subscriptions.NewCandleSubscriptionSpec;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.QuotationTranslator;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.TimestampTranslator;
-import com.siberalt.singularity.broker.shared.EventMatcher;
+import com.siberalt.singularity.broker.shared.CandleEventMatcher;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.event.Event;
 import com.siberalt.singularity.event.EventDispatcher;
@@ -26,7 +26,7 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
-public class SubscriptionManager implements com.siberalt.singularity.event.subscription.SubscriptionManager {
+public class TinkoffCandleSubscriptionManager implements com.siberalt.singularity.event.subscription.SubscriptionManager {
     private record SubscriptionData(UUID subscriptionId, CandleSubscriptionSpec candleSubscriptionSpec) {
     }
 
@@ -34,10 +34,10 @@ public class SubscriptionManager implements com.siberalt.singularity.event.subsc
     private final EventManager eventManager;
     private final Map<SubscriptionSpec<?>, SubscriptionData> subscriptions = new HashMap<>();
 
-    public SubscriptionManager(MarketDataStreamManager streamManager) {
+    public TinkoffCandleSubscriptionManager(MarketDataStreamManager streamManager) {
         this.streamManager = streamManager;
         eventManager = new EventManager(Executors.newSingleThreadExecutor(), Set.of(NewCandleEvent.class));
-        eventManager.setEventMatcher(new EventMatcher());
+        eventManager.setEventMatcher(new CandleEventMatcher());
         eventManager.setTriggerManager(new TriggerManager() {
             @Override
             public void enable(SubscriptionSpec<?> subscriptionSpec, EventDispatcher eventDispatcher) {
@@ -54,7 +54,7 @@ public class SubscriptionManager implements com.siberalt.singularity.event.subsc
                 SubscriptionData subscriptionData = subscriptions.remove(subscriptionSpec);
                 if (subscriptionData != null) {
                     if (subscriptionSpec instanceof NewCandleSubscriptionSpec spec) {
-                        SubscriptionManager.this.streamManager.unsubscribeCandles(
+                        TinkoffCandleSubscriptionManager.this.streamManager.unsubscribeCandles(
                             spec.getInstrumentIds().stream().map(Instrument::new).collect(Collectors.toSet()),
                             subscriptionData.candleSubscriptionSpec()
                         );

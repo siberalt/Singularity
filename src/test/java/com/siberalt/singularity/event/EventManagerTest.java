@@ -2,6 +2,7 @@ package com.siberalt.singularity.event;
 
 import com.siberalt.singularity.event.subscription.Subscription;
 import com.siberalt.singularity.event.subscription.SubscriptionSpec;
+import com.siberalt.singularity.event.subscription.exception.UnsupportedEventTypeException;
 import com.siberalt.singularity.event.trigger.TriggerManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -88,7 +91,10 @@ class EventManagerTest {
         doThrow(new RuntimeException("Handler error")).when(handler).handle(any(), any());
 
         Subscription subscription = eventManager.subscribe(spec, handler);
-        eventManager.dispatch(event).join();
+        CompletableFuture<Void> result = eventManager.dispatch(event);
+
+        CompletionException thrown = assertThrows(CompletionException.class, result::join);
+        assertEquals("Handler error", thrown.getCause().getMessage());
 
         assertNotNull(subscription.getErrors());
         assertEquals(1, subscription.getErrors().size());
@@ -109,15 +115,12 @@ class EventManagerTest {
     }
 
     @Test
-    void subscribeReturnsInactiveSubscriptionForNonMatchingSpec() {
+    void subscribeThrowsForUnsupportedEventType() {
         SubscriptionSpec<SomeOtherEvent> spec = mock(SubscriptionSpec.class);
         EventHandler<SomeOtherEvent> handler = mock(EventHandler.class);
         when(spec.getEventType()).thenReturn(SomeOtherEvent.class);
 
-        Subscription subscription = eventManager.subscribe(spec, handler);
-
-        assertNotNull(subscription);
-        assertFalse(subscription.isActive());
+        assertThrows(UnsupportedEventTypeException.class, () -> eventManager.subscribe(spec, handler));
         verify(triggerManager, never()).enable(any(), any());
     }
 

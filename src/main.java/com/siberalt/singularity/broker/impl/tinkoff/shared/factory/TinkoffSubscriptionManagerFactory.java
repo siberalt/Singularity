@@ -17,6 +17,6 @@ public class TinkoffSubscriptionManagerFactory implements TinkoffServiceFactory<
         var scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
         var marketDataStreamManager = streamManagerFactory.newMarketDataStreamManager(executorService, scheduledExecutorService);
 
-        return new com.siberalt.singularity.broker.impl.tinkoff.shared.SubscriptionManager(marketDataStreamManager);
+        return new com.siberalt.singularity.broker.impl.tinkoff.shared.TinkoffCandleSubscriptionManager(marketDataStreamManager);
     }
 }

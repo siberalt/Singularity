@@ -21,7 +21,7 @@ import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.entity.candle.SqliteCandleRepository;
 import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.entity.operation.BrokerOperationRepository;
-import com.siberalt.singularity.event.handler.CandleSaveEventHandler;
+import com.siberalt.singularity.entity.candle.CandleSaveEventHandler;
 import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.strategy.Strategy;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;

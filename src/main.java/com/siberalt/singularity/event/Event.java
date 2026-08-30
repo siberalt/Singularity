@@ -12,8 +12,4 @@ public abstract class Event {
     public UUID getId() {
         return id;
     }
-
-    abstract public boolean equals(Object o);
-
-    abstract public int hashCode();
 }

@@ -1,7 +1,6 @@
-package com.siberalt.singularity.event.handler;
+package com.siberalt.singularity.entity.candle;
 
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.events.NewCandleEvent;
-import com.siberalt.singularity.entity.candle.WriteCandleRepository;
 import com.siberalt.singularity.event.EventHandler;
 import com.siberalt.singularity.event.subscription.Subscription;
 

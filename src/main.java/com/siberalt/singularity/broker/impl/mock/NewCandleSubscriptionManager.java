@@ -116,7 +116,7 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
                                 specificHandler.handle(newCandleEvent, subscription);
                             } catch (Throwable throwable) {
                                 logger.error("Error occurred while handling event", throwable);
-                                subscription.setErrors(List.of(throwable));
+                                subscription.addError(throwable);
 
                                 if (interruptOnError) {
                                     throw throwable;

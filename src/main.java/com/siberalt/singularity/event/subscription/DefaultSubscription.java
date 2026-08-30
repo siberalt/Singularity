@@ -1,11 +1,13 @@
 package com.siberalt.singularity.event.subscription;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class DefaultSubscription implements Subscription {
-    private boolean active;
-    private Runnable onUnsubscribe;
-    private List<Throwable> errors;
+    private volatile boolean active;
+    private final Runnable onUnsubscribe;
+    private final List<Throwable> errors = new CopyOnWriteArrayList<>();
 
     public DefaultSubscription(boolean active, Runnable onUnsubscribe) {
         this.active = active;
@@ -13,12 +15,11 @@ public class DefaultSubscription implements Subscription {
     }
 
     public DefaultSubscription(boolean active) {
-        this.active = active;
+        this(active, () -> {});
     }
 
-    public DefaultSubscription setErrors(List<Throwable> errors) {
-        this.errors = errors;
-        return this;
+    public void addError(Throwable error) {
+        errors.add(error);
     }
 
     @Override
@@ -34,6 +35,6 @@ public class DefaultSubscription implements Subscription {
 
     @Override
     public List<Throwable> getErrors() {
-        return errors;
+        return Collections.unmodifiableList(errors);
     }
 }
