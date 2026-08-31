@@ -6,6 +6,7 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.broker.contract.service.instrument.common.InstrumentType;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
+import com.siberalt.singularity.broker.contract.service.instrument.request.GetTradableRequest;
 import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -47,5 +48,69 @@ public class MockInstrumentServiceTest {
 
         response = instrumentService.get(GetRequest.of(UUID.randomUUID().toString()));
         Assertions.assertNull(response.getInstrument());
+    }
+
+    @Test
+    void testGetTradableFiltersByCurrency() throws AbstractException {
+        var rubInstrumentUid = UUID.randomUUID().toString();
+        var usdInstrumentUid = UUID.randomUUID().toString();
+
+        InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
+        instrumentRepository.save(
+            MockBroker.DEFAULT_ID,
+            new Instrument()
+                .setInstrumentType(InstrumentType.SHARE)
+                .setLot(10)
+                .setIsin("RU102")
+                .setCurrency("RUB")
+                .setUid(rubInstrumentUid)
+        );
+        instrumentRepository.save(
+            MockBroker.DEFAULT_ID,
+            new Instrument()
+                .setInstrumentType(InstrumentType.SHARE)
+                .setLot(1)
+                .setIsin("US102")
+                .setCurrency("USD")
+                .setUid(usdInstrumentUid)
+        );
+
+        var mockBroker = new MockBroker(null, instrumentRepository, null, null, new ClockStub());
+        var instrumentService = mockBroker.getInstrumentService();
+
+        var response = instrumentService.getTradable(GetTradableRequest.of("rub"));
+
+        Assertions.assertEquals(1, response.getInstruments().size());
+        Assertions.assertEquals(rubInstrumentUid, response.getInstruments().getFirst().getUid());
+    }
+
+    @Test
+    void testGetTradableReturnsAllInstrumentsWhenNoCurrencyGiven() throws AbstractException {
+        InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
+        instrumentRepository.save(
+            MockBroker.DEFAULT_ID,
+            new Instrument()
+                .setInstrumentType(InstrumentType.SHARE)
+                .setLot(10)
+                .setIsin("RU102")
+                .setCurrency("RUB")
+                .setUid(UUID.randomUUID().toString())
+        );
+        instrumentRepository.save(
+            MockBroker.DEFAULT_ID,
+            new Instrument()
+                .setInstrumentType(InstrumentType.SHARE)
+                .setLot(1)
+                .setIsin("US102")
+                .setCurrency("USD")
+                .setUid(UUID.randomUUID().toString())
+        );
+
+        var mockBroker = new MockBroker(null, instrumentRepository, null, null, new ClockStub());
+        var instrumentService = mockBroker.getInstrumentService();
+
+        var response = instrumentService.getTradable(new GetTradableRequest());
+
+        Assertions.assertEquals(2, response.getInstruments().size());
     }
 }
