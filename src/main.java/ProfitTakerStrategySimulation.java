@@ -48,13 +48,13 @@ public class ProfitTakerStrategySimulation {
         );
         InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
         instrumentRepository.save(
+            EventMockBroker.DEFAULT_ID,
             new Instrument()
                 .setInstrumentType(InstrumentType.SHARE)
                 .setLot(1)
                 .setIsin("RU102")
                 .setCurrency("RUB")
                 .setUid("TMOS")
-                .setPositionUid("TMOS_POS")
         );
         SimulationClock clock = new SimpleSimulationClock();
         EventMockBroker broker = new EventMockBroker(

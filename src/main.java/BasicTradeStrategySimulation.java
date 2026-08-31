@@ -82,13 +82,13 @@ public class BasicTradeStrategySimulation {
 
         InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
         instrumentRepository.save(
+            EventMockBroker.DEFAULT_ID,
             new Instrument()
                 .setInstrumentType(InstrumentType.SHARE)
                 .setLot(1)
                 .setIsin("RU102")
                 .setCurrency("RUB")
                 .setUid("TMOS")
-                .setPositionUid("TMOS_POS")
         );
 
         ExtremeLocator maximumLocator = PivotPointExtremeLocator.ofMaximums(100);

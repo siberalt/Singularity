@@ -51,7 +51,7 @@ class MockMarketDataServiceIT {
             .setUid(config.getInstrument().getUid());
 
         InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
-        instrumentRepository.save(instrument);
+        instrumentRepository.save(MockBroker.DEFAULT_ID, instrument);
 
         storageHandler = ResourceHandler.newHandler(() ->
             new CvsFileCandleRepositoryFactory().create(

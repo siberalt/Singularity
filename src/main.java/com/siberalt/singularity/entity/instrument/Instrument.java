@@ -5,7 +5,6 @@ import com.siberalt.singularity.broker.contract.service.instrument.common.Instru
 public class Instrument {
     protected String name;
     protected String uid;
-    protected String positionUid;
     protected InstrumentType instrumentType;
     protected String isin;
     protected int lot;
@@ -26,15 +25,6 @@ public class Instrument {
 
     public Instrument setUid(String uid) {
         this.uid = uid;
-        return this;
-    }
-
-    public String getPositionUid() {
-        return positionUid;
-    }
-
-    public Instrument setPositionUid(String positionUid) {
-        this.positionUid = positionUid;
         return this;
     }
 
@@ -79,8 +69,7 @@ public class Instrument {
         return String.join("",
                 String.format("name: %s\n", getName()),
                 String.format("instrumentType: %s\n", getInstrumentType()),
-                String.format("uid: %s\n", getUid()),
-                String.format("positionUid: %s\n", getPositionUid())
+                String.format("uid: %s\n", getUid())
         );
     }
 }

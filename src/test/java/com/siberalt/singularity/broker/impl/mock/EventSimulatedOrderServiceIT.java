@@ -76,7 +76,7 @@ public class EventSimulatedOrderServiceIT {
         candleStorage = mock(CvsCandleRepository.class);
 
         InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
-        instrumentRepository.save(instrument);
+        instrumentRepository.save(EventMockBroker.DEFAULT_ID, instrument);
         OrderRepository orderRepository = new InMemoryOrderRepository();
         OperationRepository operationRepository = new InMemoryOperationRepository();
         clock = new SimpleSimulationClock();

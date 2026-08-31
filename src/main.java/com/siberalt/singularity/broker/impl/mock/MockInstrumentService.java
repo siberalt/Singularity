@@ -18,6 +18,8 @@ public class MockInstrumentService implements InstrumentService {
 
     @Override
     public GetResponse get(GetRequest request) throws AbstractException {
-        return new GetResponse().setInstrument(instrumentStorage.get(request.getId()));
+        return new GetResponse().setInstrument(
+            instrumentStorage.get(virtualBroker.getId(), request.getId()).orElse(null)
+        );
     }
 }

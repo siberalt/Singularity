@@ -1,7 +1,7 @@
 package com.siberalt.singularity.entity.instrument;
 
 public interface WriteInstrumentRepository {
-    void save(Instrument instrument);
+    void save(String brokerId, Instrument instrument);
 
-    void delete(Instrument instrument);
+    void delete(String brokerId, Instrument instrument);
 }

@@ -45,7 +45,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
         String id
     ) {
         super(candleRepository, instrumentRepository, orderRepository, operationRepository, clock, commissionRatio, id);
-        Set<String> instrumentIds = instrumentRepository.getAll()
+        Set<String> instrumentIds = instrumentRepository.getAll(id)
             .stream()
             .map(Instrument::getUid)
             .collect(Collectors.toSet());

@@ -16,7 +16,6 @@ public class MockInstrumentServiceTest {
     @Test
     void testBasic() throws AbstractException {
         var instrumentUid = UUID.randomUUID().toString();
-        var instrumentPositionUid = UUID.randomUUID().toString();
         var instrumentType = InstrumentType.SHARE;
         var instrumentLot = 10;
         var instrumentIsin = "RU102";
@@ -24,13 +23,13 @@ public class MockInstrumentServiceTest {
 
         InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
         instrumentRepository.save(
+            MockBroker.DEFAULT_ID,
             new Instrument()
                 .setInstrumentType(instrumentType)
                 .setLot(instrumentLot)
                 .setIsin(instrumentIsin)
                 .setCurrency(instrumentCurrency)
                 .setUid(instrumentUid)
-                .setPositionUid(instrumentPositionUid)
         );
 
         var mockBroker = new MockBroker(null, instrumentRepository, null, null, new ClockStub());
@@ -45,7 +44,6 @@ public class MockInstrumentServiceTest {
         Assertions.assertEquals(instrumentIsin, instrument.getIsin());
         Assertions.assertEquals(instrumentCurrency, instrument.getCurrency());
         Assertions.assertEquals(instrumentUid, instrument.getUid());
-        Assertions.assertEquals(instrumentPositionUid, instrument.getPositionUid());
 
         response = instrumentService.get(GetRequest.of(UUID.randomUUID().toString()));
         Assertions.assertNull(response.getInstrument());

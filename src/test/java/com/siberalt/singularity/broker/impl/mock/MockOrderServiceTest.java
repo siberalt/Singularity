@@ -67,7 +67,7 @@ public abstract class MockOrderServiceTest {
         currentTime = Instant.parse("2021-12-15T15:00:00Z");
 
         instrumentStorage = mock(ReadInstrumentRepository.class);
-        when(instrumentStorage.get(instrument.getUid())).thenReturn(instrument);
+        when(instrumentStorage.get(MockBroker.DEFAULT_ID, instrument.getUid())).thenReturn(Optional.of(instrument));
         candleStorage = mock(ReadCandleRepository.class);
         orderRepository = new InMemoryOrderRepository();
         operationRepository = new InMemoryOperationRepository();
@@ -294,7 +294,7 @@ public abstract class MockOrderServiceTest {
             () -> assertBuyOrder(testCandle, OrderType.MARKET, 0)
         );
 
-        when(instrumentStorage.get(config.getInstrument().getUid())).thenReturn(null);
+        when(instrumentStorage.get(MockBroker.DEFAULT_ID, config.getInstrument().getUid())).thenReturn(Optional.empty());
 
         assertThrowsWithErrorCode(
             NotFoundException.class,

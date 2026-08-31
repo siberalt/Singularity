@@ -6,7 +6,6 @@ public class InstrumentConfig {
     protected String dataPath;
     protected String name;
     protected String uid;
-    protected String positionUid;
     protected InstrumentType instrumentType = InstrumentType.SHARE;
     protected String isin;
     protected int lot;
@@ -34,14 +33,6 @@ public class InstrumentConfig {
 
     public void setUid(String uid) {
         this.uid = uid;
-    }
-
-    public String getPositionUid() {
-        return positionUid;
-    }
-
-    public void setPositionUid(String positionUid) {
-        this.positionUid = positionUid;
     }
 
     public InstrumentType getInstrumentType() {

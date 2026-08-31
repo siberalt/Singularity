@@ -7,7 +7,6 @@ public class InstrumentTranslator {
         return ru.tinkoff.piapi.contract.v1.InstrumentShort.newBuilder()
                 .setName(instrument.getName())
                 .setUid(instrument.getUid())
-                .setPositionUid(instrument.getPositionUid())
                 .setInstrumentKind(InstrumentTypeTranslator.toTinkoff(instrument.getInstrumentType()))
                 .build();
     }
@@ -16,7 +15,6 @@ public class InstrumentTranslator {
         return new Instrument()
                 .setName(instrument.getName())
                 .setUid(instrument.getUid())
-                .setPositionUid(instrument.getPositionUid())
                 .setInstrumentType(InstrumentTypeTranslator.toContract(instrument.getInstrumentKind()));
     }
 }
