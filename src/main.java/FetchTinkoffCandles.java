@@ -13,13 +13,17 @@ import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.runtime.progress.ConsoleProgressTrackerFactory;
 import com.siberalt.singularity.service.ConfigFacade;
+import com.siberalt.singularity.utils.entity.CandleMigrationCheckpointRepository;
 import com.siberalt.singularity.utils.entity.CandleMigrationService;
+import com.siberalt.singularity.utils.entity.SqliteCandleMigrationCheckpointRepository;
 import ru.ttech.piapi.core.connector.ConnectorConfiguration;
 import ru.ttech.piapi.core.connector.ServiceStubFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Properties;
@@ -30,7 +34,7 @@ public class FetchTinkoffCandles {
     // Лимит Tinkoff API для минутных свечей — до 1 дня за один запрос
     // (https://developer.tbank.ru/invest/services/quotes/faq_marketdata)
     private static final int CHUNK_SIZE_DAYS = 1;
-    private static final Instant FROM = Instant.parse("2025-01-01T00:00:00Z");
+    private static final Instant FROM = Instant.parse("2026-01-01T00:00:00Z");
     private static final Instant TO = Instant.parse("2027-01-01T00:00:00Z");
 
     public static void main(String[] args) throws IOException, AbstractException, SQLException {
@@ -47,10 +51,11 @@ public class FetchTinkoffCandles {
             ConnectorConfiguration.loadFromProperties(properties)
         );
 
+        String dbPath = ConfigFacade.of(appConfig).getAsString("dbPath");
+
         try (
-            SqliteCandleRepository candleRepository = new SqliteCandleRepositoryFactory().create(
-                ConfigFacade.of(appConfig).getAsString("dbPath")
-            )
+            SqliteCandleRepository candleRepository = new SqliteCandleRepositoryFactory().create(dbPath);
+            Connection checkpointConnection = DriverManager.getConnection(dbPath)
         ) {
             InstrumentService instrumentService = new TinkoffInstrumentServiceFactory().create(serviceStubFactory);
             MarketDataService marketDataService = new TinkoffMarketDataServiceFactory().create(serviceStubFactory);
@@ -62,13 +67,15 @@ public class FetchTinkoffCandles {
             String instrumentUid = instrument.getUid();
 
             TinkoffCandleSource candleSource = new TinkoffCandleSource(marketDataService, INTERVAL);
+            CandleMigrationCheckpointRepository checkpoint = new SqliteCandleMigrationCheckpointRepository(checkpointConnection);
 
             CandleMigrationService migrationService = new CandleMigrationService(
                 new ConsoleProgressTrackerFactory(),
                 candleSource,
                 candleRepository,
                 1,
-                CHUNK_SIZE_DAYS
+                CHUNK_SIZE_DAYS,
+                checkpoint
             );
             migrationService.migrateInstrument(instrumentUid, FROM, TO);
         } finally {

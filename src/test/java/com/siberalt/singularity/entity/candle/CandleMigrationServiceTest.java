@@ -1,6 +1,8 @@
 package com.siberalt.singularity.entity.candle;
 
+import com.siberalt.singularity.utils.entity.CandleMigrationCheckpointRepository;
 import com.siberalt.singularity.utils.entity.CandleMigrationService;
+import com.siberalt.singularity.runtime.progress.NullProgressTrackerFactory;
 import com.siberalt.singularity.shared.TimePointRange;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -25,6 +27,9 @@ class CandleMigrationServiceTest {
 
     @Mock
     private WriteCandleRepository target;
+
+    @Mock
+    private CandleMigrationCheckpointRepository checkpoint;
 
     private CandleMigrationService service;
 
@@ -340,6 +345,75 @@ class CandleMigrationServiceTest {
             verify(source).getRangeMetadata(eq(instrumentUid), any(), any());
             verify(source, times(2)).getPeriod(eq(instrumentUid), any(), any());
             verify(target).saveBatch(List.of(candle1));
+        }
+    }
+
+    @Nested
+    class MigrateInstrumentWithCheckpoint {
+
+        @Test
+        void skipsChunksAlreadyMarkedDone() {
+            String instrumentUid = "TEST_INSTRUMENT";
+            Instant from = FIXED_FROM;
+            Instant to = FIXED_TO;
+
+            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+                .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), 1));
+            when(checkpoint.isDone(eq(instrumentUid), any())).thenReturn(true);
+
+            CandleMigrationService serviceWithCheckpoint = new CandleMigrationService(
+                new NullProgressTrackerFactory(), source, target, 1, 7, checkpoint
+            );
+
+            serviceWithCheckpoint.migrateInstrument(instrumentUid, from, to);
+
+            verify(source).getRangeMetadata(eq(instrumentUid), any(), any());
+            verify(checkpoint).isDone(eq(instrumentUid), any());
+            verifyNoMoreInteractions(source);
+            verifyNoInteractions(target);
+        }
+
+        @Test
+        void marksChunkDoneAfterSuccessfulSave() {
+            String instrumentUid = "TEST_INSTRUMENT";
+            Instant from = FIXED_FROM;
+            Instant to = FIXED_TO;
+            Candle candle = Candle.of(CANDLE_TIME_1, 100, 100.0);
+
+            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+                .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), 1));
+            when(checkpoint.isDone(eq(instrumentUid), any())).thenReturn(false);
+            when(source.getPeriod(eq(instrumentUid), any(), any())).thenReturn(List.of(candle));
+
+            CandleMigrationService serviceWithCheckpoint = new CandleMigrationService(
+                new NullProgressTrackerFactory(), source, target, 1, 7, checkpoint
+            );
+
+            serviceWithCheckpoint.migrateInstrument(instrumentUid, from, to);
+
+            verify(target).saveBatch(List.of(candle));
+            verify(checkpoint).markDone(eq(instrumentUid), any());
+        }
+
+        @Test
+        void doesNotMarkChunkDoneOnFailure() {
+            String instrumentUid = "TEST_INSTRUMENT";
+            Instant from = FIXED_FROM;
+            Instant to = FIXED_TO;
+
+            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+                .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), 1));
+            when(checkpoint.isDone(eq(instrumentUid), any())).thenReturn(false);
+            when(source.getPeriod(eq(instrumentUid), any(), any()))
+                .thenThrow(new RuntimeException("boom"));
+
+            CandleMigrationService serviceWithCheckpoint = new CandleMigrationService(
+                new NullProgressTrackerFactory(), source, target, 1, 7, checkpoint
+            );
+
+            serviceWithCheckpoint.migrateInstrument(instrumentUid, from, to);
+
+            verify(checkpoint, never()).markDone(eq(instrumentUid), any());
         }
     }
 }
