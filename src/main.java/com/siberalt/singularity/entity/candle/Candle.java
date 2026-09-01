@@ -14,9 +14,23 @@ public record Candle (
     Quotation close,
     Quotation high,
     Quotation low,
-    long volume
+    long volume,
+    long volumeBuy,
+    long volumeSell
 ){
     public static final long DEFAULT_INDEX = -1;
+
+    public Candle(
+        String instrumentUid,
+        TimePoint timePoint,
+        Quotation open,
+        Quotation close,
+        Quotation high,
+        Quotation low,
+        long volume
+    ) {
+        this(instrumentUid, timePoint, open, close, high, low, volume, 0L, 0L);
+    }
 
     public static final Candle EMPTY = new Candle(
         null,
@@ -34,6 +48,8 @@ public record Candle (
         if (o == null || getClass() != o.getClass()) return false;
         Candle candle = (Candle) o;
         return volume == candle.volume &&
+            volumeBuy == candle.volumeBuy &&
+            volumeSell == candle.volumeSell &&
             Objects.equals(instrumentUid, candle.instrumentUid) &&
             Objects.equals(timePoint, candle.timePoint) &&
             Objects.equals(open, candle.open) &&
@@ -51,7 +67,9 @@ public record Candle (
             close.toString(),
             high.toString(),
             low.toString(),
-            volume
+            volume,
+            volumeBuy,
+            volumeSell
         );
     }
 
@@ -98,7 +116,7 @@ public record Candle (
 
     @Override
     public Candle clone() {
-        return new Candle(instrumentUid, timePoint, open, close, high, low, volume);
+        return new Candle(instrumentUid, timePoint, open, close, high, low, volume, volumeBuy, volumeSell);
     }
 
     public boolean isEmpty() {

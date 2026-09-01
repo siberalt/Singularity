@@ -10,6 +10,8 @@ public class HistoricCandleTranslator {
                 .setLow(QuotationTranslator.toTinkoff(candle.getLow()))
                 .setClose(QuotationTranslator.toTinkoff(candle.getClose()))
                 .setVolume(candle.getVolume())
+                .setVolumeBuy(candle.getVolumeBuy())
+                .setVolumeSell(candle.getVolumeSell())
                 .setTime(TimestampTranslator.toTinkoff(candle.getTime()))
                 .setIsComplete(candle.isComplete())
                 .build();
@@ -22,6 +24,8 @@ public class HistoricCandleTranslator {
                 .setLow(QuotationTranslator.toContract(candle.getLow()))
                 .setClose(QuotationTranslator.toContract(candle.getClose()))
                 .setVolume(candle.getVolume())
+                .setVolumeBuy(candle.getVolumeBuy())
+                .setVolumeSell(candle.getVolumeSell())
                 .setTime(TimestampTranslator.toContract(candle.getTime()))
                 .setComplete(candle.getIsComplete());
     }

@@ -23,7 +23,7 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
     @Override
     public Optional<Candle> getAt(String instrumentUid, Instant at) {
         String sql = """
-            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume
+            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
             FROM candle
             WHERE instrument_uid = ? AND time = ?
             """;
@@ -47,7 +47,7 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
     @Override
     public List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore) {
         String sql = """
-            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume
+            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
             FROM candle
             WHERE instrument_uid = ? AND time <= ?
             ORDER BY time DESC
@@ -87,7 +87,7 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
     @Override
     public List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter) {
         String sql = """
-            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume
+            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
             FROM candle
             WHERE instrument_uid = ? AND time >= ?
             ORDER BY time ASC
@@ -114,7 +114,7 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
     @Override
     public List<Candle> getPeriod(String instrumentUid, Instant from, Instant to) {
         String sql = """
-            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume
+            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
             FROM candle
             WHERE instrument_uid = ? AND time >= ? AND time <= ?
             ORDER BY time ASC
@@ -140,7 +140,7 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
     @Override
     public List<Candle> findByOpenPrice(FindPriceParams params) {
         String sql = """
-            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume
+            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
             FROM candle
             WHERE instrument_uid = ? AND time >= ? AND time <= ?
             """;
@@ -214,14 +214,16 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
     @Override
     public void save(Candle candle) {
         String sql = """
-            INSERT INTO candle (instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO candle (instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(instrument_uid, time_index) DO UPDATE SET
                 open_price = excluded.open_price,
                 close_price = excluded.close_price,
                 high_price = excluded.high_price,
                 low_price = excluded.low_price,
-                volume = excluded.volume
+                volume = excluded.volume,
+                volume_buy = excluded.volume_buy,
+                volume_sell = excluded.volume_sell
             """;
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -233,6 +235,8 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
             statement.setLong(6, candle.high().toLong());
             statement.setLong(7, candle.low().toLong());
             statement.setLong(8, candle.volume());
+            statement.setLong(9, candle.volumeBuy());
+            statement.setLong(10, candle.volumeSell());
 
             statement.executeUpdate();
         } catch (SQLException e) {
@@ -247,14 +251,16 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
         }
 
         String sql = """
-            INSERT INTO candle (instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO candle (instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(instrument_uid, time_index) DO UPDATE SET
                 open_price = excluded.open_price,
                 close_price = excluded.close_price,
                 high_price = excluded.high_price,
                 low_price = excluded.low_price,
-                volume = excluded.volume
+                volume = excluded.volume,
+                volume_buy = excluded.volume_buy,
+                volume_sell = excluded.volume_sell
             """;
 
         try {
@@ -271,6 +277,8 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
                     statement.setLong(6, candle.high().toLong());
                     statement.setLong(7, candle.low().toLong());
                     statement.setLong(8, candle.volume());
+                    statement.setLong(9, candle.volumeBuy());
+                    statement.setLong(10, candle.volumeSell());
 
                     statement.addBatch();
                 }
@@ -317,6 +325,8 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
         long highPrice = resultSet.getLong("high_price");
         long lowPrice = resultSet.getLong("low_price");
         long volume = resultSet.getLong("volume");
+        long volumeBuy = resultSet.getLong("volume_buy");
+        long volumeSell = resultSet.getLong("volume_sell");
 
         TimePoint timePoint = new TimePoint(timeIndex, Instant.ofEpochMilli(time));
 
@@ -327,7 +337,9 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
             Quotation.fromLong(closePrice),
             Quotation.fromLong(highPrice),
             Quotation.fromLong(lowPrice),
-            volume
+            volume,
+            volumeBuy,
+            volumeSell
         );
     }
 

@@ -15,6 +15,8 @@ public class HistoricCandle {
     protected Quotation low;
     protected Quotation close;
     protected long volume;
+    protected long volumeBuy;
+    protected long volumeSell;
     protected Instant time;
     protected boolean isComplete;
 
@@ -63,6 +65,24 @@ public class HistoricCandle {
         return this;
     }
 
+    public long getVolumeBuy() {
+        return volumeBuy;
+    }
+
+    public HistoricCandle setVolumeBuy(long volumeBuy) {
+        this.volumeBuy = volumeBuy;
+        return this;
+    }
+
+    public long getVolumeSell() {
+        return volumeSell;
+    }
+
+    public HistoricCandle setVolumeSell(long volumeSell) {
+        this.volumeSell = volumeSell;
+        return this;
+    }
+
     public Instant getTime() {
         return time;
     }
@@ -97,6 +117,8 @@ public class HistoricCandle {
         return new HistoricCandle()
                 .setTime(candle.getTime())
                 .setVolume(candle.volume())
+                .setVolumeBuy(candle.volumeBuy())
+                .setVolumeSell(candle.volumeSell())
                 .setLow(candle.low())
                 .setHigh(candle.high())
                 .setClose(candle.close())

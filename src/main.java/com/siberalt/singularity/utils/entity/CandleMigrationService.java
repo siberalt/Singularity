@@ -2,7 +2,7 @@ package com.siberalt.singularity.utils.entity;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.CandleRangeMetadata;
-import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.entity.candle.MigrationCandleSource;
 import com.siberalt.singularity.entity.candle.WriteCandleRepository;
 import com.siberalt.singularity.runtime.progress.NullProgressTrackerFactory;
 import com.siberalt.singularity.runtime.progress.ProgressTracker;
@@ -30,7 +30,7 @@ public class CandleMigrationService {
 
     private static final Logger log = LoggerFactory.getLogger(CandleMigrationService.class);
 
-    private final ReadCandleRepository source;
+    private final MigrationCandleSource source;
     private final WriteCandleRepository target;
     private final ExecutorService executor;
     private final int chunkSizeDays; // размер временного чанка в днях
@@ -44,7 +44,7 @@ public class CandleMigrationService {
      * @param parallelism   количество параллельных потоков для обработки инструментов
      * @param chunkSizeDays размер чанка в днях (разбиение временного интервала)
      */
-    public CandleMigrationService(ReadCandleRepository source,
+    public CandleMigrationService(MigrationCandleSource source,
                                   WriteCandleRepository target,
                                   int parallelism,
                                   int chunkSizeDays) {
@@ -56,7 +56,7 @@ public class CandleMigrationService {
     }
 
     public CandleMigrationService(ProgressTrackerFactory progressTrackerFactory,
-                                  ReadCandleRepository source,
+                                  MigrationCandleSource source,
                                   WriteCandleRepository target,
                                   int parallelism,
                                   int chunkSizeDays) {

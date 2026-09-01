@@ -17,7 +17,18 @@ public class ExceptionConverter {
     }
 
     public static AbstractException toContractException(ServiceRuntimeException exception) {
-        int code = Integer.parseInt(exception.getErrorCode());
+        int code = exception.parseErrorCode();
+
+        if (code == 0) {
+            // errorCode у Tinkoff - это всегда непустое число (см. коды ниже); 0 означает,
+            // что errorStatus.getDescription() вернул не код ошибки API, а текст транспортной
+            // проблемы (обрыв соединения, TLS-хендшейк и т.п.) - см. getErrorType()
+            return ExceptionBuilder
+                    .newBuilder(ErrorCode.INTERNAL_NETWORK_ERROR)
+                    .withMessage("Сетевая ошибка при обращении к Tinkoff API (" + exception.getErrorType() + "): " + exception.getMessage())
+                    .withSuppressedException(exception)
+                    .build();
+        }
 
         var errorCode = switch (code) {
             case 12001 -> ErrorCode.UNIMPLEMENTED; //Method is unimplemented	Метод не реализован.

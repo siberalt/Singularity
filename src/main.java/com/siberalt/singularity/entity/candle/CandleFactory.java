@@ -125,6 +125,44 @@ public class CandleFactory {
         return candle;
     }
 
+    public Candle create(
+        Instant time,
+        Quotation openPrice,
+        Quotation closePrice,
+        Quotation highPrice,
+        Quotation lowPrice,
+        long volume,
+        long volumeBuy,
+        long volumeSell
+    ) {
+        Candle candle = candleCache.get(time);
+
+        if (candle != null) {
+            if (isCandleDiverged(candle, openPrice, closePrice, highPrice, lowPrice, volume, volumeBuy, volumeSell)) {
+                throw new IllegalStateException(
+                    "Candle with time " + time + " already exists in cache with different values."
+                );
+            }
+
+            return candle;
+        }
+
+        candle = new Candle(
+            instrumentUid,
+            new TimePoint(startIndex++, time),
+            openPrice,
+            closePrice,
+            highPrice,
+            lowPrice,
+            volume,
+            volumeBuy,
+            volumeSell
+        );
+
+        candleCache.put(time, candle);
+        return candle;
+    }
+
     private boolean isCandleDiverged(
         Candle cachedCandle,
         Quotation openPrice,
@@ -138,5 +176,20 @@ public class CandleFactory {
             !cachedCandle.high().equals(highPrice) ||
             !cachedCandle.low().equals(lowPrice) ||
             cachedCandle.volume() != volume;
+    }
+
+    private boolean isCandleDiverged(
+        Candle cachedCandle,
+        Quotation openPrice,
+        Quotation closePrice,
+        Quotation highPrice,
+        Quotation lowPrice,
+        long volume,
+        long volumeBuy,
+        long volumeSell
+    ) {
+        return isCandleDiverged(cachedCandle, openPrice, closePrice, highPrice, lowPrice, volume) ||
+            cachedCandle.volumeBuy() != volumeBuy ||
+            cachedCandle.volumeSell() != volumeSell;
     }
 }

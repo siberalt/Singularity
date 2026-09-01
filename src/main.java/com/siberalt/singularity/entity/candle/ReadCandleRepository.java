@@ -4,16 +4,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-public interface ReadCandleRepository {
+public interface ReadCandleRepository extends MigrationCandleSource {
     Optional<Candle> getAt(String instrumentUid, Instant at);
 
     List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore);
 
     List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter);
 
-    List<Candle> getPeriod(String instrumentUid, Instant from, Instant to);
-
     List<Candle> findByOpenPrice(FindPriceParams params);
-
-    CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to);
 }
