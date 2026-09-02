@@ -1,5 +1,6 @@
 package com.siberalt.singularity.utils.entity;
 
+import com.siberalt.singularity.db.initialize.FlywayDatabaseInitializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,8 +9,8 @@ import org.junit.jupiter.api.Test;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.Instant;
+import java.util.UUID;
 
 class SqliteCandleMigrationCheckpointRepositoryTest {
     private static final String INSTRUMENT_UID = "TEST_INSTRUMENT";
@@ -20,17 +21,15 @@ class SqliteCandleMigrationCheckpointRepositoryTest {
     @BeforeEach
     void setUp() throws SQLException, ClassNotFoundException {
         Class.forName("org.sqlite.JDBC");
-        connection = DriverManager.getConnection("jdbc:sqlite::memory:");
-        try (Statement statement = connection.createStatement()) {
-            statement.execute("""
-                CREATE TABLE candle_migration_range (
-                    instrument_uid TEXT NOT NULL,
-                    range_from INTEGER NOT NULL,
-                    range_to INTEGER NOT NULL,
-                    PRIMARY KEY (instrument_uid, range_from)
-                )
-                """);
-        }
+
+        // Общая для процесса in-memory база под уникальным именем: держим соединение
+        // открытым, пока идут Flyway-миграции (иначе SQLite уничтожит пустую in-memory
+        // базу сразу после закрытия последнего подключения к ней), и используем
+        // уникальное имя на тест, чтобы тесты не делили состояние друг с другом.
+        String jdbcUrl = "jdbc:sqlite:file:" + UUID.randomUUID() + "?mode=memory&cache=shared";
+        connection = DriverManager.getConnection(jdbcUrl);
+        new FlywayDatabaseInitializer().migrate(jdbcUrl);
+
         repository = new SqliteCandleMigrationCheckpointRepository(connection);
     }
 

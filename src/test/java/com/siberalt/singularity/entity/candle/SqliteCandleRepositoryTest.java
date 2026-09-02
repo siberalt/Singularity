@@ -1,6 +1,7 @@
 package com.siberalt.singularity.entity.candle;
 
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
+import com.siberalt.singularity.db.initialize.FlywayDatabaseInitializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,8 +13,8 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.Instant;
+import java.util.UUID;
 
 class SqliteCandleRepositoryTest {
     private static final String INSTRUMENT_UID = "TEST_INSTRUMENT";
@@ -24,25 +25,15 @@ class SqliteCandleRepositoryTest {
     @BeforeEach
     void setUp() throws SQLException, ClassNotFoundException {
         Class.forName("org.sqlite.JDBC");
-        connection = DriverManager.getConnection("jdbc:sqlite::memory:");
-        try (Statement statement = connection.createStatement()) {
-            statement.execute("""
-                CREATE TABLE candle (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    instrument_uid TEXT NOT NULL,
-                    time_index INTEGER NOT NULL,
-                    time INTEGER NOT NULL,
-                    open_price INTEGER NOT NULL,
-                    close_price INTEGER NOT NULL,
-                    high_price INTEGER NOT NULL,
-                    low_price INTEGER NOT NULL,
-                    volume INTEGER NOT NULL,
-                    volume_buy INTEGER NOT NULL DEFAULT 0,
-                    volume_sell INTEGER NOT NULL DEFAULT 0,
-                    UNIQUE(instrument_uid, time)
-                )
-                """);
-        }
+
+        // Общая для процесса in-memory база под уникальным именем: держим соединение
+        // открытым, пока идут Flyway-миграции (иначе SQLite уничтожит пустую in-memory
+        // базу сразу после закрытия последнего подключения к ней), и используем
+        // уникальное имя на тест, чтобы тесты не делили состояние друг с другом.
+        String jdbcUrl = "jdbc:sqlite:file:" + UUID.randomUUID() + "?mode=memory&cache=shared";
+        connection = DriverManager.getConnection(jdbcUrl);
+        new FlywayDatabaseInitializer().migrate(jdbcUrl);
+
         repository = new SqliteCandleRepository(connection);
     }
 
