@@ -29,11 +29,14 @@ import java.time.Instant;
 import java.util.Properties;
 
 public class FetchTinkoffCandles {
-    private static final String INSTRUMENT_QUERY = "55371b1f-8f7c-4c12-9d93-386fae5ec12a";
+    private static final String INSTRUMENT_QUERY = "b9dff600-4ca6-4fa9-ba91-df2126548ccc";
     private static final CandleInterval INTERVAL = CandleInterval.MIN_1;
     // Лимит Tinkoff API для минутных свечей — до 1 дня за один запрос
     // (https://developer.tbank.ru/invest/services/quotes/faq_marketdata)
     private static final int CHUNK_SIZE_DAYS = 1;
+    // Сколько чанков одного инструмента запрашивать параллельно (сеть - узкое место,
+    // не сам Tinkoff API; консервативное значение, чтобы не упереться в rate limit)
+    private static final int CHUNK_PARALLELISM = 5;
     private static final Instant FROM = Instant.parse("2026-01-01T00:00:00Z");
     private static final Instant TO = Instant.parse("2027-01-01T00:00:00Z");
 
@@ -69,14 +72,12 @@ public class FetchTinkoffCandles {
             TinkoffCandleSource candleSource = new TinkoffCandleSource(marketDataService, INTERVAL);
             CandleMigrationCheckpointRepository checkpoint = new SqliteCandleMigrationCheckpointRepository(checkpointConnection);
 
-            CandleMigrationService migrationService = new CandleMigrationService(
-                new ConsoleProgressTrackerFactory(),
-                candleSource,
-                candleRepository,
-                1,
-                CHUNK_SIZE_DAYS,
-                checkpoint
-            );
+            CandleMigrationService migrationService = CandleMigrationService.builder(candleSource, candleRepository)
+                .progressTrackerFactory(new ConsoleProgressTrackerFactory())
+                .chunkSizeDays(CHUNK_SIZE_DAYS)
+                .checkpoint(checkpoint)
+                .chunkParallelism(CHUNK_PARALLELISM)
+                .build();
             migrationService.migrateInstrument(instrumentUid, FROM, TO);
         } finally {
             serviceStubFactory.getChannel().shutdown();

@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Optional;
 
-public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
+public class SqliteCandleRepository implements CandleRepository, CandleIndexNormalizer, AutoCloseable {
     private final Connection connection;
 
     public SqliteCandleRepository(Connection connection) {
@@ -216,7 +216,7 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
         String sql = """
             INSERT INTO candle (instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(instrument_uid, time_index) DO UPDATE SET
+            ON CONFLICT(instrument_uid, time) DO UPDATE SET
                 open_price = excluded.open_price,
                 close_price = excluded.close_price,
                 high_price = excluded.high_price,
@@ -253,7 +253,7 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
         String sql = """
             INSERT INTO candle (instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(instrument_uid, time_index) DO UPDATE SET
+            ON CONFLICT(instrument_uid, time) DO UPDATE SET
                 open_price = excluded.open_price,
                 close_price = excluded.close_price,
                 high_price = excluded.high_price,
@@ -304,15 +304,63 @@ public class SqliteCandleRepository implements CandleRepository, AutoCloseable {
 
     @Override
     public void delete(Candle candle) {
-        String sql = "DELETE FROM candle WHERE instrument_uid = ? AND time_index = ?";
+        String sql = "DELETE FROM candle WHERE instrument_uid = ? AND time = ?";
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, candle.instrumentUid());
-            statement.setLong(2, candle.getIndex());
+            statement.setLong(2, candle.getTime().toEpochMilli());
 
             statement.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException("Ошибка при удалении свечи", e);
+        }
+    }
+
+    @Override
+    public void normalizeIndex(String instrumentUid, Instant from) {
+        long fromMillis = from.toEpochMilli();
+
+        // Индекс последней свечи перед from + 1 - быстрый seek по существующему
+        // индексу (instrument_uid, time), независимо от размера всей истории.
+        // COUNT(*) по тому же условию дал бы то же значение, но потребовал бы
+        // пересчитать все строки до from.
+        String lastIndexSql = """
+            SELECT time_index FROM candle
+            WHERE instrument_uid = ? AND time < ?
+            ORDER BY time DESC
+            LIMIT 1
+            """;
+        long baseIndex;
+        try (PreparedStatement statement = connection.prepareStatement(lastIndexSql)) {
+            statement.setString(1, instrumentUid);
+            statement.setLong(2, fromMillis);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                baseIndex = resultSet.next() ? resultSet.getLong(1) + 1 : 0;
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Ошибка при нормализации индексов свечей", e);
+        }
+
+        String updateSql = """
+            WITH ranked AS (
+                SELECT id, ROW_NUMBER() OVER (ORDER BY time ASC) - 1 AS rn
+                FROM candle
+                WHERE instrument_uid = ? AND time >= ?
+            )
+            UPDATE candle
+            SET time_index = ? + (SELECT rn FROM ranked WHERE ranked.id = candle.id)
+            WHERE instrument_uid = ? AND time >= ?
+            """;
+
+        try (PreparedStatement statement = connection.prepareStatement(updateSql)) {
+            statement.setString(1, instrumentUid);
+            statement.setLong(2, fromMillis);
+            statement.setLong(3, baseIndex);
+            statement.setString(4, instrumentUid);
+            statement.setLong(5, fromMillis);
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Ошибка при нормализации индексов свечей", e);
         }
     }
 

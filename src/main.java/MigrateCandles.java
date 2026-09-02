@@ -32,13 +32,11 @@ public class MigrateCandles {
                 ConfigFacade.of(configuration).getAsString("dbPath")
             )
         ) {
-            CandleMigrationService candleMigrationService = new CandleMigrationService(
-                new ConsoleProgressTrackerFactory(),
-                cvsCandleRepository,
-                sqliteCandleRepository,
-                5,
-                360
-            );
+            CandleMigrationService candleMigrationService = CandleMigrationService.builder(cvsCandleRepository, sqliteCandleRepository)
+                .progressTrackerFactory(new ConsoleProgressTrackerFactory())
+                .parallelism(5)
+                .chunkSizeDays(360)
+                .build();
             candleMigrationService.migrateInstrument("TMOS", Instant.MIN, Instant.MAX);
         }
     }

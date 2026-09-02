@@ -6,21 +6,25 @@ import com.siberalt.singularity.broker.contract.service.market.request.CandleInt
 import com.siberalt.singularity.broker.contract.service.market.request.GetCandlesRequest;
 import com.siberalt.singularity.broker.contract.service.market.response.HistoricCandle;
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.entity.candle.CandleFactory;
 import com.siberalt.singularity.entity.candle.CandleRangeMetadata;
 import com.siberalt.singularity.entity.candle.MigrationCandleSource;
+import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.shared.TimePointRange;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Индекс свечей здесь не проставляется (используется placeholder из
+ * {@link TimePoint#TimePoint(Instant)}) - реальный time_index вычисляется
+ * отдельным шагом после миграции ({@link com.siberalt.singularity.entity.candle.CandleIndexNormalizer}).
+ * Благодаря этому источник не хранит никакого состояния между вызовами и
+ * безопасен для параллельной обработки чанков одного инструмента.
+ */
 public class TinkoffCandleSource implements MigrationCandleSource {
     protected final MarketDataService marketDataService;
     protected final CandleInterval interval;
-    protected final Map<String, CandleFactory> candleFactories = new ConcurrentHashMap<>();
 
     public TinkoffCandleSource(MarketDataService marketDataService, CandleInterval interval) {
         this.marketDataService = marketDataService;
@@ -34,11 +38,11 @@ public class TinkoffCandleSource implements MigrationCandleSource {
                 GetCandlesRequest.of(from, to, interval, instrumentUid)
             ).getCandles();
 
-            CandleFactory candleFactory = candleFactories.computeIfAbsent(instrumentUid, CandleFactory::new);
             List<Candle> candles = new ArrayList<>();
             for (HistoricCandle historicCandle : historicCandles) {
-                candles.add(candleFactory.create(
-                    historicCandle.getTime(),
+                candles.add(new Candle(
+                    instrumentUid,
+                    new TimePoint(historicCandle.getTime()),
                     historicCandle.getOpen(),
                     historicCandle.getClose(),
                     historicCandle.getHigh(),
@@ -56,9 +60,15 @@ public class TinkoffCandleSource implements MigrationCandleSource {
 
     @Override
     public CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to) {
-        if (!from.isBefore(to)) {
+        // Свечей из будущего не бывает - без этой обрезки CandleMigrationService
+        // нарежет чанки вплоть до запрошенного to, часть из них уйдёт в API с
+        // датой "из будущего", получит ошибку валидации и никогда не будет
+        // учтена в прогрессе (чанк падает в catch и не помечается обработанным).
+        Instant clampedTo = to.isAfter(Instant.now()) ? Instant.now() : to;
+
+        if (!from.isBefore(clampedTo)) {
             return CandleRangeMetadata.EMPTY;
         }
-        return new CandleRangeMetadata(new TimePointRange(from, to), 1);
+        return new CandleRangeMetadata(new TimePointRange(from, clampedTo), 1);
     }
 }

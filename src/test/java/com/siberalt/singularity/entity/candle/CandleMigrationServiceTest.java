@@ -4,6 +4,7 @@ import com.siberalt.singularity.utils.entity.CandleMigrationCheckpointRepository
 import com.siberalt.singularity.utils.entity.CandleMigrationService;
 import com.siberalt.singularity.runtime.progress.NullProgressTrackerFactory;
 import com.siberalt.singularity.shared.TimePointRange;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletionException;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -42,7 +44,10 @@ class CandleMigrationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new CandleMigrationService(source, target, 2, 7);
+        service = CandleMigrationService.builder(source, target)
+            .parallelism(2)
+            .chunkSizeDays(7)
+            .build();
     }
 
     @Nested
@@ -361,9 +366,11 @@ class CandleMigrationServiceTest {
                 .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), 1));
             when(checkpoint.isDone(eq(instrumentUid), any())).thenReturn(true);
 
-            CandleMigrationService serviceWithCheckpoint = new CandleMigrationService(
-                new NullProgressTrackerFactory(), source, target, 1, 7, checkpoint
-            );
+            CandleMigrationService serviceWithCheckpoint = CandleMigrationService.builder(source, target)
+                .progressTrackerFactory(new NullProgressTrackerFactory())
+                .chunkSizeDays(7)
+                .checkpoint(checkpoint)
+                .build();
 
             serviceWithCheckpoint.migrateInstrument(instrumentUid, from, to);
 
@@ -385,9 +392,11 @@ class CandleMigrationServiceTest {
             when(checkpoint.isDone(eq(instrumentUid), any())).thenReturn(false);
             when(source.getPeriod(eq(instrumentUid), any(), any())).thenReturn(List.of(candle));
 
-            CandleMigrationService serviceWithCheckpoint = new CandleMigrationService(
-                new NullProgressTrackerFactory(), source, target, 1, 7, checkpoint
-            );
+            CandleMigrationService serviceWithCheckpoint = CandleMigrationService.builder(source, target)
+                .progressTrackerFactory(new NullProgressTrackerFactory())
+                .chunkSizeDays(7)
+                .checkpoint(checkpoint)
+                .build();
 
             serviceWithCheckpoint.migrateInstrument(instrumentUid, from, to);
 
@@ -407,11 +416,47 @@ class CandleMigrationServiceTest {
             when(source.getPeriod(eq(instrumentUid), any(), any()))
                 .thenThrow(new RuntimeException("boom"));
 
-            CandleMigrationService serviceWithCheckpoint = new CandleMigrationService(
-                new NullProgressTrackerFactory(), source, target, 1, 7, checkpoint
-            );
+            CandleMigrationService serviceWithCheckpoint = CandleMigrationService.builder(source, target)
+                .progressTrackerFactory(new NullProgressTrackerFactory())
+                .chunkSizeDays(7)
+                .checkpoint(checkpoint)
+                .build();
 
             serviceWithCheckpoint.migrateInstrument(instrumentUid, from, to);
+
+            verify(checkpoint, never()).markDone(eq(instrumentUid), any());
+        }
+    }
+
+    @Nested
+    class MigrateInstrumentWriteFailure {
+
+        @Test
+        void writeFailurePropagatesInsteadOfBeingSwallowed() {
+            // Ошибка при чтении (сеть) - ожидаемая помеха, чанк можно тихо повторить.
+            // Ошибка при записи (например, рассинхронизация схемы БД) - структурная
+            // проблема, которая будет повторяться на каждом чанке одинаково, поэтому
+            // должна прерывать миграцию, а не тихо проглатываться.
+            String instrumentUid = "TEST_INSTRUMENT";
+            Instant from = FIXED_FROM;
+            Instant to = FIXED_TO;
+            Candle candle = Candle.of(CANDLE_TIME_1, 100, 100.0);
+
+            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+                .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), 1));
+            when(checkpoint.isDone(eq(instrumentUid), any())).thenReturn(false);
+            when(source.getPeriod(eq(instrumentUid), any(), any())).thenReturn(List.of(candle));
+            doThrow(new RuntimeException("SQLITE_ERROR: constraint mismatch"))
+                .when(target).saveBatch(List.of(candle));
+
+            CandleMigrationService serviceWithCheckpoint = CandleMigrationService.builder(source, target)
+                .progressTrackerFactory(new NullProgressTrackerFactory())
+                .chunkSizeDays(7)
+                .checkpoint(checkpoint)
+                .build();
+
+            Assertions.assertThrows(CompletionException.class,
+                () -> serviceWithCheckpoint.migrateInstrument(instrumentUid, from, to));
 
             verify(checkpoint, never()).markDone(eq(instrumentUid), any());
         }
