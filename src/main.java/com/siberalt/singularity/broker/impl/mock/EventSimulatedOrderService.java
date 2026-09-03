@@ -75,8 +75,12 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
                     String.format("[%s] Executing order event: %s", clock.currentTime(), orderEvent.getEvent().getId())
                 );
 
+                Order order = orderEvent.getOrder();
+                // The event is consumed here either way, so drop it from the by-id index too -
+                // otherwise it accumulates for the whole simulation.
+                orderEvents.remove(order.getId());
+
                 try {
-                    Order order = orderEvent.getOrder();
                     List<TransactionSpec> transactionSpecs = calculateTransactions(order);
 
                     if (order.getDirection() == OrderDirection.BUY) {
@@ -199,6 +203,9 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
         Order futureOrder = new Order()
             .setAccountId(order.getAccountId())
             .setId(order.getId())
+            // Same logical order, so it keeps the key: the fill replaces the scheduled order in
+            // the repository instead of leaving the original key entry behind.
+            .setIdempotencyKey(order.getIdempotencyKey())
             .setDirection(order.getDirection())
             .setOrderType(order.getOrderType())
             .setLotsRequested(order.getLotsRequested())
@@ -249,7 +256,20 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
     @Override
     protected void cancel(Order order) {
         super.cancel(order);
-        eventObserver.cancelEvent(orderEvents.get(order.getId()).getEvent());
+
+        // An order that filled immediately never got a scheduled event.
+        OrderEvent orderEvent = orderEvents.remove(order.getId());
+
+        if (orderEvent != null) {
+            eventObserver.cancelEvent(orderEvent.getEvent());
+            orderEventsByTime.computeIfPresent(
+                orderEvent.getEvent().getTimePoint(),
+                (time, events) -> {
+                    events.remove(orderEvent);
+                    return events.isEmpty() ? null : events;
+                }
+            );
+        }
     }
 
     protected Candle findMarketSignalCandle(

@@ -29,7 +29,7 @@ import java.time.Instant;
 import java.util.Properties;
 
 public class FetchTinkoffCandles {
-    private static final String INSTRUMENT_QUERY = "b9dff600-4ca6-4fa9-ba91-df2126548ccc";
+    private static final String INSTRUMENT_QUERY = "55371b1f-8f7c-4c12-9d93-386fae5ec12a";
     private static final CandleInterval INTERVAL = CandleInterval.MIN_1;
     // Лимит Tinkoff API для минутных свечей — до 1 дня за один запрос
     // (https://developer.tbank.ru/invest/services/quotes/faq_marketdata)

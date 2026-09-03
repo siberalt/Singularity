@@ -46,7 +46,9 @@ public class MockUserService implements UserService {
 
         var account = accountsStates.get(accountId).getAccount();
 
-        assert null == account.getClosedDate() : ExceptionBuilder.create(ErrorCode.ACCOUNT_CLOSED);
+        if (null != account.getClosedDate()) {
+            throw ExceptionBuilder.create(ErrorCode.ACCOUNT_CLOSED);
+        }
 
         account.setClosedDate(mockBroker.clock.currentTime());
         account.setStatus(AccountStatus.CLOSED);

@@ -17,7 +17,9 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.shared.exception.MockBrokerException;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.AccountBalance;
 import com.siberalt.singularity.broker.impl.mock.shared.user.AccountState;
+import com.siberalt.singularity.entity.transaction.Transaction;
 import com.siberalt.singularity.entity.transaction.TransactionSpec;
+import com.siberalt.singularity.entity.transaction.TransactionStatus;
 import com.siberalt.singularity.entity.transaction.TransactionType;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.instrument.Instrument;
@@ -246,7 +248,7 @@ public class MockOrderService implements OrderService {
         registerOrder(order);
 
         AccountBalance balance = operationsService.getAccountBalance(order.getAccountId());
-        balance.applyTransactions(transactionSpecs);
+        checkTransactionsApplied(balance.applyTransactions(transactionSpecs));
         operationsService.subtractFromPosition(
             order.getAccountId(),
             order.getInstrument().getUid(),
@@ -267,7 +269,7 @@ public class MockOrderService implements OrderService {
         registerOrder(order);
 
         AccountBalance balance = operationsService.getAccountBalance(order.getAccountId());
-        balance.applyTransactions(transactionSpecs);
+        checkTransactionsApplied(balance.applyTransactions(transactionSpecs));
         operationsService.addToPosition(
             order.getAccountId(),
             order.getInstrument().getUid(),
@@ -275,6 +277,22 @@ public class MockOrderService implements OrderService {
         );
 
         registerOperations(order, transactionSpecs);
+    }
+
+    /**
+     * A transaction can still be rejected by the balance itself (an overdraft the pre-checks did
+     * not catch). Applying the rest of the fill - the position change, the operations - on top of a
+     * rejected transaction would leave the account inconsistent, so fail the order instead.
+     */
+    protected void checkTransactionsApplied(List<Transaction> transactions) throws AbstractException {
+        for (Transaction transaction : transactions) {
+            if (transaction.getStatus() == TransactionStatus.FAILED) {
+                throw ExceptionBuilder
+                    .newBuilder(ErrorCode.INSUFFICIENT_BALANCE)
+                    .withMessage(transaction.getErrorMessage())
+                    .build();
+            }
+        }
     }
 
     protected void registerOperations(Order order, List<TransactionSpec> transactionSpecs) {
@@ -364,6 +382,7 @@ public class MockOrderService implements OrderService {
 
         return new Order()
             .setId(UUID.randomUUID().toString())
+            .setIdempotencyKey(request.getIdempotencyKey())
             .setRequestedPrice(request.getPrice())
             .setCreatedTime(mockBroker.clock.currentTime())
             .setLotsRequested(request.getQuantity())
@@ -482,8 +501,15 @@ public class MockOrderService implements OrderService {
     protected void registerOrder(Order order) throws AbstractException {
         if (order.getIdempotencyKey() == null) {
             order.setIdempotencyKey(UUID.randomUUID().toString());
-        } else if (null == orderRepository.getByIdempotencyKey(order.getIdempotencyKey())) {
-            throw ExceptionBuilder.create(ErrorCode.DUPLICATE_ORDER);
+        } else {
+            Order existingOrder = orderRepository.getByIdempotencyKey(order.getIdempotencyKey());
+
+            // The same order may be re-registered under its own key (a limit order is stored once
+            // when scheduled and again when it fills); only a different order reusing the key is a
+            // duplicate.
+            if (existingOrder != null && !existingOrder.getId().equals(order.getId())) {
+                throw ExceptionBuilder.create(ErrorCode.DUPLICATE_ORDER);
+            }
         }
 
         orderRepository.save(order);

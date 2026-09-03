@@ -14,7 +14,6 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.FindPriceParams;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -126,41 +125,49 @@ public class MockMarketDataService implements MarketDataService {
         return adaptedCandles;
     }
 
+    /**
+     * Aggregates a run of candles into the single candle of a wider interval: open is taken from
+     * the first candle, close from the last one, high/low are the extremes over the run and the
+     * volumes are summed. Averaging any of these would distort the resulting bar - notably the
+     * volume, which is a count and only ever adds up.
+     */
     protected Candle uniteCandles(List<Candle> uniteCandles) {
         if (uniteCandles.isEmpty()) {
             throw new RuntimeException("No candles to unite. Empty list");
         }
 
-        var candlesCount = uniteCandles.size();
-        Quotation openAvg = Quotation.of(BigDecimal.ZERO);
-        Quotation closeAvg = Quotation.of(BigDecimal.ZERO);
-        Quotation highAvg = Quotation.of(BigDecimal.ZERO);
-        Quotation lowAvg = Quotation.of(BigDecimal.ZERO);
-        long volumeAvg = 0;
+        Candle firstCandle = uniteCandles.getFirst();
+        Candle lastCandle = uniteCandles.getLast();
+        Quotation high = firstCandle.high();
+        Quotation low = firstCandle.low();
+        long volume = 0;
+        long volumeBuy = 0;
+        long volumeSell = 0;
 
         for (var uniteCandle : uniteCandles) {
-            openAvg = openAvg.add(uniteCandle.open());
-            closeAvg = closeAvg.add(uniteCandle.close());
-            highAvg = highAvg.add(uniteCandle.high());
-            lowAvg = lowAvg.add(uniteCandle.low());
-            volumeAvg += uniteCandle.volume();
+            if (uniteCandle.high().isGreaterThan(high)) {
+                high = uniteCandle.high();
+            }
+
+            if (uniteCandle.low().isLessThan(low)) {
+                low = uniteCandle.low();
+            }
+
+            volume += uniteCandle.volume();
+            volumeBuy += uniteCandle.volumeBuy();
+            volumeSell += uniteCandle.volumeSell();
         }
 
-        openAvg = openAvg.divide(candlesCount);
-        closeAvg = closeAvg.divide(candlesCount);
-        highAvg = highAvg.divide(candlesCount);
-        lowAvg = lowAvg.divide(candlesCount);
-        volumeAvg /= candlesCount;
-        var firstCandle = uniteCandles.stream().findFirst().orElseThrow();
-
-        return Candle.of(
-            firstCandle.getTime(),
+        return new Candle(
             firstCandle.instrumentUid(),
-            volumeAvg,
-            openAvg,
-            highAvg,
-            lowAvg,
-            closeAvg
+            firstCandle.timePoint(),
+            firstCandle.open(),
+            lastCandle.close(),
+            high,
+            low,
+            volume,
+            volumeBuy,
+            volumeSell
         );
     }
 

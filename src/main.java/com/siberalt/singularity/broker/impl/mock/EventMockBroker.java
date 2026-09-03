@@ -10,7 +10,6 @@ import com.siberalt.singularity.entity.operation.OperationRepository;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.strategy.context.Clock;
 
-import java.util.Set;
 import java.util.stream.Collectors;
 
 public class EventMockBroker extends MockBroker implements EventSubscriptionBroker {
@@ -45,10 +44,6 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
         String id
     ) {
         super(candleRepository, instrumentRepository, orderRepository, operationRepository, clock, commissionRatio, id);
-        Set<String> instrumentIds = instrumentRepository.getAll(id)
-            .stream()
-            .map(Instrument::getUid)
-            .collect(Collectors.toSet());
         this.orderService = new EventSimulatedOrderService(
             this,
             orderRepository,
@@ -56,7 +51,15 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
             new CommissionTransactionSpecProvider(commissionRatio),
             new OrderTransactionSpecProvider()
         );
-        this.subscriptionManager = new NewCandleSubscriptionManager(candleRepository, instrumentIds);
+        // Resolved when the simulation starts, not here - instruments are often registered after
+        // the broker is built.
+        this.subscriptionManager = new NewCandleSubscriptionManager(
+            candleRepository,
+            () -> instrumentRepository.getAll(id)
+                .stream()
+                .map(Instrument::getUid)
+                .collect(Collectors.toSet())
+        );
     }
 
     @Override

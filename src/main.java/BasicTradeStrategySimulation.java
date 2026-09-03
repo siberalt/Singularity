@@ -64,6 +64,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class BasicTradeStrategySimulation {
+    private final static String INSTRUMENT_ID = "TMOS";
+
     public static void main(String[] args) throws AbstractException, IOException {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2022-01-01T00:00:00Z");
@@ -88,7 +90,7 @@ public class BasicTradeStrategySimulation {
                 .setLot(1)
                 .setIsin("RU102")
                 .setCurrency("RUB")
-                .setUid("TMOS")
+                .setUid(INSTRUMENT_ID)
         );
 
         ExtremeLocator maximumLocator = PivotPointExtremeLocator.ofMaximums(100);
@@ -132,7 +134,7 @@ public class BasicTradeStrategySimulation {
 
         EffectivenessAnalyzer analyzer = new EffectivenessAnalyzer(
             strategyStarter,
-            "TMOS",
+            INSTRUMENT_ID,
             initialInvestment,
             candleRepository,
             instrumentRepository,
@@ -171,7 +173,7 @@ public class BasicTradeStrategySimulation {
                 List.of(),
                 orders,
                 candleRepository,
-                "TMOS",
+                INSTRUMENT_ID,
                 startTime,
                 endTime,
                 List.of()
@@ -182,7 +184,7 @@ public class BasicTradeStrategySimulation {
                 resistanceTracker.getSnapshots(),
                 orders,
                 candleRepository,
-                "TMOS",
+                INSTRUMENT_ID,
                 startTime,
                 endTime,
                 selectorTracker.getTrackedLevelPairs()
@@ -269,7 +271,7 @@ public class BasicTradeStrategySimulation {
         );
         BasicTradeStrategy strategy = new BasicTradeStrategy(
             broker,
-            "TMOS",
+            INSTRUMENT_ID,
             account.getId(),
             new WindowUpsideCalculator(switcherUpsideCalculator, 60 * 24),
             candleRepository

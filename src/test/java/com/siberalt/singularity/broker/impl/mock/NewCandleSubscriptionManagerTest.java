@@ -6,6 +6,7 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.CandleRepository;
 import com.siberalt.singularity.event.EventHandler;
 import com.siberalt.singularity.event.subscription.Subscription;
+import com.siberalt.singularity.event.subscription.SubscriptionSpec;
 import com.siberalt.singularity.simulation.EventSimulator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
@@ -54,14 +56,39 @@ public class NewCandleSubscriptionManagerTest {
     }
 
     @Test
-    public void subscribeReturnsInactiveSubscriptionForInvalidSpec() {
+    public void subscribeRejectsUnknownInstrument() {
         NewCandleSubscriptionSpec invalidSubscription = new NewCandleSubscriptionSpec(Set.of("invalidInstrument"));
         EventHandler<NewCandleEvent> handler = (event, subscription) -> {
         };
 
-        Subscription subscription = subscriptionManager.subscribe(invalidSubscription, handler);
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> subscriptionManager.subscribe(invalidSubscription, handler)
+        );
 
-        assertFalse(subscription.isActive());
+        assertTrue(exception.getMessage().contains("invalidInstrument"));
+    }
+
+    @Test
+    public void subscribeRejectsUnsupportedSpecType() {
+        SubscriptionSpec<NewCandleEvent> unsupportedSpec = new SubscriptionSpec<>(NewCandleEvent.class) {
+            @Override
+            public boolean equals(Object obj) {
+                return this == obj;
+            }
+
+            @Override
+            public int hashCode() {
+                return System.identityHashCode(this);
+            }
+        };
+        EventHandler<NewCandleEvent> handler = (event, subscription) -> {
+        };
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> subscriptionManager.subscribe(unsupportedSpec, handler)
+        );
     }
 
     @Test

@@ -25,7 +25,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -351,35 +350,33 @@ class MockMarketDataServiceIT {
     ) {
         var uniteCandles = new ArrayList<>(marketDataService.candleRepository.getPeriod(instrumentUid, from, to));
 
-        uniteCandles.remove(uniteCandles.size() - 1);
+        uniteCandles.removeLast();
         assertTrue(uniteCandles.size() <= assertInterval.getDuration().toMinutes());
 
         System.out.println(candle.getTime() + ": test " + uniteCandles.size());
 
-        Quotation openAvg = Quotation.of(BigDecimal.ZERO);
-        Quotation closeAvg = Quotation.of(BigDecimal.ZERO);
-        Quotation highAvg = Quotation.of(BigDecimal.ZERO);
-        Quotation lowAvg = Quotation.of(BigDecimal.ZERO);
-        long volumeAvg = 0;
+        Quotation expectedOpen = uniteCandles.getFirst().open();
+        Quotation expectedClose = uniteCandles.getLast().close();
+        Quotation expectedHigh = uniteCandles.getFirst().high();
+        Quotation expectedLow = uniteCandles.getFirst().low();
+        long expectedVolume = 0;
 
         for (var uniteCandle : uniteCandles) {
-            openAvg = openAvg.add(uniteCandle.open());
-            closeAvg = closeAvg.add(uniteCandle.close());
-            highAvg = highAvg.add(uniteCandle.high());
-            lowAvg = lowAvg.add(uniteCandle.low());
-            volumeAvg += uniteCandle.volume();
+            if (uniteCandle.high().isGreaterThan(expectedHigh)) {
+                expectedHigh = uniteCandle.high();
+            }
+
+            if (uniteCandle.low().isLessThan(expectedLow)) {
+                expectedLow = uniteCandle.low();
+            }
+
+            expectedVolume += uniteCandle.volume();
         }
 
-        openAvg = openAvg.divide(uniteCandles.size());
-        closeAvg = closeAvg.divide(uniteCandles.size());
-        highAvg = highAvg.divide(uniteCandles.size());
-        lowAvg = lowAvg.divide(uniteCandles.size());
-        volumeAvg /= uniteCandles.size();
-
-        assertEquals(openAvg, candle.getOpen());
-        assertEquals(closeAvg, candle.getClose());
-        assertEquals(highAvg, candle.getHigh());
-        assertEquals(lowAvg, candle.getLow());
-        assertEquals(volumeAvg, candle.getVolume());
+        assertEquals(expectedOpen, candle.getOpen());
+        assertEquals(expectedClose, candle.getClose());
+        assertEquals(expectedHigh, candle.getHigh());
+        assertEquals(expectedLow, candle.getLow());
+        assertEquals(expectedVolume, candle.getVolume());
     }
 }

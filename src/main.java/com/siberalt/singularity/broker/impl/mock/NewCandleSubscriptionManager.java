@@ -20,12 +20,14 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Supplier;
 
 public class NewCandleSubscriptionManager implements SubscriptionManager, EventInvoker, Initializable, TimeDependentUnit {
     private static final Logger logger = LoggerFactory.getLogger(NewCandleSubscriptionManager.class);
     private final ReadCandleRepository candleRepository;
     private HashMap<String, Iterator<Candle>> candleIterator;
-    private final Set<String> instrumentIds;
+    private final Supplier<Set<String>> instrumentIdsSupplier;
+    private Set<String> instrumentIds;
     private EventObserver eventObserver;
     private Clock clock;
     private final HashMap<Instant, List<Candle>> eventCandles = new HashMap<>();
@@ -34,8 +36,20 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
     private boolean interruptOnError = true;
 
     public NewCandleSubscriptionManager(ReadCandleRepository candleRepository, Set<String> instrumentIds) {
+        this(candleRepository, () -> instrumentIds);
+    }
+
+    /**
+     * Resolves the instruments to simulate lazily rather than taking a snapshot at construction
+     * time: the set is fixed at {@link #init}, together with the candle iterators built from it, so
+     * instruments registered between constructing the broker and starting the simulation are seen.
+     */
+    public NewCandleSubscriptionManager(
+        ReadCandleRepository candleRepository,
+        Supplier<Set<String>> instrumentIdsSupplier
+    ) {
         this.candleRepository = candleRepository;
-        this.instrumentIds = instrumentIds;
+        this.instrumentIdsSupplier = instrumentIdsSupplier;
     }
 
     public boolean isInterruptOnError() {
@@ -47,14 +61,38 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
         return this;
     }
 
+    /**
+     * A spec this manager cannot serve is a wiring error, not a subscription that happens to stay
+     * quiet: handing back an inactive subscription used to make it indistinguishable from a
+     * strategy that simply never traded, so it is rejected outright.
+     */
     @Override
     public <T extends Event> Subscription subscribe(SubscriptionSpec<T> spec, EventHandler<T> handler) {
-        boolean active = (spec instanceof NewCandleSubscriptionSpec newCandleSubscription)
-            && instrumentIds.containsAll(newCandleSubscription.getInstrumentIds())
-            && newCandleSubscription.getEventType().equals(NewCandleEvent.class);
+        if (!(spec instanceof NewCandleSubscriptionSpec newCandleSubscription)) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "%s only serves %s, got %s for event type %s",
+                    getClass().getSimpleName(),
+                    NewCandleSubscriptionSpec.class.getSimpleName(),
+                    spec.getClass().getSimpleName(),
+                    spec.getEventType().getSimpleName()
+                )
+            );
+        }
 
-        if (!active) {
-            return new DefaultSubscription(false, () -> {});
+        Set<String> knownInstrumentIds = getInstrumentIds();
+
+        if (!knownInstrumentIds.containsAll(newCandleSubscription.getInstrumentIds())) {
+            Set<String> unknownInstrumentIds = new HashSet<>(newCandleSubscription.getInstrumentIds());
+            unknownInstrumentIds.removeAll(knownInstrumentIds);
+
+            throw new IllegalArgumentException(
+                String.format(
+                    "No candles are simulated for instruments %s; this broker only knows %s",
+                    unknownInstrumentIds,
+                    knownInstrumentIds
+                )
+            );
         }
 
         List<EventHandler<?>> handlers = eventHandlers.computeIfAbsent(
@@ -75,6 +113,7 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
 
     @Override
     public void init(Instant startTime, Instant endTime) {
+        instrumentIds = instrumentIdsSupplier.get();
         candleIterator = new HashMap<>();
         for (String instrumentId : instrumentIds) {
             Iterable<Candle> candles = candleRepository.getPeriod(instrumentId, startTime, endTime);
@@ -142,6 +181,14 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
             // Clear inactive subscriptions from the event handlers
             clearInactiveSubscriptions();
         }
+    }
+
+    private Set<String> getInstrumentIds() {
+        if (instrumentIds == null) {
+            instrumentIds = instrumentIdsSupplier.get();
+        }
+
+        return instrumentIds;
     }
 
     private void clearInactiveSubscriptions() {

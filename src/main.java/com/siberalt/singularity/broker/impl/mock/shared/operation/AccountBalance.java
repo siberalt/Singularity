@@ -69,7 +69,9 @@ public class AccountBalance {
             return resultTransaction;
         }
 
-        return resultTransaction;
+        return resultTransaction
+            .setStatus(TransactionStatus.COMPLETED)
+            .setExecutedTime(clock.currentTime());
     }
 
     public boolean isEnoughOfMoney(Money amount) {
@@ -114,12 +116,12 @@ public class AccountBalance {
     }
 
     public void addPositionBalance(String instrumentUid, long count) {
-        assert count > 0 : "Count should be positive";
+        assertCountPositive(count);
         updatePositionBalance(instrumentUid, balance -> balance + count);
     }
 
     public void subtractPositionBalance(String instrumentUid, long count) {
-        assert count > 0 : "Count should be positive";
+        assertCountPositive(count);
         updatePositionBalance(instrumentUid, balance -> balance - count);
     }
 
@@ -135,19 +137,52 @@ public class AccountBalance {
         return availableMonies.values().stream().toList();
     }
 
+    /**
+     * Applies {@code updater} to the current balance of the money's currency, treating a currency
+     * the account has never held as a zero balance. The updater must be applied in every case -
+     * skipping it for an absent currency would turn a subtraction into a deposit.
+     */
     protected void updateMoneyBalance(Map<String, Money> moneyBalance, Money money, Function<Money, Money> updater) {
-        money = moneyBalance.containsKey(money.getCurrencyIso())
-            ? updater.apply(moneyBalance.get(money.getCurrencyIso()))
-            : money;
-        moneyBalance.put(money.getCurrencyIso(), money);
+        String currencyIso = money.getCurrencyIso();
+        Money currentBalance = moneyBalance.getOrDefault(currencyIso, Money.of(currencyIso, Quotation.ZERO));
+        Money updatedBalance = updater.apply(currentBalance);
+
+        if (updatedBalance.getQuotation().isNegative()) {
+            throw new IllegalStateException(
+                String.format(
+                    "Balance of account %s in %s would go negative: %s -> %s",
+                    accountId,
+                    currencyIso,
+                    currentBalance,
+                    updatedBalance
+                )
+            );
+        }
+
+        moneyBalance.put(currencyIso, updatedBalance);
     }
 
     protected void updatePositionBalance(String instrumentUid, Function<Long, Long> updater) {
         var position = positions.get(instrumentUid);
+
+        if (position == null) {
+            throw new IllegalStateException(
+                String.format("Account %s has no position in instrument %s", accountId, instrumentUid)
+            );
+        }
+
         position.setBalance(updater.apply(position.getBalance()));
     }
 
     private void assertMoneyPositive(Money money) {
-        assert money.getQuotation().isGreaterThan(Quotation.of(0D)) : "Money value should be positive";
+        if (!money.getQuotation().isGreaterThan(Quotation.ZERO)) {
+            throw new IllegalArgumentException(String.format("Money value should be positive, got %s", money));
+        }
+    }
+
+    private void assertCountPositive(long count) {
+        if (count <= 0) {
+            throw new IllegalArgumentException(String.format("Count should be positive, got %d", count));
+        }
     }
 }
