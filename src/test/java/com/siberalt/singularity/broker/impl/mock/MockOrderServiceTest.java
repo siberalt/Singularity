@@ -585,6 +585,7 @@ public abstract class MockOrderServiceTest {
 
         Position position = operationsService.getPositionByInstrumentId(testAccount.getId(), instrumentConfig.getUid());
         long instrumentBalance = (position != null) ? position.getBalance() : 0;
+        long blockedBefore = (position != null) ? position.getBlocked() : 0;
         Money avialableMoney = operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
 
         PostOrderResponse postResponse = ordersService.post(request);
@@ -603,10 +604,17 @@ public abstract class MockOrderServiceTest {
                 avialableMoney,
                 operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency())
             );
-            assertEquals(
-                instrumentBalance,
-                operationsService.getPositionByInstrumentId(testAccount.getId(), instrumentConfig.getUid()).getBalance()
+
+            // The lots the parked order will need are held back, so they cannot be promised to a
+            // second order while this one waits.
+            Position blockedPosition = operationsService.getPositionByInstrumentId(
+                testAccount.getId(),
+                instrumentConfig.getUid()
             );
+            long reservedLots = quantity * instrumentConfig.getLot();
+
+            assertEquals(instrumentBalance - reservedLots, blockedPosition.getBalance());
+            assertEquals(blockedBefore + reservedLots, blockedPosition.getBlocked());
         } else {
             Quotation totalBalanceChange = instrumentPrice
                 .subtract(instrumentPrice.multiply(commissionRatio))
@@ -691,8 +699,16 @@ public abstract class MockOrderServiceTest {
                 instrumentConfig.getUid()
             );
             var balanceAfter = (positionAfter != null) ? positionAfter.getBalance() : 0;
+
+            // The money the parked order will need is held back, priced at the current market -
+            // above the limit price it will actually fill at, so the reservation errs high.
+            Quotation reservedMoney = instrumentPrice
+                .add(instrumentPrice.multiply(commissionRatio))
+                .multiply(quantity)
+                .multiply(instrumentConfig.getLot());
+
             assertEquals(
-                avialableMoney,
+                avialableMoney.subtract(Money.of(instrumentConfig.getCurrency(), reservedMoney)),
                 operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency())
             );
             Assertions.assertEquals(instrumentBalance, balanceAfter);

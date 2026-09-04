@@ -37,41 +37,71 @@ public class AccountBalance {
         return positions.values();
     }
 
+    /**
+     * All-or-nothing: the whole batch is checked against the balance before any of it is applied,
+     * so a batch that would overdraw leaves the account exactly as it was. Applying transaction by
+     * transaction would strand the earlier ones of a failed fill - the money moved but the position
+     * never changed.
+     *
+     * @return one {@link Transaction} per spec, all COMPLETED, or - if the batch was refused - the
+     *         transactions up to and including the FAILED one, none of which were applied.
+     */
     public List<Transaction> applyTransactions(List<TransactionSpec> transactions) {
         List<Transaction> result = new ArrayList<>();
+        Map<String, Money> projectedBalances = new HashMap<>();
+
         for (TransactionSpec transaction : transactions) {
-            Transaction resultTransaction = applyTransaction(transaction);
-            result.add(resultTransaction);
-            if (resultTransaction.getStatus() == TransactionStatus.FAILED) {
-                // If any transaction fails, we stop processing further transactions
+            String currencyIso = transaction.amount().getCurrencyIso();
+            Money projected = projectedBalances
+                .computeIfAbsent(currencyIso, this::getAvailableMoney)
+                .add(transaction.amount());
+
+            if (projected.getQuotation().isNegative()) {
+                result.add(
+                    toTransaction(transaction)
+                        .setStatus(TransactionStatus.FAILED)
+                        .setErrorMessage(
+                            String.format(
+                                "Balance of account %s in %s would go negative: %s -> %s",
+                                accountId,
+                                currencyIso,
+                                projectedBalances.get(currencyIso),
+                                projected
+                            )
+                        )
+                );
+
                 return result;
             }
+
+            projectedBalances.put(currencyIso, projected);
+            result.add(toTransaction(transaction));
         }
+
+        availableMonies.putAll(projectedBalances);
+        result.forEach(
+            transaction -> transaction
+                .setStatus(TransactionStatus.COMPLETED)
+                .setExecutedTime(clock.currentTime())
+        );
+
         return result;
     }
 
     public Transaction applyTransaction(TransactionSpec transaction) {
-        Transaction resultTransaction = new Transaction()
+        return applyTransactions(List.of(transaction)).getFirst();
+    }
+
+    protected Transaction toTransaction(TransactionSpec spec) {
+        return new Transaction()
             .setId(UUID.randomUUID().toString())
-            .setDescription(transaction.description())
-            .setType(transaction.type())
-            .setAmount(transaction.amount())
+            .setDescription(spec.description())
+            .setType(spec.type())
+            .setAmount(spec.amount())
             .setDestinationAccountId(accountId)
             .setSourceAccountId(brokerId)
             .setCreatedTime(clock.currentTime())
             .setStatus(TransactionStatus.PENDING);
-
-        try {
-            updateMoneyBalance(availableMonies, transaction.amount(), balance -> balance.add(transaction.amount()));
-        } catch (Exception e) {
-            resultTransaction.setStatus(TransactionStatus.FAILED);
-            resultTransaction.setErrorMessage(e.getMessage());
-            return resultTransaction;
-        }
-
-        return resultTransaction
-            .setStatus(TransactionStatus.COMPLETED)
-            .setExecutedTime(clock.currentTime());
     }
 
     public boolean isEnoughOfMoney(Money amount) {
@@ -113,6 +143,56 @@ public class AccountBalance {
 
     public void removePosition(String instrumentUid) {
         positions.remove(instrumentUid);
+    }
+
+    /**
+     * Moves lots out of the free balance and into the blocked part, reserving them for an order
+     * that is waiting to fill. The mirror of {@link #addBlockedMoney} for instruments: everything
+     * that asks "can this account sell?" looks at the free balance, so reserved lots cannot be
+     * promised twice.
+     */
+    public void blockPosition(String instrumentUid, long count) {
+        assertCountPositive(count);
+
+        Position position = requirePosition(instrumentUid);
+
+        if (position.getBalance() < count) {
+            throw new IllegalStateException(
+                String.format(
+                    "Account %s has %d lots of %s free, cannot block %d",
+                    accountId,
+                    position.getBalance(),
+                    instrumentUid,
+                    count
+                )
+            );
+        }
+
+        position
+            .setBalance(position.getBalance() - count)
+            .setBlocked(position.getBlocked() + count);
+    }
+
+    public void unblockPosition(String instrumentUid, long count) {
+        assertCountPositive(count);
+
+        Position position = requirePosition(instrumentUid);
+
+        if (position.getBlocked() < count) {
+            throw new IllegalStateException(
+                String.format(
+                    "Account %s has %d lots of %s blocked, cannot unblock %d",
+                    accountId,
+                    position.getBlocked(),
+                    instrumentUid,
+                    count
+                )
+            );
+        }
+
+        position
+            .setBlocked(position.getBlocked() - count)
+            .setBalance(position.getBalance() + count);
     }
 
     public void addPositionBalance(String instrumentUid, long count) {
@@ -163,7 +243,12 @@ public class AccountBalance {
     }
 
     protected void updatePositionBalance(String instrumentUid, Function<Long, Long> updater) {
-        var position = positions.get(instrumentUid);
+        Position position = requirePosition(instrumentUid);
+        position.setBalance(updater.apply(position.getBalance()));
+    }
+
+    protected Position requirePosition(String instrumentUid) {
+        Position position = positions.get(instrumentUid);
 
         if (position == null) {
             throw new IllegalStateException(
@@ -171,7 +256,7 @@ public class AccountBalance {
             );
         }
 
-        position.setBalance(updater.apply(position.getBalance()));
+        return position;
     }
 
     private void assertMoneyPositive(Money money) {

@@ -61,7 +61,14 @@ public class DefaultOrderServiceFactory implements OrderServiceFactory {
             orderRegistry,
             priceModel,
             orderExecutor,
-            createPendingOrderHandler(context, orderExecutor, orderRegistry, priceModel, marketDataService)
+            createPendingOrderHandler(
+                context,
+                orderExecutor,
+                orderRegistry,
+                priceModel,
+                marketDataService,
+                operationsService
+            )
         );
     }
 
@@ -97,7 +104,8 @@ public class DefaultOrderServiceFactory implements OrderServiceFactory {
         OrderExecutor orderExecutor,
         OrderRegistry orderRegistry,
         OrderPriceModel priceModel,
-        MockMarketDataService marketDataService
+        MockMarketDataService marketDataService,
+        MockOperationsService operationsService
     ) {
         return new RejectingPendingOrderHandler();
     }

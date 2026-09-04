@@ -46,14 +46,16 @@ public class DefaultEventOrderServiceFactory extends DefaultOrderServiceFactory 
         OrderExecutor orderExecutor,
         OrderRegistry orderRegistry,
         OrderPriceModel priceModel,
-        MockMarketDataService marketDataService
+        MockMarketDataService marketDataService,
+        MockOperationsService operationsService
     ) {
         return new SimulatedPendingOrderHandler(
             context.clock(),
             orderExecutor,
             orderRegistry,
             priceModel,
-            marketDataService
+            marketDataService,
+            operationsService
         );
     }
 }

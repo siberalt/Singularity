@@ -115,6 +115,20 @@ public class MockOperationsService implements OperationsService {
         accountBalance.subtractAvailableMoney(money);
     }
 
+    /**
+     * Reserves lots for an order that is waiting to fill. Reserved lots leave the free position
+     * balance, so a second order cannot be placed against the same instruments.
+     */
+    public void blockPosition(String accountId, String instrumentUid, long count) throws AbstractException {
+        checkAccountExists(accountId);
+        getOrCreateBalance(accountId).blockPosition(instrumentUid, count);
+    }
+
+    public void unblockPosition(String accountId, String instrumentUid, long count) throws AbstractException {
+        checkAccountExists(accountId);
+        getOrCreateBalance(accountId).unblockPosition(instrumentUid, count);
+    }
+
     public void unblockMoney(String accountId, Money money) throws AbstractException {
         checkAccountExists(accountId);
         var accountBalance = getOrCreateBalance(accountId);

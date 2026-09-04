@@ -21,6 +21,6 @@ public class RejectingPendingOrderHandler implements PendingOrderHandler {
 
     @Override
     public void onCancelled(Order order) {
-        // Nothing was ever scheduled, so there is nothing to unschedule.
+        // Nothing was ever scheduled or reserved, so there is nothing to undo.
     }
 }

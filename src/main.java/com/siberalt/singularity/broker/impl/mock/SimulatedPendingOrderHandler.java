@@ -4,6 +4,7 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.broker.contract.service.order.response.ExecutionStatus;
+import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.shared.exception.MockBrokerException;
 import com.siberalt.singularity.broker.impl.mock.shared.order.OrderEvent;
@@ -40,6 +41,7 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
     protected final OrderRegistry orderRegistry;
     protected final OrderPriceModel priceModel;
     protected final MockMarketDataService marketDataService;
+    protected final MockOperationsService operationsService;
     protected final Map<String, OrderEvent> orderEvents = new HashMap<>();
     protected final Map<Instant, List<OrderEvent>> orderEventsByTime = new HashMap<>();
     protected Duration limitOrderLifeTime = Duration.ofDays(1);
@@ -51,13 +53,15 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
         OrderExecutor orderExecutor,
         OrderRegistry orderRegistry,
         OrderPriceModel priceModel,
-        MockMarketDataService marketDataService
+        MockMarketDataService marketDataService,
+        MockOperationsService operationsService
     ) {
         this.clock = clock;
         this.orderExecutor = orderExecutor;
         this.orderRegistry = orderRegistry;
         this.priceModel = priceModel;
         this.marketDataService = marketDataService;
+        this.operationsService = operationsService;
     }
 
     public Duration getLimitOrderLifeTime() {
@@ -143,6 +147,9 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
 
         Event event = Event.create(eventTime, this);
         OrderEvent orderEvent = new OrderEvent(futureOrder, event);
+        // Reserve before the order's own balance change is cleared below - that figure is what the
+        // fill is expected to cost.
+        blockFunds(order, orderEvent);
         orderEvents.put(futureOrder.getId(), orderEvent);
         orderEventsByTime.computeIfAbsent(eventTime, k -> new ArrayList<>()).add(orderEvent);
 
@@ -156,11 +163,52 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
     }
 
     /**
+     * Holds back what the parked order will need, so the same money or the same lots cannot be
+     * promised to a second order while this one waits. For a buy that is the cost priced at the
+     * current market, which is above the limit price the order will actually fill at - erring
+     * towards reserving slightly too much rather than too little.
+     */
+    protected void blockFunds(Order order, OrderEvent orderEvent) throws AbstractException {
+        if (order.getDirection() == OrderDirection.BUY) {
+            Money cost = Money.of(
+                order.getInstrument().getCurrency(),
+                order.getBalanceChange().multiply(-1)
+            );
+            operationsService.blockMoney(order.getAccountId(), cost);
+            orderEvent.setBlockedMoney(cost);
+
+            return;
+        }
+
+        long lots = order.getLotsRequested() * order.getInstrument().getLot();
+        operationsService.blockPosition(order.getAccountId(), order.getInstrument().getUid(), lots);
+        orderEvent.setBlockedLots(lots);
+    }
+
+    protected void unblockFunds(OrderEvent orderEvent) throws AbstractException {
+        Order order = orderEvent.getOrder();
+
+        if (orderEvent.getBlockedMoney() != null) {
+            operationsService.unblockMoney(order.getAccountId(), orderEvent.getBlockedMoney());
+            orderEvent.setBlockedMoney(null);
+        }
+
+        if (orderEvent.getBlockedLots() > 0) {
+            operationsService.unblockPosition(
+                order.getAccountId(),
+                order.getInstrument().getUid(),
+                orderEvent.getBlockedLots()
+            );
+            orderEvent.setBlockedLots(0);
+        }
+    }
+
+    /**
      * Drops the fill scheduled for this order. Marking it cancelled and journalling the cancel
      * operation has already been done by the caller - this only undoes the scheduling.
      */
     @Override
-    public void onCancelled(Order order) {
+    public void onCancelled(Order order) throws AbstractException {
         // An order that filled immediately never got a scheduled event.
         OrderEvent orderEvent = orderEvents.remove(order.getId());
 
@@ -168,6 +216,7 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
             return;
         }
 
+        unblockFunds(orderEvent);
         eventObserver.cancelEvent(orderEvent.getEvent());
         orderEventsByTime.computeIfPresent(
             orderEvent.getEvent().getTimePoint(),
@@ -197,6 +246,23 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
             orderEvents.remove(order.getId());
 
             try {
+                // Whatever was held back for this order goes back to the account before it either
+                // fills - paying out of the freed funds - or expires unfilled.
+                unblockFunds(orderEvent);
+
+                if (order.getExecutionStatus() == ExecutionStatus.REJECTED) {
+                    logger.info(
+                        String.format(
+                            "[%s] Order %s expired without reaching its price",
+                            currentTime,
+                            order.getId()
+                        )
+                    );
+                    orderRegistry.register(order);
+
+                    continue;
+                }
+
                 List<TransactionSpec> transactionSpecs = orderExecutor.calculateTransactions(order);
 
                 if (order.getDirection() == OrderDirection.BUY) {

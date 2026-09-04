@@ -22,7 +22,8 @@ public interface PendingOrderHandler {
 
     /**
      * Called after a stored, not-yet-filled order is cancelled, so an implementation that
-     * scheduled a future fill can drop it. Orders that filled immediately never reach here.
+     * scheduled a future fill can drop it and release whatever it reserved for it. Orders that
+     * filled immediately never reach here.
      */
-    void onCancelled(Order order);
+    void onCancelled(Order order) throws AbstractException;
 }
