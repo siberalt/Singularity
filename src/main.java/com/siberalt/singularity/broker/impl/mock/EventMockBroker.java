@@ -1,8 +1,8 @@
 package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.execution.EventSubscriptionBroker;
-import com.siberalt.singularity.broker.contract.service.order.CommissionTransactionSpecProvider;
-import com.siberalt.singularity.broker.contract.service.order.OrderTransactionSpecProvider;
+import com.siberalt.singularity.broker.impl.mock.factory.DefaultEventOrderServiceFactory;
+import com.siberalt.singularity.broker.impl.mock.factory.MockServicesFactory;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
@@ -13,7 +13,6 @@ import com.siberalt.singularity.strategy.context.Clock;
 import java.util.stream.Collectors;
 
 public class EventMockBroker extends MockBroker implements EventSubscriptionBroker {
-    private final EventSimulatedOrderService orderService;
     private final NewCandleSubscriptionManager subscriptionManager;
 
     public EventMockBroker(
@@ -43,13 +42,44 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
         double commissionRatio,
         String id
     ) {
-        super(candleRepository, instrumentRepository, orderRepository, operationRepository, clock, commissionRatio, id);
-        this.orderService = new EventSimulatedOrderService(
-            this,
+        this(
+            candleRepository,
+            instrumentRepository,
             orderRepository,
             operationRepository,
-            new CommissionTransactionSpecProvider(commissionRatio),
-            new OrderTransactionSpecProvider()
+            clock,
+            commissionRatio,
+            id,
+            new DefaultEventOrderServiceFactory()
+        );
+    }
+
+    /**
+     * Lets the caller plug in its own {@link DefaultEventOrderServiceFactory} - e.g. one built with
+     * custom commission/order transaction spec providers - instead of the defaulted one the other
+     * constructors use. Kept specific to {@link DefaultEventOrderServiceFactory} (rather than accepting
+     * any {@link com.siberalt.singularity.broker.impl.mock.factory.OrderServiceFactory}) because
+     * {@link #getOrderService()} always casts to {@link EventSimulatedOrderService}.
+     */
+    public EventMockBroker(
+        ReadCandleRepository candleRepository,
+        ReadInstrumentRepository instrumentRepository,
+        OrderRepository orderRepository,
+        OperationRepository operationRepository,
+        Clock clock,
+        double commissionRatio,
+        String id,
+        DefaultEventOrderServiceFactory orderServiceFactory
+    ) {
+        super(
+            candleRepository,
+            instrumentRepository,
+            orderRepository,
+            operationRepository,
+            clock,
+            commissionRatio,
+            id,
+            new MockServicesFactory().orderServiceFactory(orderServiceFactory)
         );
         // Resolved when the simulation starts, not here - instruments are often registered after
         // the broker is built.
@@ -64,7 +94,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
 
     @Override
     public EventSimulatedOrderService getOrderService() {
-        return orderService;
+        return (EventSimulatedOrderService) orderService;
     }
 
     @Override
@@ -89,8 +119,9 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
     }
 
     public static class Builder {
-        protected String id = "mock-broker";
+        protected String id = EventMockBroker.DEFAULT_ID;
         protected double commissionRatio = DEFAULT_COMMISSION_RATIO;
+        protected DefaultEventOrderServiceFactory orderServiceFactory = new DefaultEventOrderServiceFactory();
         protected final ReadCandleRepository candleRepository;
         protected final ReadInstrumentRepository instrumentRepository;
         protected final OrderRepository orderRepository;
@@ -121,6 +152,11 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
             return this;
         }
 
+        public Builder setOrderServiceFactory(DefaultEventOrderServiceFactory orderServiceFactory) {
+            this.orderServiceFactory = orderServiceFactory;
+            return this;
+        }
+
         public EventMockBroker build() {
             return new EventMockBroker(
                 candleRepository,
@@ -129,7 +165,8 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
                 operationRepository,
                 clock,
                 commissionRatio,
-                id
+                id,
+                orderServiceFactory
             );
         }
     }

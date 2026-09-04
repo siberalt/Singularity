@@ -16,17 +16,30 @@ import com.siberalt.singularity.broker.impl.mock.shared.operation.AccountBalance
 import com.siberalt.singularity.broker.impl.mock.shared.operation.OpenPosition;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.shared.TimeRange;
+import com.siberalt.singularity.strategy.context.Clock;
 
 import java.time.Instant;
 import java.util.*;
 
 public class MockOperationsService implements OperationsService {
     private final Map<String, AccountBalance> accountBalances = new HashMap<>();
-    private final MockBroker mockBroker;
+    private final Clock clock;
+    private final String brokerId;
+    private final MockInstrumentService instrumentService;
+    private final MockUserService userService;
     private final ReadOperationRepository operationRepository;
 
-    public MockOperationsService(MockBroker virtualBroker, ReadOperationRepository operationRepository) {
-        this.mockBroker = virtualBroker;
+    public MockOperationsService(
+        Clock clock,
+        String brokerId,
+        MockInstrumentService instrumentService,
+        MockUserService userService,
+        ReadOperationRepository operationRepository
+    ) {
+        this.clock = clock;
+        this.brokerId = brokerId;
+        this.instrumentService = instrumentService;
+        this.userService = userService;
         this.operationRepository = operationRepository;
     }
 
@@ -140,8 +153,7 @@ public class MockOperationsService implements OperationsService {
         var accountBalance = getOrCreateBalance(accountId);
 
         if (!accountBalance.hasPositionByInstrumentUid(instrumentUid)) {
-            Instrument instrument = mockBroker
-                    .instrumentService
+            Instrument instrument = instrumentService
                     .get(GetRequest.of(instrumentUid))
                     .getInstrument();
             Position newPosition = new Position()
@@ -161,8 +173,7 @@ public class MockOperationsService implements OperationsService {
         AccountBalance accountBalance = getOrCreateBalance(accountId);
 
         if (!accountBalance.hasPositionByInstrumentUid(instrumentUid)) {
-            Instrument instrument = mockBroker
-                    .instrumentService
+            Instrument instrument = instrumentService
                     .get(GetRequest.of(instrumentUid))
                     .getInstrument();
             Position newPosition = new Position()
@@ -179,14 +190,14 @@ public class MockOperationsService implements OperationsService {
 
     private AccountBalance getOrCreateBalance(String accountId) {
         if (!accountBalances.containsKey(accountId)) {
-            accountBalances.put(accountId, new AccountBalance(accountId, mockBroker.clock, mockBroker.getId()));
+            accountBalances.put(accountId, new AccountBalance(accountId, clock, brokerId));
         }
 
         return accountBalances.get(accountId);
     }
 
     private void checkAccountExists(String accountId) throws AbstractException {
-        if (!mockBroker.getUserService().accountExists(accountId)) {
+        if (!userService.accountExists(accountId)) {
             throw ExceptionBuilder.create(ErrorCode.ACCOUNT_NOT_FOUND);
         }
     }

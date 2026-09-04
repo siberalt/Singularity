@@ -15,23 +15,23 @@ import java.util.stream.Collectors;
 public class MockInstrumentService implements InstrumentService {
     protected ReadInstrumentRepository instrumentStorage;
 
-    protected MockBroker virtualBroker;
+    protected String brokerId;
 
-    public MockInstrumentService(MockBroker virtualBroker, ReadInstrumentRepository instrumentStorage) {
+    public MockInstrumentService(String brokerId, ReadInstrumentRepository instrumentStorage) {
         this.instrumentStorage = instrumentStorage;
-        this.virtualBroker = virtualBroker;
+        this.brokerId = brokerId;
     }
 
     @Override
     public GetResponse get(GetRequest request) throws AbstractException {
         return new GetResponse().setInstrument(
-            instrumentStorage.get(virtualBroker.getId(), request.getId()).orElse(null)
+            instrumentStorage.get(brokerId, request.getId()).orElse(null)
         );
     }
 
     @Override
     public GetTradableResponse getTradable(GetTradableRequest request) throws AbstractException {
-        List<Instrument> instruments = instrumentStorage.getAll(virtualBroker.getId()).stream()
+        List<Instrument> instruments = instrumentStorage.getAll(brokerId).stream()
             .filter(instrument -> request.getCurrency() == null || instrument.getCurrency().equalsIgnoreCase(request.getCurrency()))
             .collect(Collectors.toList());
 

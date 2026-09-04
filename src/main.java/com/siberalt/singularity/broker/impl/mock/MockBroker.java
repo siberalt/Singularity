@@ -2,10 +2,11 @@ package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.execution.SandboxServiceAwareBroker;
 import com.siberalt.singularity.broker.contract.execution.StopOrderServiceAwareBroker;
-import com.siberalt.singularity.broker.contract.service.order.CommissionTransactionSpecProvider;
-import com.siberalt.singularity.broker.contract.service.order.OrderTransactionSpecProvider;
 import com.siberalt.singularity.broker.contract.service.order.stop.StopOrderServiceInterface;
 import com.siberalt.singularity.broker.contract.service.sandbox.SandboxService;
+import com.siberalt.singularity.broker.impl.mock.factory.MockServiceContext;
+import com.siberalt.singularity.broker.impl.mock.factory.MockServices;
+import com.siberalt.singularity.broker.impl.mock.factory.MockServicesFactory;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
 import com.siberalt.singularity.entity.operation.OperationRepository;
@@ -35,22 +36,34 @@ public class MockBroker implements
         OperationRepository operationRepository,
         Clock clock,
         double commissionRatio,
-        String id
+        String id,
+        MockServicesFactory servicesFactory
     ) {
         this.clock = clock;
-        orderService = new MockOrderService(
-            this,
-            orderRepository,
-            operationRepository,
-            new CommissionTransactionSpecProvider(commissionRatio),
-            new OrderTransactionSpecProvider()
-        );
-        marketDataService = new MockMarketDataService(this, candleRepository);
-        operationsService = new MockOperationsService(this, operationRepository);
-        instrumentService = new MockInstrumentService(this, instrumentStorage);
-        userService = new MockUserService(this);
-        sandboxService = new MockSandboxService(this);
         this.id = id;
+
+        MockServices services = servicesFactory.create(
+            new MockServiceContext(clock, id, candleRepository, instrumentStorage, orderRepository, operationRepository, commissionRatio)
+        );
+
+        instrumentService = services.instrumentService();
+        userService = services.userService();
+        marketDataService = services.marketDataService();
+        operationsService = services.operationsService();
+        sandboxService = services.sandboxService();
+        orderService = services.orderService();
+    }
+
+    public MockBroker(
+        ReadCandleRepository candleRepository,
+        ReadInstrumentRepository instrumentStorage,
+        OrderRepository orderRepository,
+        OperationRepository operationRepository,
+        Clock clock,
+        double commissionRatio,
+        String id
+    ) {
+        this(candleRepository, instrumentStorage, orderRepository, operationRepository, clock, commissionRatio, id, new MockServicesFactory());
     }
 
     public MockBroker(

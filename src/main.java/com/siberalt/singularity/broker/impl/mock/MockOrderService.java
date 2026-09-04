@@ -25,6 +25,7 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.entity.order.OrderRepository;
+import com.siberalt.singularity.strategy.context.Clock;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -33,7 +34,11 @@ import java.util.*;
 public class MockOrderService implements OrderService {
     public static final double DEFAULT_COMMISSION_RATIO = 0.003;
 
-    protected MockBroker mockBroker;
+    protected Clock clock;
+    protected MockOperationsService operationsService;
+    protected MockInstrumentService instrumentService;
+    protected MockMarketDataService marketDataService;
+    protected MockUserService userService;
     protected double buyBestPriceRatio = 0.3;
     protected double sellBestPriceRatio = 0.7;
     protected Duration limitOrderLifeTime = Duration.ofDays(1);
@@ -42,22 +47,36 @@ public class MockOrderService implements OrderService {
     protected TransactionSpecProvider commissionTransactionSpecProvider = new CommissionTransactionSpecProvider(DEFAULT_COMMISSION_RATIO);
     private TransactionSpecProvider orderTransactionSpecProvider = new OrderTransactionSpecProvider();
 
-    public MockOrderService(MockBroker mockBroker, OrderRepository orderRepository, OperationRepository operationRepository) {
-        this.mockBroker = mockBroker;
+    public MockOrderService(
+        Clock clock,
+        MockOperationsService operationsService,
+        MockInstrumentService instrumentService,
+        MockMarketDataService marketDataService,
+        MockUserService userService,
+        OrderRepository orderRepository,
+        OperationRepository operationRepository
+    ) {
+        this.clock = clock;
+        this.operationsService = operationsService;
+        this.instrumentService = instrumentService;
+        this.marketDataService = marketDataService;
+        this.userService = userService;
         this.orderRepository = orderRepository;
         this.operationRepository = operationRepository;
     }
 
     public MockOrderService(
-        MockBroker mockBroker,
+        Clock clock,
+        MockOperationsService operationsService,
+        MockInstrumentService instrumentService,
+        MockMarketDataService marketDataService,
+        MockUserService userService,
         OrderRepository orderRepository,
         OperationRepository operationRepository,
         TransactionSpecProvider commissionTransactionSpecProvider,
         TransactionSpecProvider orderTransactionSpecProvider
     ) {
-        this.mockBroker = mockBroker;
-        this.orderRepository = orderRepository;
-        this.operationRepository = operationRepository;
+        this(clock, operationsService, instrumentService, marketDataService, userService, orderRepository, operationRepository);
         this.commissionTransactionSpecProvider = commissionTransactionSpecProvider;
         this.orderTransactionSpecProvider = orderTransactionSpecProvider;
     }
@@ -102,7 +121,7 @@ public class MockOrderService implements OrderService {
 
         cancel(cancelOrder);
 
-        return new CancelOrderResponse().setTime(mockBroker.clock.currentTime());
+        return new CancelOrderResponse().setTime(clock.currentTime());
     }
 
     @Override
@@ -238,10 +257,8 @@ public class MockOrderService implements OrderService {
     }
 
     protected PostOrderResponse sellInstrument(Order order, List<TransactionSpec> transactionSpecs) throws AbstractException {
-        MockOperationsService operationsService = mockBroker.operationsService;
-
         order
-            .setExecutedTime(mockBroker.clock.currentTime())
+            .setExecutedTime(clock.currentTime())
             .setExecutionStatus(ExecutionStatus.FILL)
             .setLotsExecuted(order.getLotsRequested());
 
@@ -261,9 +278,8 @@ public class MockOrderService implements OrderService {
     }
 
     protected void buyInstrument(Order order, List<TransactionSpec> transactionSpecs) throws AbstractException {
-        MockOperationsService operationsService = mockBroker.operationsService;
         order
-            .setExecutedTime(mockBroker.clock.currentTime())
+            .setExecutedTime(clock.currentTime())
             .setExecutionStatus(ExecutionStatus.FILL)
             .setLotsExecuted(order.getLotsRequested());
         registerOrder(order);
@@ -364,8 +380,7 @@ public class MockOrderService implements OrderService {
     }
 
     protected Order createOrder(PostOrderRequest request) throws AbstractException {
-        Instrument instrument = mockBroker
-            .instrumentService
+        Instrument instrument = instrumentService
             .get(GetRequest.of(request.getInstrumentId()))
             .getInstrument();
 
@@ -373,7 +388,7 @@ public class MockOrderService implements OrderService {
             throw ExceptionBuilder.create(ErrorCode.INSTRUMENT_NOT_FOUND);
         }
 
-        Candle currentCandle = mockBroker.marketDataService.getInstrumentCurrentCandle(request.getInstrumentId());
+        Candle currentCandle = marketDataService.getInstrumentCurrentCandle(request.getInstrumentId());
         if (currentCandle == null) {
             throw new MockBrokerException("Candle not found");
         }
@@ -384,7 +399,7 @@ public class MockOrderService implements OrderService {
             .setId(UUID.randomUUID().toString())
             .setIdempotencyKey(request.getIdempotencyKey())
             .setRequestedPrice(request.getPrice())
-            .setCreatedTime(mockBroker.clock.currentTime())
+            .setCreatedTime(clock.currentTime())
             .setLotsRequested(request.getQuantity())
             .setAccountId(request.getAccountId())
             .setDirection(request.getDirection())
@@ -417,7 +432,7 @@ public class MockOrderService implements OrderService {
     }
 
     protected void checkAccountAvailable(String accountId) throws AbstractException {
-        AccountState accountState = mockBroker.userService.getAccountState(accountId);
+        AccountState accountState = userService.getAccountState(accountId);
 
         if (accountState == null) {
             throw ExceptionBuilder.create(ErrorCode.ACCOUNT_NOT_FOUND);
@@ -433,7 +448,7 @@ public class MockOrderService implements OrderService {
     }
 
     protected void checkEnoughOfMoneyToBuy(Order order) throws AbstractException {
-        boolean isEnoughOfMoney = this.mockBroker.operationsService.isEnoughOfMoney(
+        boolean isEnoughOfMoney = operationsService.isEnoughOfMoney(
             order.getAccountId(),
             Money.of(order.getInstrument().getCurrency(), order.getBalanceChange().multiply(-1))
         );
@@ -444,7 +459,7 @@ public class MockOrderService implements OrderService {
     }
 
     protected void checkEnoughOfPositionToSell(Order order) throws AbstractException {
-        Position position = mockBroker.operationsService.getPositionByInstrumentId(
+        Position position = operationsService.getPositionByInstrumentId(
             order.getAccountId(),
             order.getInstrument().getUid()
         );

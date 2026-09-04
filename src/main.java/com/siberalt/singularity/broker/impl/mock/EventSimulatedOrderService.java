@@ -2,8 +2,7 @@ package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
-import com.siberalt.singularity.broker.contract.service.order.CommissionTransactionSpecProvider;
-import com.siberalt.singularity.broker.contract.service.order.OrderTransactionSpecProvider;
+import com.siberalt.singularity.broker.contract.service.order.TransactionSpecProvider;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.broker.contract.service.order.request.PostOrderRequest;
 import com.siberalt.singularity.broker.contract.service.order.response.ExecutionStatus;
@@ -35,29 +34,43 @@ import java.util.logging.Logger;
 public class EventSimulatedOrderService extends MockOrderService implements EventInvoker, TimeDependentUnit {
     private static final Logger logger = Logger.getLogger(EventSimulatedOrderService.class.getName());
     protected EventObserver eventObserver;
-    protected EventMockBroker mockBroker;
     protected Map<String, OrderEvent> orderEvents = new HashMap<>();
     protected Map<Instant, List<OrderEvent>> orderEventsByTime = new HashMap<>();
-    protected Clock clock;
 
     public EventSimulatedOrderService(
-        EventMockBroker mockBroker,
+        Clock clock,
+        MockOperationsService operationsService,
+        MockInstrumentService instrumentService,
+        MockMarketDataService marketDataService,
+        MockUserService userService,
         OrderRepository orderRepository,
         OperationRepository operationRepository
     ) {
-        super(mockBroker, orderRepository, operationRepository);
-        this.mockBroker = mockBroker;
+        super(clock, operationsService, instrumentService, marketDataService, userService, orderRepository, operationRepository);
     }
 
     public EventSimulatedOrderService(
-        EventMockBroker mockBroker,
+        Clock clock,
+        MockOperationsService operationsService,
+        MockInstrumentService instrumentService,
+        MockMarketDataService marketDataService,
+        MockUserService userService,
         OrderRepository orderRepository,
         OperationRepository operationRepository,
-        CommissionTransactionSpecProvider commissionTransactionSpecProvider,
-        OrderTransactionSpecProvider orderTransactionSpecProvider
+        TransactionSpecProvider commissionTransactionSpecProvider,
+        TransactionSpecProvider orderTransactionSpecProvider
     ) {
-        super(mockBroker, orderRepository, operationRepository, commissionTransactionSpecProvider, orderTransactionSpecProvider);
-        this.mockBroker = mockBroker;
+        super(
+            clock,
+            operationsService,
+            instrumentService,
+            marketDataService,
+            userService,
+            orderRepository,
+            operationRepository,
+            commissionTransactionSpecProvider,
+            orderTransactionSpecProvider
+        );
     }
 
     @Override
@@ -114,7 +127,7 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
         logger.info(
             String.format(
                 "[%s] Buying instrument %s, Amount: %d, Instrument Price: %s, Total Price: %s, Commission: %s",
-                mockBroker.clock.currentTime(),
+                clock.currentTime(),
                 order.getInstrument().getUid(),
                 order.getLotsRequested(),
                 order.getInstrumentPrice(),
@@ -130,7 +143,7 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
         logger.info(
             String.format(
                 "[%s] Selling instrument %s, Amount: %d, Instrument Price: %s, Total Price: %s, Commission: %s",
-                mockBroker.clock.currentTime(),
+                clock.currentTime(),
                 order.getInstrument().getUid(),
                 order.getLotsRequested(),
                 order.getInstrumentPrice(),
@@ -152,7 +165,7 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
             logger.info(
                 String.format(
                     "[%s] Predicting market event for order %s",
-                    mockBroker.clock.currentTime(),
+                    clock.currentTime(),
                     order.getId()
                 )
             );
@@ -174,7 +187,7 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
             logger.info(
                 String.format(
                     "[%s] Predicting market event for order %s",
-                    mockBroker.clock.currentTime(),
+                    clock.currentTime(),
                     order.getId()
                 )
             );
@@ -185,7 +198,7 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
     }
 
     protected void predictMarketEvent(Order order) throws AbstractException {
-        var currentTime = mockBroker.clock.currentTime();
+        var currentTime = clock.currentTime();
         var endOrderLifeTime = currentTime.plus(limitOrderLifeTime);
         Instrument instrument = order.getInstrument();
 
@@ -224,7 +237,7 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
             );
             futureOrder.setInstrumentPrice(instrumentPrice);
         } else {
-            var lastCandle = mockBroker.marketDataService.findClosestBefore(
+            var lastCandle = marketDataService.findClosestBefore(
                 instrument.getUid(),
                 endOrderLifeTime
             ).orElse(null);
@@ -283,7 +296,7 @@ public class EventSimulatedOrderService extends MockOrderService implements Even
             ? ComparisonOperator.MORE_OR_EQUAL
             : ComparisonOperator.LESS_OR_EQUAL;
 
-        return mockBroker.marketDataService.findCandlesByOpenPrice(
+        return marketDataService.findCandlesByOpenPrice(
                 CandleInterval.MIN_1,
                 new FindPriceParams(
                     instrumentUid,

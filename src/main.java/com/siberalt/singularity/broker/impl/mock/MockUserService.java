@@ -5,17 +5,18 @@ import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.ExceptionBuilder;
 import com.siberalt.singularity.broker.contract.service.user.*;
 import com.siberalt.singularity.broker.impl.mock.shared.user.AccountState;
+import com.siberalt.singularity.strategy.context.Clock;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 public class MockUserService implements UserService {
-    protected MockBroker mockBroker;
+    protected Clock clock;
     protected Map<String, AccountState> accountsStates = new HashMap<>();
 
-    public MockUserService(MockBroker virtualBroker) {
-        this.mockBroker = virtualBroker;
+    public MockUserService(Clock clock) {
+        this.clock = clock;
     }
 
     protected AccountState getAccountState(String accountId) throws AbstractException {
@@ -33,7 +34,7 @@ public class MockUserService implements UserService {
                 .setName(name)
                 .setType(accountType)
                 .setAccessLevel(accessLevel);
-        account.setOpenedDate(mockBroker.clock.currentTime());
+        account.setOpenedDate(clock.currentTime());
         account.setId(UUID.randomUUID().toString());
         account.setStatus(AccountStatus.OPEN);
         accountsStates.put(account.getId(), new AccountState(account));
@@ -50,7 +51,7 @@ public class MockUserService implements UserService {
             throw ExceptionBuilder.create(ErrorCode.ACCOUNT_CLOSED);
         }
 
-        account.setClosedDate(mockBroker.clock.currentTime());
+        account.setClosedDate(clock.currentTime());
         account.setStatus(AccountStatus.CLOSED);
     }
 

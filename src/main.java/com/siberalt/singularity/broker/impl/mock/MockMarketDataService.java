@@ -13,6 +13,7 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.FindPriceParams;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.strategy.context.Clock;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -21,11 +22,11 @@ import java.util.List;
 import java.util.Optional;
 
 public class MockMarketDataService implements MarketDataService {
-    protected MockBroker virtualBroker;
+    protected Clock clock;
     protected ReadCandleRepository candleRepository;
 
-    public MockMarketDataService(MockBroker virtualBroker, ReadCandleRepository candleStorage) {
-        this.virtualBroker = virtualBroker;
+    public MockMarketDataService(Clock clock, ReadCandleRepository candleStorage) {
+        this.clock = clock;
         this.candleRepository = candleStorage;
     }
 
@@ -48,7 +49,7 @@ public class MockMarketDataService implements MarketDataService {
 
     @Override
     public GetLastPricesResponse getLastPrices(GetLastPricesRequest request) {
-        Instant currentTime = virtualBroker.clock.currentTime();
+        Instant currentTime = clock.currentTime();
 
         List<LastPrice> lastPrices = new ArrayList<>();
 
@@ -73,7 +74,7 @@ public class MockMarketDataService implements MarketDataService {
     @Override
     public GetCurrentPriceResponse getCurrentPrice(GetCurrentPriceRequest request) throws AbstractException {
         String instrumentUid = request.getInstrumentUid();
-        Instant at = virtualBroker.clock.currentTime();
+        Instant at = clock.currentTime();
 
         List<Candle> candleList = candleRepository.findBeforeOrEqual(instrumentUid, at, 1);
 
@@ -81,7 +82,7 @@ public class MockMarketDataService implements MarketDataService {
             throw ExceptionBuilder.create(ErrorCode.INSTRUMENT_NOT_FOUND);
         }
 
-        Candle candle = candleList.get(0);
+        Candle candle = candleList.getFirst();
         Quotation price = candle.open();
 
         return new GetCurrentPriceResponse()
@@ -91,7 +92,7 @@ public class MockMarketDataService implements MarketDataService {
 
     protected Optional<Candle> findClosestBefore(String instrumentUid, Instant at) {
         List<Candle> candles = candleRepository.findBeforeOrEqual(instrumentUid, at, 1);
-        return candles.isEmpty() ? Optional.empty() : Optional.ofNullable(candles.get(0));
+        return candles.isEmpty() ? Optional.empty() : Optional.ofNullable(candles.getFirst());
     }
 
     protected List<Candle> findCandlesByOpenPrice(CandleInterval interval, FindPriceParams findParams) {
@@ -174,9 +175,9 @@ public class MockMarketDataService implements MarketDataService {
     protected Candle getInstrumentCurrentCandle(String instrumentUid) {
         List<Candle> candles = candleRepository.findBeforeOrEqual(
             instrumentUid,
-            virtualBroker.clock.currentTime(),
+            clock.currentTime(),
             1
         );
-        return candles.isEmpty() ? null : candles.get(0);
+        return candles.isEmpty() ? null : candles.getFirst();
     }
 }

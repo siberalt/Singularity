@@ -9,21 +9,23 @@ import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.service.sandbox.SandboxService;
 
 public class MockSandboxService implements SandboxService, SandboxMoneyManager, SandboxPositionManager {
-    private final MockBroker broker;
+    private final MockUserService userService;
+    private final MockOperationsService operationsService;
 
-    public MockSandboxService(MockBroker broker) {
-        this.broker = broker;
+    public MockSandboxService(MockUserService userService, MockOperationsService operationsService) {
+        this.userService = userService;
+        this.operationsService = operationsService;
     }
 
     @Override
     public String openAccount(String name) {
-        return broker.getUserService().openAccount(name, AccountType.ORDINARY, AccessLevel.FULL_ACCESS).getId();
+        return userService.openAccount(name, AccountType.ORDINARY, AccessLevel.FULL_ACCESS).getId();
     }
 
     @Override
     public void payIn(String accountId, Money money) {
         try {
-            broker.operationsService.addMoney(accountId, money);
+            operationsService.addMoney(accountId, money);
         } catch (AbstractException e) {
             throw new RuntimeException(e);
         }
@@ -32,7 +34,7 @@ public class MockSandboxService implements SandboxService, SandboxMoneyManager, 
     @Override
     public void closeAccount(String accountId) {
         try {
-            broker.userService.closeAccount(accountId);
+            userService.closeAccount(accountId);
         } catch (AbstractException e) {
             throw new RuntimeException(e);
         }
@@ -41,7 +43,7 @@ public class MockSandboxService implements SandboxService, SandboxMoneyManager, 
     @Override
     public void addToPosition(String accountId, String instrumentUid, long amount) {
         try {
-            broker.operationsService.addToPosition(accountId, instrumentUid, amount);
+            operationsService.addToPosition(accountId, instrumentUid, amount);
         } catch (AbstractException e) {
             throw new RuntimeException(e);
         }
