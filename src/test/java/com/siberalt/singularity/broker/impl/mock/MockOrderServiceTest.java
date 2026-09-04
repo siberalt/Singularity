@@ -11,6 +11,7 @@ import com.siberalt.singularity.entity.position.Position;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.order.response.ExecutionStatus;
 import com.siberalt.singularity.broker.contract.service.order.response.GetOrdersResponse;
+import com.siberalt.singularity.broker.contract.service.order.response.OrderState;
 import com.siberalt.singularity.broker.contract.service.order.response.PostOrderResponse;
 import com.siberalt.singularity.broker.contract.service.user.AccessLevel;
 import com.siberalt.singularity.broker.contract.service.user.Account;
@@ -441,18 +442,17 @@ public abstract class MockOrderServiceTest {
 
         var postResponse = assertBuyOrder(validCandle, OrderType.MARKET, 10, validCandle.open());
 
-        // MARKET orders fill immediately and are evicted from OrderRepository right away in favor
-        // of an Operation record - getState() on a resolved order is now indistinguishable from
-        // one that never existed.
-        assertThrowsWithErrorCode(
-            NotFoundException.class,
-            ErrorCode.ORDER_NOT_FOUND,
-            () -> orderService.getState(
-                new GetOrderStateRequest()
-                    .setOrderId(postResponse.getOrderId())
-                    .setAccountId(testAccount.getId())
-            )
+        // A filled order stays in OrderRepository, so getState() reports how it ended rather than
+        // pretending it never existed.
+        OrderState filledState = orderService.getState(
+            new GetOrderStateRequest()
+                .setOrderId(postResponse.getOrderId())
+                .setAccountId(testAccount.getId())
         );
+
+        assertEquals(ExecutionStatus.FILL, filledState.getExecutionStatus());
+        assertEquals(postResponse.getOrderId(), filledState.getOrderId());
+        assertEquals(postResponse.getLotsExecuted(), filledState.getLotsExecuted());
 
         Optional<Operation> tradeOperation = operationRepository.getByAccountId(testAccount.getId(), TimeRange.MAX)
             .stream()

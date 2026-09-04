@@ -45,7 +45,7 @@ import java.util.Properties;
 import java.util.Set;
 
 public class SandboxStrategyRun {
-    private static final String INSTRUMENT_UID = "TMOS";
+    private static final String INSTRUMENT_UID = "55371b1f-8f7c-4c12-9d93-386fae5ec12a";
 
     public static void main(String[] args) throws IOException, AbstractException {
         ConfigInterface configuration = new YamlConfig(

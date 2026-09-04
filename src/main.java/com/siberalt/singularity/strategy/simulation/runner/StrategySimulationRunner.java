@@ -81,7 +81,7 @@ public class StrategySimulationRunner {
         TimeRange timeRange = new TimeRange(startTime, endTime);
         eventSimulatorInitializer.initialize(timeRange, account, simulator);
 
-        simulator.addSimulationUnit(broker.getOrderService());
+        simulator.addSimulationUnit(broker.getPendingOrderHandler());
         simulator.addSimulationUnit(broker.getSubscriptionManager());
         simulator.addInitializableUnit(
             (start, end) -> strategyStarter.start(new TimeRange(start, end), account, new Observer())

@@ -37,7 +37,7 @@ import java.util.logging.Logger;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-public class EventSimulatedOrderServiceIT {
+public class EventMockBrokerOrderServiceIT {
     private static Logger logger;
     private EventMockBroker broker;
     private UserActionSimulator<Map<String, Object>> userActionSimulator;
@@ -50,7 +50,7 @@ public class EventSimulatedOrderServiceIT {
 
     @BeforeAll
     public static void setUpAll() {
-        logger = Logger.getLogger(EventSimulatedOrderService.class.getName());
+        logger = Logger.getLogger(LoggingOrderExecutor.class.getName());
         Handler consoleHandler = new ConsoleHandler();
         consoleHandler.setFormatter(new java.util.logging.Formatter() {
             @Override
@@ -84,15 +84,15 @@ public class EventSimulatedOrderServiceIT {
             .setCommissionRatio(0)
             .build();
 
-        EventSimulatedOrderService orderService = broker.getOrderService();
+        SimulatedPendingOrderHandler pendingOrderHandler = broker.getPendingOrderHandler();
         operationsService = broker.getOperationsService();
 
         eventSimulator = new EventSimulator(clock);
-        eventSimulator.addEventInvoker(orderService);
+        eventSimulator.addEventInvoker(pendingOrderHandler);
         eventSimulator.addEventInvoker(userActionSimulator);
         eventSimulator.addInitializableUnit(userActionSimulator);
         eventSimulator.addTimeDependentUnit(userActionSimulator);
-        eventSimulator.addTimeDependentUnit(orderService);
+        eventSimulator.addTimeDependentUnit(pendingOrderHandler);
     }
 
     @Test

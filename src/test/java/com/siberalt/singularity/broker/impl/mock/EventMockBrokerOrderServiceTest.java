@@ -2,9 +2,11 @@ package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
-import com.siberalt.singularity.broker.contract.service.exception.NotFoundException;
+import com.siberalt.singularity.broker.contract.service.exception.InvalidRequestException;
 import com.siberalt.singularity.broker.contract.service.order.request.CancelOrderRequest;
 import com.siberalt.singularity.broker.contract.service.order.request.GetOrderStateRequest;
+import com.siberalt.singularity.broker.contract.service.order.response.ExecutionStatus;
+import com.siberalt.singularity.broker.contract.service.order.response.OrderState;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
 import com.siberalt.singularity.broker.contract.service.order.response.CancelOrderResponse;
 import com.siberalt.singularity.broker.contract.service.order.response.PostOrderResponse;
@@ -32,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 
-public class EventSimulatedOrderServiceTest extends MockOrderServiceTest {
+public class EventMockBrokerOrderServiceTest extends MockOrderServiceTest {
     protected EventObserver eventObserver;
 
     @Override
@@ -45,7 +47,7 @@ public class EventSimulatedOrderServiceTest extends MockOrderServiceTest {
     ) {
         var broker = new EventMockBroker(candleStorage, instrumentStorage, orderRepository, operationRepository, clock);
         eventObserver = new EventObserver();
-        broker.getOrderService().observeEventsBy(eventObserver);
+        broker.getPendingOrderHandler().observeEventsBy(eventObserver);
 
         return broker;
     }
@@ -91,17 +93,16 @@ public class EventSimulatedOrderServiceTest extends MockOrderServiceTest {
 
         assertNotNull(cancelResponse);
 
-        // The order is no longer in OrderRepository once cancelled - it was evicted in favor of a
-        // CANCELED Operation record, so getState() on it now reports not-found rather than CANCELLED.
-        assertThrowsWithErrorCode(
-            NotFoundException.class,
-            ErrorCode.ORDER_NOT_FOUND,
-            () -> orderService.getState(
-                new GetOrderStateRequest()
-                    .setOrderId(postResponse.getOrderId())
-                    .setAccountId(testAccount.getId())
-            )
+        // A cancelled order is kept, so getState() reports CANCELLED instead of pretending the
+        // order never existed.
+        OrderState cancelledState = orderService.getState(
+            new GetOrderStateRequest()
+                .setOrderId(postResponse.getOrderId())
+                .setAccountId(testAccount.getId())
         );
+
+        assertEquals(ExecutionStatus.CANCELLED, cancelledState.getExecutionStatus());
+        assertEquals(0, cancelledState.getLotsExecuted());
 
         Optional<Operation> cancelOperation = operationRepository.getByAccountId(testAccount.getId(), TimeRange.MAX)
             .stream()
@@ -114,11 +115,11 @@ public class EventSimulatedOrderServiceTest extends MockOrderServiceTest {
         assertEquals(0, cancelOperation.get().quantityDone());
         assertEquals(Quotation.ZERO, cancelOperation.get().payment());
 
-        // The order is gone from OrderRepository entirely now, so a repeat cancel can't distinguish
-        // "already cancelled" from "never existed" - both surface as ORDER_NOT_FOUND.
+        // The order is still there, just no longer active, so a repeat cancel is reported as a bad
+        // request against a known order rather than as a missing one.
         assertThrowsWithErrorCode(
-            NotFoundException.class,
-            ErrorCode.ORDER_NOT_FOUND,
+            InvalidRequestException.class,
+            ErrorCode.CANCEL_ORDER_ERROR,
             () -> orderService.cancel(
                 new CancelOrderRequest()
                     .setOrderId(postResponse.getOrderId())

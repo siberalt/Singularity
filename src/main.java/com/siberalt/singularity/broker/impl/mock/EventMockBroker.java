@@ -59,7 +59,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
      * custom commission/order transaction spec providers - instead of the defaulted one the other
      * constructors use. Kept specific to {@link DefaultEventOrderServiceFactory} (rather than accepting
      * any {@link com.siberalt.singularity.broker.impl.mock.factory.OrderServiceFactory}) because
-     * {@link #getOrderService()} always casts to {@link EventSimulatedOrderService}.
+     * {@link #getPendingOrderHandler()} relies on that factory's pending-order handler.
      */
     public EventMockBroker(
         ReadCandleRepository candleRepository,
@@ -92,9 +92,15 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
         );
     }
 
-    @Override
-    public EventSimulatedOrderService getOrderService() {
-        return (EventSimulatedOrderService) orderService;
+    /**
+     * The order service's pending-order handler, which is also the simulation unit that fills
+     * limit orders when their market event comes due - register it with the {@code EventSimulator}
+     * alongside {@link #getSubscriptionManager()}. Always a
+     * {@link SimulatedPendingOrderHandler}: every constructor routes through
+     * {@link DefaultEventOrderServiceFactory}, which builds exactly that.
+     */
+    public SimulatedPendingOrderHandler getPendingOrderHandler() {
+        return (SimulatedPendingOrderHandler) orderService.getPendingOrderHandler();
     }
 
     @Override

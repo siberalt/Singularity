@@ -1,8 +1,6 @@
 package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.execution.SandboxServiceAwareBroker;
-import com.siberalt.singularity.broker.contract.execution.StopOrderServiceAwareBroker;
-import com.siberalt.singularity.broker.contract.service.order.stop.StopOrderServiceInterface;
 import com.siberalt.singularity.broker.contract.service.sandbox.SandboxService;
 import com.siberalt.singularity.broker.impl.mock.factory.MockServiceContext;
 import com.siberalt.singularity.broker.impl.mock.factory.MockServices;
@@ -13,9 +11,7 @@ import com.siberalt.singularity.entity.operation.OperationRepository;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.strategy.context.Clock;
 
-public class MockBroker implements
-    StopOrderServiceAwareBroker,
-    SandboxServiceAwareBroker
+public class MockBroker implements SandboxServiceAwareBroker
 {
     public static final double DEFAULT_COMMISSION_RATIO = 0.003;
     public static final String DEFAULT_ID = "mock-broker";
@@ -99,11 +95,6 @@ public class MockBroker implements
     @Override
     public MockUserService getUserService() {
         return userService;
-    }
-
-    @Override
-    public StopOrderServiceInterface getStopOrderService() {
-        return null;
     }
 
     @Override

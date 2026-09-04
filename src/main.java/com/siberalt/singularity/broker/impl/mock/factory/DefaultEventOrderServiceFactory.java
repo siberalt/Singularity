@@ -1,62 +1,59 @@
 package com.siberalt.singularity.broker.impl.mock.factory;
 
-import com.siberalt.singularity.broker.contract.service.order.CommissionTransactionSpecProvider;
-import com.siberalt.singularity.broker.contract.service.order.OrderTransactionSpecProvider;
 import com.siberalt.singularity.broker.contract.service.order.TransactionSpecProvider;
-import com.siberalt.singularity.broker.impl.mock.EventSimulatedOrderService;
-import com.siberalt.singularity.broker.impl.mock.MockInstrumentService;
+import com.siberalt.singularity.broker.impl.mock.LoggingOrderExecutor;
 import com.siberalt.singularity.broker.impl.mock.MockMarketDataService;
 import com.siberalt.singularity.broker.impl.mock.MockOperationsService;
-import com.siberalt.singularity.broker.impl.mock.MockUserService;
+import com.siberalt.singularity.broker.impl.mock.OrderExecutor;
+import com.siberalt.singularity.broker.impl.mock.OrderPriceModel;
+import com.siberalt.singularity.broker.impl.mock.OrderRegistry;
+import com.siberalt.singularity.broker.impl.mock.SimulatedPendingOrderHandler;
 
 /**
- * The {@link OrderServiceFactory} an {@code EventMockBroker} plugs into
- * {@link MockServicesFactory} instead of {@link DefaultOrderServiceFactory} - builds an
- * {@link EventSimulatedOrderService} from the exact same inputs, so the event-driven broker still
- * goes through the shared composition root rather than wiring its order service by hand.
- * <p>
- * The commission and order transaction spec providers can be overridden through the constructor;
- * left unset (the no-arg constructor), each defaults the same way {@link DefaultOrderServiceFactory}
- * does - commission from {@link MockServiceContext#commissionRatio()}, order unconditionally.
+ * The {@link OrderServiceFactory} an {@code EventMockBroker} plugs into {@link MockServicesFactory}
+ * instead of {@link DefaultOrderServiceFactory}. The order service itself is identical - the only
+ * difference is what happens to an order the market is not ready for, so this overrides just the
+ * pending-order handler, plus wraps the executor in a {@link LoggingOrderExecutor}: a simulation
+ * run is worth following in the log, and fills scheduled for later would otherwise happen silently.
  */
-public class DefaultEventOrderServiceFactory implements OrderServiceFactory {
-    private final TransactionSpecProvider commissionTransactionSpecProvider;
-    private final TransactionSpecProvider orderTransactionSpecProvider;
-
+public class DefaultEventOrderServiceFactory extends DefaultOrderServiceFactory {
     public DefaultEventOrderServiceFactory() {
-        this(null, null);
+        super();
     }
 
     public DefaultEventOrderServiceFactory(
         TransactionSpecProvider commissionTransactionSpecProvider,
         TransactionSpecProvider orderTransactionSpecProvider
     ) {
-        this.commissionTransactionSpecProvider = commissionTransactionSpecProvider;
-        this.orderTransactionSpecProvider = orderTransactionSpecProvider;
+        super(commissionTransactionSpecProvider, orderTransactionSpecProvider);
     }
 
     @Override
-    public EventSimulatedOrderService create(
+    protected OrderExecutor createOrderExecutor(
         MockServiceContext context,
         MockOperationsService operationsService,
-        MockInstrumentService instrumentService,
-        MockMarketDataService marketDataService,
-        MockUserService userService
+        OrderRegistry orderRegistry
     ) {
-        return new EventSimulatedOrderService(
+        return new LoggingOrderExecutor(
+            super.createOrderExecutor(context, operationsService, orderRegistry),
+            context.clock()
+        );
+    }
+
+    @Override
+    protected SimulatedPendingOrderHandler createPendingOrderHandler(
+        MockServiceContext context,
+        OrderExecutor orderExecutor,
+        OrderRegistry orderRegistry,
+        OrderPriceModel priceModel,
+        MockMarketDataService marketDataService
+    ) {
+        return new SimulatedPendingOrderHandler(
             context.clock(),
-            operationsService,
-            instrumentService,
-            marketDataService,
-            userService,
-            context.orderRepository(),
-            context.operationRepository(),
-            commissionTransactionSpecProvider != null
-                ? commissionTransactionSpecProvider
-                : new CommissionTransactionSpecProvider(context.commissionRatio()),
-            orderTransactionSpecProvider != null
-                ? orderTransactionSpecProvider
-                : new OrderTransactionSpecProvider()
+            orderExecutor,
+            orderRegistry,
+            priceModel,
+            marketDataService
         );
     }
 }

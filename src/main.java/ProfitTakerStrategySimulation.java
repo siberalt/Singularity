@@ -83,7 +83,7 @@ public class ProfitTakerStrategySimulation {
         );
 
         Observer observer = new Observer();
-        simulator.addSimulationUnit(broker.getOrderService());
+        simulator.addSimulationUnit(broker.getPendingOrderHandler());
         simulator.addSimulationUnit(broker.getSubscriptionManager());
         simulator.addInitializableUnit((from, to) -> {
             try {
