@@ -37,7 +37,7 @@ import java.util.logging.Logger;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-public class EventMockBrokerOrderServiceIT {
+public class EventMockBrokerIT {
     private static Logger logger;
     private EventMockBroker broker;
     private UserActionSimulator<Map<String, Object>> userActionSimulator;

@@ -5,10 +5,10 @@ import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.InvalidRequestException;
 import com.siberalt.singularity.broker.contract.service.order.request.CancelOrderRequest;
 import com.siberalt.singularity.broker.contract.service.order.request.GetOrderStateRequest;
+import com.siberalt.singularity.broker.contract.service.order.request.GetOrdersRequest;
+import com.siberalt.singularity.broker.contract.service.order.response.CancelOrderResponse;
 import com.siberalt.singularity.broker.contract.service.order.response.ExecutionStatus;
 import com.siberalt.singularity.broker.contract.service.order.response.OrderState;
-import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
-import com.siberalt.singularity.broker.contract.service.order.response.CancelOrderResponse;
 import com.siberalt.singularity.broker.contract.service.order.response.PostOrderResponse;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
@@ -24,7 +24,6 @@ import com.siberalt.singularity.strategy.context.Clock;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,7 +33,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 
-public class EventMockBrokerOrderServiceTest extends MockOrderServiceTest {
+/**
+ * The order service as {@link EventMockBroker} builds it, plus what only this configuration can do:
+ * park an order until the market reaches its price, and cancel one while it waits.
+ */
+public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTest {
     protected EventObserver eventObserver;
 
     @Override
@@ -45,7 +48,13 @@ public class EventMockBrokerOrderServiceTest extends MockOrderServiceTest {
         OperationRepository operationRepository,
         Clock clock
     ) {
-        var broker = new EventMockBroker(candleStorage, instrumentStorage, orderRepository, operationRepository, clock);
+        EventMockBroker broker = new EventMockBroker(
+            candleStorage,
+            instrumentStorage,
+            orderRepository,
+            operationRepository,
+            clock
+        );
         eventObserver = new EventObserver();
         broker.getPendingOrderHandler().observeEventsBy(eventObserver);
 
@@ -53,8 +62,87 @@ public class EventMockBrokerOrderServiceTest extends MockOrderServiceTest {
     }
 
     @Test
+    public void testBuyLimitParksUntilMarketReachesThePrice() throws AbstractException {
+        Candle validCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+        Candle buySignalCandle = createCandle(
+            currentTime, 10, 15, 5, 9, 100
+        );
+
+        addMoney(validCandle.open().multiply(100));
+        when(candleStorage.findByOpenPrice(any())).thenReturn(List.of(buySignalCandle));
+
+        assertBuyParked(validCandle, 10, Quotation.of(9));
+    }
+
+    @Test
+    public void testBuyLimitParksWhenMarketNeverReachesThePrice() throws AbstractException {
+        Candle validCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+        Candle expirationCandle = createCandle(
+            lifeTimeEnd(), 10, 15, 5, 12, 100
+        );
+
+        addMoney(validCandle.open().multiply(100));
+        stubLastCandleOfLifeTime(expirationCandle);
+
+        // findByOpenPrice finds no candle crossing the limit, so the order is scheduled to expire
+        // against the last candle of its lifetime rather than to fill. It is still parked - and
+        // still holds the money - until that moment arrives.
+        assertBuyParked(validCandle, 10, Quotation.of(9));
+    }
+
+    @Test
+    public void testSellLimitParksUntilMarketReachesThePrice() throws AbstractException {
+        Candle validCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+        Candle sellSignalCandle = createCandle(
+            currentTime, 10, 15, 5, 12, 100
+        );
+
+        addInstruments(80);
+        when(candleStorage.findByOpenPrice(any())).thenReturn(List.of(sellSignalCandle));
+
+        assertSellParked(validCandle, 10, Quotation.of(11));
+    }
+
+    @Test
+    public void testSellLimitParksWhenMarketNeverReachesThePrice() throws AbstractException {
+        Candle validCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+        Candle expirationCandle = createCandle(
+            lifeTimeEnd(), 10, 15, 5, 9, 100
+        );
+
+        addInstruments(80);
+        stubLastCandleOfLifeTime(expirationCandle);
+
+        assertSellParked(validCandle, 10, Quotation.of(11));
+    }
+
+    protected SimulatedPendingOrderHandler pendingOrderHandler() {
+        return ((EventMockBroker) broker).getPendingOrderHandler();
+    }
+
+    protected Instant lifeTimeEnd() {
+        return currentTime.plus(pendingOrderHandler().getLimitOrderLifeTime());
+    }
+
+    /**
+     * The candle the handler falls back to when nothing crosses the limit price - it schedules the
+     * order to be rejected at that moment.
+     */
+    protected void stubLastCandleOfLifeTime(Candle expirationCandle) {
+        when(candleStorage.findBeforeOrEqual(config.getInstrument().getUid(), lifeTimeEnd(), 1))
+            .thenReturn(List.of(expirationCandle));
+    }
+
+    @Test
     public void testCancelOrder() throws AbstractException {
-        // Test on order expiration
         Candle buyCandle = createCandle(
             Instant.parse("2021-12-15T15:00:00Z"), 1000, 110, 90, 100, 100
         );
@@ -66,10 +154,8 @@ public class EventMockBrokerOrderServiceTest extends MockOrderServiceTest {
 
         addMoney(Quotation.of(20000D));
 
-        PostOrderResponse postResponse = assertBuyOrder(buyCandle, OrderType.LIMIT, 10, Quotation.of(99));
-        assertCancelOrder(postResponse);
+        assertCancelOrder(assertBuyParked(buyCandle, 10, Quotation.of(99)));
 
-        // Test on order limit execution
         Candle buySignalCandle = createCandle(
             Instant.parse("2021-12-15T15:20:00Z"), 10, 15, 6, 10, 100
         );
@@ -80,8 +166,7 @@ public class EventMockBrokerOrderServiceTest extends MockOrderServiceTest {
         );
 
         addInstruments(10);
-        postResponse = assertSellOrder(sellCandle, OrderType.LIMIT, 10, Quotation.of(110));
-        assertCancelOrder(postResponse);
+        assertCancelOrder(assertSellParked(sellCandle, 10, Quotation.of(110)));
     }
 
     protected void assertCancelOrder(PostOrderResponse postResponse) throws AbstractException {
@@ -128,61 +213,30 @@ public class EventMockBrokerOrderServiceTest extends MockOrderServiceTest {
         );
     }
 
-    @Override
-    protected PostOrderResponse[] requestsForTestGet() throws AbstractException {
-        Instant currentTime = Instant.parse("2021-12-15T15:00:00Z");
+    /**
+     * The other half of "get orders", which only this broker can reach: an order still waiting for
+     * the market is exactly what the call is supposed to return.
+     */
+    @Test
+    public void testGetReportsParkedOrder() throws AbstractException {
+        Candle validCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+        Candle buySignalCandle = createCandle(
+            currentTime, 10, 15, 5, 9, 100
+        );
 
-        Instant[] times = {
-            currentTime,
-            currentTime.plus(1, ChronoUnit.HOURS),
-            currentTime.plus(20, ChronoUnit.MINUTES),
-            currentTime.plus(5, ChronoUnit.SECONDS),
-            currentTime.plus(6, ChronoUnit.MILLIS),
-            currentTime.plus(3, ChronoUnit.DAYS),
-            currentTime.plus(10, ChronoUnit.MINUTES),
-            currentTime.plus(23, ChronoUnit.MINUTES),
-        };
+        addMoney(validCandle.open().multiply(100));
+        when(candleStorage.findByOpenPrice(any())).thenReturn(List.of(buySignalCandle));
 
-        Candle[] testCandles = {
-            createCandle(
-                times[0], 11, 16, 10, 10, 100
-            ),
-            createCandle(
-                times[1], 12, 12, 10, 12, 200
-            ),
-            createCandle(
-                times[2], 16, 17, 6, 15, 150
-            ),
-            createCandle(
-                times[3], 11, 20, 7, 16, 1000
-            ),
-            createCandle(
-                times[4], 12, 18, 9, 14, 1
-            ),
-            createCandle(
-                times[5], 12, 18, 9, 14, 1
-            ),
-            createCandle(
-                times[6], 11, 15, 1, 12, 10
-            ),
-            createCandle(
-                times[7], 10, 10, 10, 10, 78
-            ),
-        };
+        PostOrderResponse parked = assertBuyParked(validCandle, 10, Quotation.of(9));
 
-        when(candleStorage.findByOpenPrice(any()))
-            .thenReturn(List.of(testCandles[2]))
-            .thenReturn(List.of(testCandles[5]));
+        List<OrderState> activeOrders = orderService
+            .get(GetOrdersRequest.of(testAccount.getId()))
+            .getOrders();
 
-        addMoney(Quotation.of(1000));
-
-        return new PostOrderResponse[] {
-            assertBuyOrder(testCandles[0], OrderType.MARKET, 1, testCandles[0].open()),
-            assertBuyOrder(testCandles[1], OrderType.LIMIT, 12, testCandles[1].open()),
-            assertBuyOrder(testCandles[3], OrderType.BEST_PRICE, 12),
-            assertSellOrder(testCandles[4], OrderType.MARKET, 10, testCandles[3].open()),
-            assertSellOrder(testCandles[5], OrderType.LIMIT, 12, testCandles[4].open()),
-            assertBuyOrder(testCandles[7], OrderType.BEST_PRICE, 12),
-        };
+        assertEquals(1, activeOrders.size());
+        assertEquals(parked.getOrderId(), activeOrders.getFirst().getOrderId());
+        assertEquals(ExecutionStatus.NEW, activeOrders.getFirst().getExecutionStatus());
     }
 }
