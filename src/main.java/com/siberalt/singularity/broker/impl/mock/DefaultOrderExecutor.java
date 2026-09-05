@@ -67,81 +67,115 @@ public class DefaultOrderExecutor implements OrderExecutor {
         this.orderTransactionSpecProvider = orderTransactionSpecProvider;
     }
 
+    /**
+     * The transaction spec providers price a whole order, so a fill that only covers part of one is
+     * priced through a slice - a copy of the order requesting just those lots.
+     */
     @Override
-    public List<TransactionSpec> calculateTransactions(Order order) {
-        Optional<TransactionSpec> commissionTransactionSpec = commissionTransactionSpecProvider.provide(order);
-        Optional<TransactionSpec> orderTransactionSpec = orderTransactionSpecProvider.provide(order);
+    public FillQuote quote(Order order, long lots) {
+        Order slice = fillSlice(order, lots);
+        Optional<TransactionSpec> orderTransactionSpec = orderTransactionSpecProvider.provide(slice);
+        Optional<TransactionSpec> commissionTransactionSpec = commissionTransactionSpecProvider.provide(slice);
 
         List<TransactionSpec> transactionSpecs = new ArrayList<>();
         List<Quotation> balanceChanges = new ArrayList<>();
 
         orderTransactionSpec.ifPresent(
             spec -> {
-                Quotation amount = spec.amount().getQuotation();
-                balanceChanges.add(amount);
-                order.setExecutedCommission(amount);
-                transactionSpecs.add(spec);
-            }
-        );
-        commissionTransactionSpec.ifPresent(
-            spec -> {
                 balanceChanges.add(spec.amount().getQuotation());
                 transactionSpecs.add(spec);
             }
         );
-        order.setBalanceChange(Quotation.sum(balanceChanges));
 
-        return transactionSpecs;
+        Quotation commission = Quotation.ZERO;
+
+        if (commissionTransactionSpec.isPresent()) {
+            commission = commissionTransactionSpec.get().amount().getQuotation();
+            balanceChanges.add(commission);
+            transactionSpecs.add(commissionTransactionSpec.get());
+        }
+
+        return new FillQuote(transactionSpecs, Quotation.sum(balanceChanges), commission);
+    }
+
+    /**
+     * A copy of the order asking for only the lots this fill covers, priced the same way. Only the
+     * fields the spec providers read are carried over.
+     */
+    protected Order fillSlice(Order order, long lots) {
+        return new Order()
+            .setAccountId(order.getAccountId())
+            .setDirection(order.getDirection())
+            .setOrderType(order.getOrderType())
+            .setInstrument(order.getInstrument())
+            .setInstrumentPrice(order.getInstrumentPrice())
+            .setLotsRequested(lots);
     }
 
     @Override
-    public void buy(Order order, List<TransactionSpec> transactionSpecs) throws AbstractException {
+    public void buy(Order order, long lots, FillQuote quote) throws AbstractException {
         // Refuse a duplicate key before the account is touched - it must not cost money.
         orderRegistry.claimIdempotencyKey(order);
 
         AccountBalance balance = operationsService.getAccountBalance(order.getAccountId());
-        checkTransactionsApplied(balance.applyTransactions(transactionSpecs));
+        checkTransactionsApplied(balance.applyTransactions(quote.transactionSpecs()));
         operationsService.addToPosition(
             order.getAccountId(),
             order.getInstrument().getUid(),
-            order.getLotsRequested() * order.getInstrument().getLot()
+            lots * order.getInstrument().getLot()
         );
 
-        settle(order, transactionSpecs);
+        settle(order, lots, quote);
     }
 
     @Override
-    public void sell(Order order, List<TransactionSpec> transactionSpecs) throws AbstractException {
+    public void sell(Order order, long lots, FillQuote quote) throws AbstractException {
         orderRegistry.claimIdempotencyKey(order);
 
         AccountBalance balance = operationsService.getAccountBalance(order.getAccountId());
-        checkTransactionsApplied(balance.applyTransactions(transactionSpecs));
+        checkTransactionsApplied(balance.applyTransactions(quote.transactionSpecs()));
         operationsService.subtractFromPosition(
             order.getAccountId(),
             order.getInstrument().getUid(),
-            order.getLotsRequested() * order.getInstrument().getLot()
+            lots * order.getInstrument().getLot()
         );
 
-        settle(order, transactionSpecs);
+        settle(order, lots, quote);
     }
 
     /**
-     * Records the fill, once the account has actually changed. Marking the order filled and
-     * journalling it happens last on purpose: an order stored as FILL is a claim that the trade
-     * took place, and since orders are kept, that claim outlives the failure that would have
-     * contradicted it.
+     * Records the fill, once the account has actually changed. Marking the order and journalling it
+     * happens last on purpose: an order stored as filled is a claim that the trade took place, and
+     * since orders are kept, that claim outlives the failure that would have contradicted it.
      */
-    protected void settle(Order order, List<TransactionSpec> transactionSpecs) {
-        markFilled(order);
+    protected void settle(Order order, long lots, FillQuote quote) {
+        markFilled(order, lots, quote);
         orderRegistry.save(order);
-        registerOperations(order, transactionSpecs);
+        registerOperations(order, lots, quote);
     }
 
-    protected void markFilled(Order order) {
+    /**
+     * Adds this fill to the order's running totals. An order that still has lots left to fill stays
+     * PARTIALLYFILL - it is not done, and everything that asks for active orders should keep seeing
+     * it.
+     */
+    protected void markFilled(Order order, long lots, FillQuote quote) {
+        long lotsExecuted = order.getLotsExecuted() + lots;
+
         order
             .setExecutedTime(clock.currentTime())
-            .setExecutionStatus(ExecutionStatus.FILL)
-            .setLotsExecuted(order.getLotsRequested());
+            .setExecutionStatus(
+                lotsExecuted < order.getLotsRequested()
+                    ? ExecutionStatus.PARTIALLYFILL
+                    : ExecutionStatus.FILL
+            )
+            .setLotsExecuted(lotsExecuted)
+            .setBalanceChange(accumulate(order.getBalanceChange(), quote.balanceChange()))
+            .setExecutedCommission(accumulate(order.getExecutedCommission(), quote.commission()));
+    }
+
+    private Quotation accumulate(Quotation total, Quotation addition) {
+        return total == null ? addition : total.add(addition);
     }
 
     /**
@@ -160,13 +194,18 @@ public class DefaultOrderExecutor implements OrderExecutor {
         }
     }
 
-    protected void registerOperations(Order order, List<TransactionSpec> transactionSpecs) {
-        for (TransactionSpec spec : transactionSpecs) {
-            operationRepository.save(toOperation(order, spec, OperationState.EXECUTED));
+    /**
+     * One operation per transaction of this fill, not of the whole order: an order that fills
+     * across several bars leaves a trade in the journal for each of them, the way an account
+     * statement shows it.
+     */
+    protected void registerOperations(Order order, long lots, FillQuote quote) {
+        for (TransactionSpec spec : quote.transactionSpecs()) {
+            operationRepository.save(toOperation(order, lots, spec, OperationState.EXECUTED));
         }
     }
 
-    protected Operation toOperation(Order order, TransactionSpec spec, OperationState state) {
+    protected Operation toOperation(Order order, long lots, TransactionSpec spec, OperationState state) {
         OperationType type = mapTransactionType(spec.type());
         boolean isTrade = type.isBuy() || type.isSell();
 
@@ -175,8 +214,8 @@ public class DefaultOrderExecutor implements OrderExecutor {
             .accountId(order.getAccountId())
             .instrumentUid(order.getInstrument().getUid())
             .direction(type)
-            .quantity(isTrade ? order.getLotsRequested() : 0)
-            .quantityDone(isTrade ? order.getLotsExecuted() : 0)
+            .quantity(isTrade ? lots : 0)
+            .quantityDone(isTrade ? lots : 0)
             .price(isTrade ? order.getInstrumentPrice() : null)
             .payment(spec.amount().getQuotation())
             .state(state)

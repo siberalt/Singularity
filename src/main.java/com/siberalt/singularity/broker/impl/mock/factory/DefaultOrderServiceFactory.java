@@ -4,8 +4,9 @@ import com.siberalt.singularity.broker.contract.service.order.CommissionTransact
 import com.siberalt.singularity.broker.contract.service.order.OrderTransactionSpecProvider;
 import com.siberalt.singularity.broker.contract.service.order.TransactionSpecProvider;
 import com.siberalt.singularity.broker.impl.mock.DefaultOrderExecutor;
+import com.siberalt.singularity.broker.impl.mock.LiquidityModel;
 import com.siberalt.singularity.broker.impl.mock.MockInstrumentService;
-import com.siberalt.singularity.broker.impl.mock.MockMarketDataService;
+import com.siberalt.singularity.broker.impl.mock.SimulationMarketData;
 import com.siberalt.singularity.broker.impl.mock.MockOperationsService;
 import com.siberalt.singularity.broker.impl.mock.MockOrderService;
 import com.siberalt.singularity.broker.impl.mock.MockUserService;
@@ -44,10 +45,11 @@ public class DefaultOrderServiceFactory implements OrderServiceFactory {
         MockServiceContext context,
         MockOperationsService operationsService,
         MockInstrumentService instrumentService,
-        MockMarketDataService marketDataService,
+        SimulationMarketData marketDataService,
         MockUserService userService
     ) {
         OrderPriceModel priceModel = createPriceModel(context);
+        LiquidityModel liquidityModel = createLiquidityModel(context);
         OrderRegistry orderRegistry = createOrderRegistry(context);
         OrderExecutor orderExecutor = createOrderExecutor(context, operationsService, orderRegistry);
 
@@ -60,6 +62,7 @@ public class DefaultOrderServiceFactory implements OrderServiceFactory {
             context.orderRepository(),
             orderRegistry,
             priceModel,
+            liquidityModel,
             orderExecutor,
             createPendingOrderHandler(
                 context,
@@ -67,7 +70,8 @@ public class DefaultOrderServiceFactory implements OrderServiceFactory {
                 orderRegistry,
                 priceModel,
                 marketDataService,
-                operationsService
+                operationsService,
+                liquidityModel
             )
         );
     }
@@ -78,6 +82,10 @@ public class DefaultOrderServiceFactory implements OrderServiceFactory {
 
     protected OrderPriceModel createPriceModel(MockServiceContext context) {
         return new OrderPriceModel();
+    }
+
+    protected LiquidityModel createLiquidityModel(MockServiceContext context) {
+        return new LiquidityModel();
     }
 
     protected OrderExecutor createOrderExecutor(
@@ -104,8 +112,9 @@ public class DefaultOrderServiceFactory implements OrderServiceFactory {
         OrderExecutor orderExecutor,
         OrderRegistry orderRegistry,
         OrderPriceModel priceModel,
-        MockMarketDataService marketDataService,
-        MockOperationsService operationsService
+        SimulationMarketData marketDataService,
+        MockOperationsService operationsService,
+        LiquidityModel liquidityModel
     ) {
         return new RejectingPendingOrderHandler();
     }

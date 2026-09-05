@@ -2,9 +2,6 @@ package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.entity.order.Order;
-import com.siberalt.singularity.entity.transaction.TransactionSpec;
-
-import java.util.List;
 
 /**
  * Prices a fill and carries it out: money, position and the resulting operations. Both
@@ -12,19 +9,24 @@ import java.util.List;
  * {@link SimulatedPendingOrderHandler} (filling a parked order once the market reaches it) use all
  * of it - storing an order without filling it is {@link OrderRegistry}'s job, not this one's.
  * <p>
+ * Every method takes the number of lots this particular fill covers, which is not always the whole
+ * order: a bar may not have the volume to absorb it (see {@link LiquidityModel}), and then the order
+ * fills across several of them. The order carries the running totals - lots executed, balance
+ * change, commission - and each fill adds to them; the {@link FillQuote} carries what this one fill
+ * costs.
+ * <p>
  * A fill applies the money and the position as two separate changes, in that order. Money first is
  * deliberate: if the second change fails the account is short, which is recoverable, rather than
  * holding instruments it never paid for. Making the pair genuinely atomic is the one gap left here.
  */
 public interface OrderExecutor {
     /**
-     * Returns the transactions the fill consists of and records the resulting balance change and
-     * commission on the order. Pure with respect to the account - nothing is applied until
-     * {@link #buy} or {@link #sell}.
+     * What a fill of {@code lots} lots would consist of and cost, at the price the order currently
+     * carries. Pure - neither the account nor the order is touched.
      */
-    List<TransactionSpec> calculateTransactions(Order order);
+    FillQuote quote(Order order, long lots);
 
-    void buy(Order order, List<TransactionSpec> transactionSpecs) throws AbstractException;
+    void buy(Order order, long lots, FillQuote quote) throws AbstractException;
 
-    void sell(Order order, List<TransactionSpec> transactionSpecs) throws AbstractException;
+    void sell(Order order, long lots, FillQuote quote) throws AbstractException;
 }

@@ -215,7 +215,7 @@ class MockMarketDataServiceIT {
           9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-30T15:15:00Z;5.558;5.56;5.56;5.556;35532;
          */
         Instant time = Instant.parse("2020-12-30T15:15:00Z");
-        Candle candle = marketDataService.findClosestBefore(config.getInstrument().getUid(), time).orElseThrow();
+        Candle candle = marketDataService.lastCandleAtOrBefore(config.getInstrument().getUid(), time).orElseThrow();
 
         assertEquals(Instant.parse("2020-12-30T15:15:00Z"), candle.getTime());
         assertEquals(Quotation.of(5.558), candle.open());
@@ -259,7 +259,7 @@ class MockMarketDataServiceIT {
             ComparisonOperator.MORE,
             4
         );
-        List<Candle> result = marketDataService.findCandlesByPrice(CandleInterval.MIN_1, params);
+        List<Candle> result = marketDataService.findByPrice(CandleInterval.MIN_1, params);
 
         assertNotNull(result);
         assertEquals(4, result.size());
@@ -286,7 +286,7 @@ class MockMarketDataServiceIT {
           9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-30T15:15:00Z;5.558;5.56;5.56;5.556;35532;
          */
         clock.syncCurrentTime(Instant.parse("2020-12-30T15:15:00Z"));
-        Candle candle = marketDataService.getInstrumentCurrentCandle(config.getInstrument().getUid());
+        Candle candle = marketDataService.currentCandle(config.getInstrument().getUid());
 
         assertNotNull(candle);
         assertEquals(Instant.parse("2020-12-30T15:15:00Z"), candle.getTime());

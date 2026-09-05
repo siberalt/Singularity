@@ -1,7 +1,7 @@
 package com.siberalt.singularity.broker.impl.mock.factory;
 
 import com.siberalt.singularity.broker.impl.mock.MockInstrumentService;
-import com.siberalt.singularity.broker.impl.mock.MockMarketDataService;
+import com.siberalt.singularity.broker.impl.mock.SimulationMarketData;
 import com.siberalt.singularity.broker.impl.mock.MockOperationsService;
 import com.siberalt.singularity.broker.impl.mock.MockOrderService;
 import com.siberalt.singularity.broker.impl.mock.MockUserService;
@@ -16,7 +16,7 @@ public interface OrderServiceFactory {
         MockServiceContext context,
         MockOperationsService operationsService,
         MockInstrumentService instrumentService,
-        MockMarketDataService marketDataService,
+        SimulationMarketData marketDataService,
         MockUserService userService
     );
 }

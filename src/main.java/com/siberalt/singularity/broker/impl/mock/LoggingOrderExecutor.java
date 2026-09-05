@@ -2,10 +2,8 @@ package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.entity.order.Order;
-import com.siberalt.singularity.entity.transaction.TransactionSpec;
 import com.siberalt.singularity.strategy.context.Clock;
 
-import java.util.List;
 import java.util.logging.Logger;
 
 /**
@@ -31,39 +29,40 @@ public class LoggingOrderExecutor implements OrderExecutor {
     }
 
     @Override
-    public List<TransactionSpec> calculateTransactions(Order order) {
-        return delegate.calculateTransactions(order);
+    public FillQuote quote(Order order, long lots) {
+        return delegate.quote(order, lots);
     }
 
     @Override
-    public void buy(Order order, List<TransactionSpec> transactionSpecs) throws AbstractException {
-        logger.info(
-            String.format(
-                "[%s] Buying instrument %s, Amount: %d, Instrument Price: %s, Total Price: %s, Commission: %s",
-                clock.currentTime(),
-                order.getInstrument().getUid(),
-                order.getLotsRequested(),
-                order.getInstrumentPrice(),
-                order.getBalanceChange(),
-                transactionSpecs
-            )
-        );
-        delegate.buy(order, transactionSpecs);
+    public void buy(Order order, long lots, FillQuote quote) throws AbstractException {
+        log("Buying", order, lots, quote);
+        delegate.buy(order, lots, quote);
     }
 
     @Override
-    public void sell(Order order, List<TransactionSpec> transactionSpecs) throws AbstractException {
+    public void sell(Order order, long lots, FillQuote quote) throws AbstractException {
+        log("Selling", order, lots, quote);
+        delegate.sell(order, lots, quote);
+    }
+
+    /**
+     * Says how much of the order this fill covers, not just how much it is for - an order filling
+     * across several bars is otherwise indistinguishable in the log from one that keeps being
+     * re-posted.
+     */
+    private void log(String action, Order order, long lots, FillQuote quote) {
         logger.info(
             String.format(
-                "[%s] Selling instrument %s, Amount: %d, Instrument Price: %s, Total Price: %s, Commission: %s",
+                "[%s] %s instrument %s, Amount: %d of %d, Instrument Price: %s, Total Price: %s, Commission: %s",
                 clock.currentTime(),
+                action,
                 order.getInstrument().getUid(),
+                lots,
                 order.getLotsRequested(),
                 order.getInstrumentPrice(),
-                order.getBalanceChange(),
-                order.getExecutedCommission()
+                quote.balanceChange(),
+                quote.commission()
             )
         );
-        delegate.sell(order, transactionSpecs);
     }
 }

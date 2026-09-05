@@ -67,10 +67,12 @@ public class OrderRegistry {
         orderRepository.save(order);
     }
 
+    /**
+     * Cancelling stops an order; it does not undo it. Whatever already filled stays filled and
+     * stays counted, so the lots executed are left alone - only the order's own status changes.
+     */
     public void cancel(Order order) {
-        order
-            .setLotsExecuted(0)
-            .setExecutionStatus(ExecutionStatus.CANCELLED);
+        order.setExecutionStatus(ExecutionStatus.CANCELLED);
         operationRepository.save(toCancelOperation(order));
         orderRepository.save(order);
     }
@@ -84,7 +86,7 @@ public class OrderRegistry {
             .instrumentUid(order.getInstrument().getUid())
             .direction(type)
             .quantity(order.getLotsRequested())
-            .quantityDone(0)
+            .quantityDone(order.getLotsExecuted())
             .price(order.getInstrumentPrice())
             .payment(Quotation.ZERO)
             .state(OperationState.CANCELED)

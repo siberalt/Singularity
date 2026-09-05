@@ -1,8 +1,9 @@
 package com.siberalt.singularity.broker.impl.mock.factory;
 
 import com.siberalt.singularity.broker.contract.service.order.TransactionSpecProvider;
+import com.siberalt.singularity.broker.impl.mock.LiquidityModel;
 import com.siberalt.singularity.broker.impl.mock.LoggingOrderExecutor;
-import com.siberalt.singularity.broker.impl.mock.MockMarketDataService;
+import com.siberalt.singularity.broker.impl.mock.SimulationMarketData;
 import com.siberalt.singularity.broker.impl.mock.MockOperationsService;
 import com.siberalt.singularity.broker.impl.mock.OrderExecutor;
 import com.siberalt.singularity.broker.impl.mock.OrderPriceModel;
@@ -46,8 +47,9 @@ public class DefaultEventOrderServiceFactory extends DefaultOrderServiceFactory 
         OrderExecutor orderExecutor,
         OrderRegistry orderRegistry,
         OrderPriceModel priceModel,
-        MockMarketDataService marketDataService,
-        MockOperationsService operationsService
+        SimulationMarketData marketDataService,
+        MockOperationsService operationsService,
+        LiquidityModel liquidityModel
     ) {
         return new SimulatedPendingOrderHandler(
             context.clock(),
@@ -55,7 +57,8 @@ public class DefaultEventOrderServiceFactory extends DefaultOrderServiceFactory 
             orderRegistry,
             priceModel,
             marketDataService,
-            operationsService
+            operationsService,
+            liquidityModel
         );
     }
 }

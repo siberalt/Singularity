@@ -39,11 +39,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -266,6 +267,71 @@ public abstract class AbstractMockOrderServiceTest {
             expectedCommission(testCandle.open(), 3),
             Quotation.sum(feeOperations.stream().map(Operation::payment).toList())
         );
+    }
+
+    /**
+     * With liquidity switched on, a bar can only give an order as much as it actually traded. What
+     * the two brokers then do with the rest differs - one can wait for another bar and one cannot -
+     * but the fill itself, and the fact that the order is not finished, is the same for both.
+     */
+    @Test
+    public void testFillTakesOnlyWhatTheBarTraded() throws AbstractException {
+        Candle testCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+
+        orderService.getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
+        addMoney(Quotation.of(100000));
+        // Whatever the broker does with the remainder, it looks for the end of the data first.
+        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1L))).thenReturn(List.of(testCandle));
+
+        PostOrderResponse response = postBuy(testCandle, OrderType.MARKET, 40, null);
+
+        // A tenth of a bar that traded 100 lots is 10 of the 40 asked for.
+        assertEquals(40, response.getLotsRequested());
+        assertEquals(10, response.getLotsExecuted());
+        assertEquals(ExecutionStatus.PARTIALLYFILL, response.getExecutionStatus());
+        assertEquals(10, freePositionLots());
+
+        // Not finished, so still one of the account's working orders.
+        List<OrderState> activeOrders = orderService.get(GetOrdersRequest.of(testAccount.getId())).getOrders();
+
+        assertEquals(1, activeOrders.size());
+        assertEquals(response.getOrderId(), activeOrders.getFirst().getOrderId());
+        assertEquals(10, activeOrders.getFirst().getLotsExecuted());
+    }
+
+    /**
+     * Cancelling a partly filled order stops the rest of it without undoing what already traded -
+     * the lots are bought and paid for, and no cancellation takes that back.
+     */
+    @Test
+    public void testCancellingAPartlyFilledOrderKeepsWhatItAlreadyFilled() throws AbstractException {
+        Candle testCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+
+        orderService.getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
+        addMoney(Quotation.of(100000));
+        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1L))).thenReturn(List.of(testCandle));
+
+        PostOrderResponse response = postBuy(testCandle, OrderType.MARKET, 40, null);
+
+        orderService.cancel(
+            new CancelOrderRequest()
+                .setOrderId(response.getOrderId())
+                .setAccountId(testAccount.getId())
+        );
+
+        OrderState state = orderService.getState(
+            new GetOrderStateRequest()
+                .setOrderId(response.getOrderId())
+                .setAccountId(testAccount.getId())
+        );
+
+        assertEquals(ExecutionStatus.CANCELLED, state.getExecutionStatus());
+        assertEquals(10, state.getLotsExecuted());
+        assertEquals(10, freePositionLots());
     }
 
     protected Quotation expectedCommission(Quotation instrumentPrice, long quantity) {

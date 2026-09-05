@@ -15,8 +15,20 @@ public class RejectingPendingOrderHandler implements PendingOrderHandler {
     public void onNotFillable(Order order) throws AbstractException {
         throw ExceptionBuilder
             .newBuilder(ErrorCode.UNIMPLEMENTED)
-            .withMessage("Limit orders are not implemented yet")
+            .withMessage(
+                "This broker fills only what the market takes right now, and this order takes none of it"
+            )
             .build();
+    }
+
+    /**
+     * Nothing to do. Without a clock the remainder can never fill, but it is not refused either -
+     * the order simply stays PARTIALLYFILL and keeps showing up among the active ones, which is
+     * exactly what "still working" means to a broker where time does not pass. The account holder
+     * can cancel it.
+     */
+    @Override
+    public void onPartiallyFilled(Order order) {
     }
 
     @Override

@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-public class MockMarketDataService implements MarketDataService {
+public class MockMarketDataService implements MarketDataService, SimulationMarketData {
     protected Clock clock;
     protected ReadCandleRepository candleRepository;
 
@@ -90,12 +90,20 @@ public class MockMarketDataService implements MarketDataService {
             .setPrice(price);
     }
 
-    protected Optional<Candle> findClosestBefore(String instrumentUid, Instant at) {
+    @Override
+    public Optional<Candle> lastCandleAtOrBefore(String instrumentUid, Instant at) {
         List<Candle> candles = candleRepository.findBeforeOrEqual(instrumentUid, at, 1);
         return candles.isEmpty() ? Optional.empty() : Optional.ofNullable(candles.getFirst());
     }
 
-    protected List<Candle> findCandlesByPrice(CandleInterval interval, FindPriceParams findParams) {
+    @Override
+    public Optional<Candle> nextCandleAtOrAfter(String instrumentUid, Instant at) {
+        List<Candle> candles = candleRepository.findAfterOrEqual(instrumentUid, at, 1);
+        return candles.isEmpty() ? Optional.empty() : Optional.ofNullable(candles.getFirst());
+    }
+
+    @Override
+    public List<Candle> findByPrice(CandleInterval interval, FindPriceParams findParams) {
         return adaptCandlesForInterval(this.candleRepository.findByPrice(findParams), interval);
     }
 
@@ -172,7 +180,8 @@ public class MockMarketDataService implements MarketDataService {
         );
     }
 
-    protected Candle getInstrumentCurrentCandle(String instrumentUid) {
+    @Override
+    public Candle currentCandle(String instrumentUid) {
         List<Candle> candles = candleRepository.findBeforeOrEqual(
             instrumentUid,
             clock.currentTime(),

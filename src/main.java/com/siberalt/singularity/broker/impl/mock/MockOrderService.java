@@ -12,7 +12,6 @@ import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.shared.exception.MockBrokerException;
 import com.siberalt.singularity.broker.impl.mock.shared.user.AccountState;
-import com.siberalt.singularity.entity.transaction.TransactionSpec;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.entity.order.Order;
@@ -34,11 +33,12 @@ public class MockOrderService implements OrderService {
     protected Clock clock;
     protected MockOperationsService operationsService;
     protected MockInstrumentService instrumentService;
-    protected MockMarketDataService marketDataService;
+    protected SimulationMarketData marketDataService;
     protected MockUserService userService;
     protected OrderRepository orderRepository;
     protected OrderRegistry orderRegistry;
     protected OrderPriceModel priceModel;
+    protected LiquidityModel liquidityModel;
     protected OrderExecutor orderExecutor;
     protected PendingOrderHandler pendingOrderHandler;
 
@@ -46,11 +46,12 @@ public class MockOrderService implements OrderService {
         Clock clock,
         MockOperationsService operationsService,
         MockInstrumentService instrumentService,
-        MockMarketDataService marketDataService,
+        SimulationMarketData marketDataService,
         MockUserService userService,
         OrderRepository orderRepository,
         OrderRegistry orderRegistry,
         OrderPriceModel priceModel,
+        LiquidityModel liquidityModel,
         OrderExecutor orderExecutor,
         PendingOrderHandler pendingOrderHandler
     ) {
@@ -62,8 +63,17 @@ public class MockOrderService implements OrderService {
         this.orderRepository = orderRepository;
         this.orderRegistry = orderRegistry;
         this.priceModel = priceModel;
+        this.liquidityModel = liquidityModel;
         this.orderExecutor = orderExecutor;
         this.pendingOrderHandler = pendingOrderHandler;
+    }
+
+    /**
+     * How much of an order the market is assumed able to absorb. Infinite by default - switch it off
+     * to have large orders fill across several bars instead of all at one price.
+     */
+    public LiquidityModel getLiquidityModel() {
+        return liquidityModel;
     }
 
     @Override
@@ -71,12 +81,9 @@ public class MockOrderService implements OrderService {
         validatePostOrderRequest(request.getPostOrderRequest());
 
         Order order = createOrder(request.getPostOrderRequest());
-        orderExecutor.calculateTransactions(order);
+        FillQuote quote = orderExecutor.quote(order, order.getLotsRequested());
 
-        return new GetPriceResponse(
-            order.getBalanceChange(),
-            order.getExecutedCommission()
-        );
+        return new GetPriceResponse(quote.balanceChange(), quote.commission());
     }
 
     @Override
@@ -100,7 +107,9 @@ public class MockOrderService implements OrderService {
             throw ExceptionBuilder.create(ErrorCode.ORDER_NOT_FOUND);
         }
 
-        if (cancelOrder.getExecutionStatus() != ExecutionStatus.NEW) {
+        // A partially filled order is still working, so it can still be pulled - what already
+        // traded stays traded, and OrderRegistry.cancel keeps that in the journal.
+        if (!isActive(cancelOrder.getExecutionStatus())) {
             throw ExceptionBuilder.create(ErrorCode.CANCEL_ORDER_ERROR);
         }
 
@@ -212,30 +221,64 @@ public class MockOrderService implements OrderService {
 
     protected PostOrderResponse buy(PostOrderRequest request) throws AbstractException {
         Order order = createOrder(request);
-        List<TransactionSpec> transactionSpecs = orderExecutor.calculateTransactions(order);
-        checkEnoughOfMoneyToBuy(order);
+        checkEnoughOfMoneyToBuy(order, orderExecutor.quote(order, order.getLotsRequested()));
 
-        if (canBuyNow(order)) {
-            orderExecutor.buy(order, transactionSpecs);
-        } else {
+        long fillableLots = canBuyNow(order) ? fillableLots(order) : 0;
+
+        if (fillableLots == 0) {
             pendingOrderHandler.onNotFillable(order);
+
+            return toServiceResponse(order);
         }
+
+        orderExecutor.buy(order, fillableLots, orderExecutor.quote(order, fillableLots));
+        handleRemainder(order);
 
         return toServiceResponse(order);
     }
 
     protected PostOrderResponse sell(PostOrderRequest request) throws AbstractException {
         Order order = createOrder(request);
-        List<TransactionSpec> transactionSpecs = orderExecutor.calculateTransactions(order);
         checkEnoughOfPositionToSell(order);
 
-        if (canSellNow(order)) {
-            orderExecutor.sell(order, transactionSpecs);
-        } else {
+        long fillableLots = canSellNow(order) ? fillableLots(order) : 0;
+
+        if (fillableLots == 0) {
             pendingOrderHandler.onNotFillable(order);
+
+            return toServiceResponse(order);
         }
 
+        orderExecutor.sell(order, fillableLots, orderExecutor.quote(order, fillableLots));
+        handleRemainder(order);
+
         return toServiceResponse(order);
+    }
+
+    /**
+     * How much of the order the market can absorb right now. Zero means this bar cannot trade
+     * against the order at all, which for these purposes is the same situation as the price not
+     * being met - the order has to wait either way.
+     */
+    protected long fillableLots(Order order) throws AbstractException {
+        Candle currentCandle = marketDataService.currentCandle(order.getInstrument().getUid());
+
+        if (currentCandle == null) {
+            throw new MockBrokerException("Candle not found");
+        }
+
+        return liquidityModel.fillableLots(order.getLotsRequested() - order.getLotsExecuted(), currentCandle);
+    }
+
+    /**
+     * A fill that could not take the whole order leaves the rest of it working, and what that means
+     * is the pending handler's business - a broker that cannot advance time simply leaves it as it
+     * is.
+     */
+    protected void handleRemainder(Order order) throws AbstractException {
+        if (order.getLotsExecuted() < order.getLotsRequested()) {
+            pendingOrderHandler.onPartiallyFilled(order);
+        }
     }
 
     protected boolean canBuyNow(Order order) {
@@ -259,7 +302,7 @@ public class MockOrderService implements OrderService {
             throw ExceptionBuilder.create(ErrorCode.INSTRUMENT_NOT_FOUND);
         }
 
-        Candle currentCandle = marketDataService.getInstrumentCurrentCandle(request.getInstrumentId());
+        Candle currentCandle = marketDataService.currentCandle(request.getInstrumentId());
         if (currentCandle == null) {
             throw new MockBrokerException("Candle not found");
         }
@@ -299,10 +342,15 @@ public class MockOrderService implements OrderService {
         }
     }
 
-    protected void checkEnoughOfMoneyToBuy(Order order) throws AbstractException {
+    /**
+     * Checked against the whole order, not just the part that can fill now: an order the account
+     * cannot afford in full is refused outright rather than filled part way and left working with
+     * nothing to pay for the rest.
+     */
+    protected void checkEnoughOfMoneyToBuy(Order order, FillQuote quote) throws AbstractException {
         boolean isEnoughOfMoney = operationsService.isEnoughOfMoney(
             order.getAccountId(),
-            Money.of(order.getInstrument().getCurrency(), order.getBalanceChange().multiply(-1))
+            Money.of(order.getInstrument().getCurrency(), quote.cost())
         );
 
         if (!isEnoughOfMoney) {

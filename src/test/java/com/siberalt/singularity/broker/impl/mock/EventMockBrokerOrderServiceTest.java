@@ -11,6 +11,8 @@ import com.siberalt.singularity.broker.contract.service.order.response.Execution
 import com.siberalt.singularity.broker.contract.service.order.response.OrderState;
 import com.siberalt.singularity.broker.contract.service.order.response.PostOrderResponse;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
+import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
+import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.CandlePriceField;
@@ -244,6 +246,101 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         PostOrderResponse parked = assertSellParked(marketCandle, 10, Quotation.of(11));
 
         assertFillsAt(parked, Quotation.of(13), OrderDirection.SELL);
+    }
+
+    /**
+     * The point of a working remainder: an order too large for one bar is not cut down to what that
+     * bar could give, it keeps going until it has all of it. Three bars of a hundred lots at a tenth
+     * each is exactly thirty, so the order finishes on the third.
+     */
+    @Test
+    public void testOrderTooLargeForOneBarFillsAcrossSeveralOfThem() throws AbstractException {
+        Candle firstBar = createCandle(currentTime, 10, 15, 5, 10, 100);
+        Candle secondBar = createCandle(currentTime.plus(Duration.ofMinutes(1)), 10, 15, 5, 10, 100);
+        Candle thirdBar = createCandle(currentTime.plus(Duration.ofMinutes(2)), 10, 15, 5, 10, 100);
+
+        orderService.getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
+        addMoney(Quotation.of(100000));
+        when(candleStorage.findAfterOrEqual(eq(config.getInstrument().getUid()), any(), eq(1L)))
+            .thenReturn(List.of(secondBar))
+            .thenReturn(List.of(thirdBar));
+
+        PostOrderResponse posted = postBuy(firstBar, OrderType.MARKET, 30, null);
+
+        assertEquals(10, posted.getLotsExecuted());
+        assertEquals(ExecutionStatus.PARTIALLYFILL, posted.getExecutionStatus());
+
+        tickAt(secondBar.getTime());
+
+        assertEquals(20, stateOf(posted).getLotsExecuted());
+        assertEquals(ExecutionStatus.PARTIALLYFILL, stateOf(posted).getExecutionStatus());
+        assertEquals(20, freePositionLots());
+
+        tickAt(thirdBar.getTime());
+
+        assertEquals(30, stateOf(posted).getLotsExecuted());
+        assertEquals(ExecutionStatus.FILL, stateOf(posted).getExecutionStatus());
+        assertEquals(30, freePositionLots());
+
+        // One order, but three separate trades - each bar it actually traded against.
+        List<Operation> trades = operationRepository.getByAccountId(testAccount.getId(), TimeRange.MAX)
+            .stream()
+            .filter(operation -> operation.price() != null)
+            .toList();
+
+        assertEquals(3, trades.size());
+        assertTrue(trades.stream().allMatch(operation -> operation.quantityDone() == 10));
+
+        // Paid for thirty lots in the end, no more and no less, commission included.
+        Quotation expectedSpend = firstBar.open()
+            .multiply(30)
+            .add(expectedCommission(firstBar.open(), 30).multiply(-1));
+
+        assertEquals(
+            Money.of(config.getInstrument().getCurrency(), Quotation.of(100000).subtract(expectedSpend)),
+            broker.getOperationsService()
+                .getAvailableMoney(testAccount.getId(), config.getInstrument().getCurrency())
+        );
+    }
+
+    /**
+     * A remainder that runs out of market stops being a remainder. The order keeps what it filled
+     * and is done - it is not a rejection, because it traded.
+     */
+    @Test
+    public void testRemainderStopsWhenTheMarketRunsOut() throws AbstractException {
+        Candle onlyBar = createCandle(currentTime, 10, 15, 5, 10, 100);
+
+        orderService.getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
+        addMoney(Quotation.of(100000));
+        // Nothing further to trade against: no next bar, and the data ends where it started.
+        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1L))).thenReturn(List.of(onlyBar));
+
+        PostOrderResponse posted = postBuy(onlyBar, OrderType.MARKET, 30, null);
+
+        assertEquals(10, posted.getLotsExecuted());
+
+        tickAt(currentTime);
+
+        assertEquals(ExecutionStatus.PARTIALLYFILL, stateOf(posted).getExecutionStatus());
+        assertEquals(10, stateOf(posted).getLotsExecuted());
+        assertEquals(10, freePositionLots());
+
+        // The reservation for the lots that never filled is released, so nothing is left blocked.
+        assertEquals(0, blockedPositionLots());
+    }
+
+    protected void tickAt(Instant eventTime) {
+        when(clock.currentTime()).thenReturn(eventTime);
+        pendingOrderHandler().tick();
+    }
+
+    protected OrderState stateOf(PostOrderResponse posted) throws AbstractException {
+        return orderService.getState(
+            new GetOrderStateRequest()
+                .setOrderId(posted.getOrderId())
+                .setAccountId(testAccount.getId())
+        );
     }
 
     /**

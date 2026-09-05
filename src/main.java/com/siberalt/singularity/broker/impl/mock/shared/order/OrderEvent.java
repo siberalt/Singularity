@@ -13,12 +13,28 @@ import com.siberalt.singularity.simulation.Event;
 public class OrderEvent {
     protected Order order;
     protected Event event;
+    protected long lotsToFill;
     protected Money blockedMoney;
     protected long blockedLots;
 
-    public OrderEvent(Order order, Event event) {
+    public OrderEvent(Order order, Event event, long lotsToFill) {
         this.order = order;
         this.event = event;
+        this.lotsToFill = lotsToFill;
+    }
+
+    /**
+     * How many lots this event fills, which is the whole order only when the market has the volume
+     * for it. An order too large for one bar is resolved by a chain of these, each covering what its
+     * own bar could absorb.
+     */
+    public long getLotsToFill() {
+        return lotsToFill;
+    }
+
+    public OrderEvent setLotsToFill(long lotsToFill) {
+        this.lotsToFill = lotsToFill;
+        return this;
     }
 
     public Order getOrder() {

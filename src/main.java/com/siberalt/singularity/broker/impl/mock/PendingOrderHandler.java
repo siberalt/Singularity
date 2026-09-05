@@ -21,6 +21,14 @@ public interface PendingOrderHandler {
     void onNotFillable(Order order) throws AbstractException;
 
     /**
+     * Called after a fill that could only take part of the order, because the market did not have
+     * the volume for the rest of it. The lots that did fill are already paid for and journalled;
+     * the order carries the running totals and is stored as PARTIALLYFILL. What happens to the
+     * remainder is the implementation's business - it either keeps working or it does not.
+     */
+    void onPartiallyFilled(Order order) throws AbstractException;
+
+    /**
      * Called after a stored, not-yet-filled order is cancelled, so an implementation that
      * scheduled a future fill can drop it and release whatever it reserved for it. Orders that
      * filled immediately never reach here.

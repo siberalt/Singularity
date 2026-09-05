@@ -12,9 +12,7 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.CandlePriceField;
 import com.siberalt.singularity.entity.candle.ComparisonOperator;
 import com.siberalt.singularity.entity.candle.FindPriceParams;
-import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.entity.order.Order;
-import com.siberalt.singularity.entity.transaction.TransactionSpec;
 import com.siberalt.singularity.simulation.Event;
 import com.siberalt.singularity.simulation.EventInvoker;
 import com.siberalt.singularity.simulation.EventObserver;
@@ -23,7 +21,9 @@ import com.siberalt.singularity.strategy.context.Clock;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,8 +35,10 @@ import java.util.logging.Logger;
  * scheduled event, and the order is filled when the simulation reaches it. An order whose price is
  * never reached within its lifetime is scheduled as rejected instead.
  * <p>
- * Only limit orders ever get here - every other order type fills at whatever the market offers, so
- * {@link MockOrderService} never finds one unfillable.
+ * An order also gets here when the market had the price but not the volume for all of it - see
+ * {@link LiquidityModel}. Then it is resolved by a chain of events rather than one, each filling
+ * what its own bar could absorb, until the order is complete or its lifetime runs out. An order
+ * without a limit price waits only for the next bar, not for a price.
  */
 public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventInvoker, TimeDependentUnit {
     private static final Logger logger = Logger.getLogger(SimulatedPendingOrderHandler.class.getName());
@@ -44,8 +46,9 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
     protected final OrderExecutor orderExecutor;
     protected final OrderRegistry orderRegistry;
     protected final OrderPriceModel priceModel;
-    protected final MockMarketDataService marketDataService;
+    protected final SimulationMarketData marketDataService;
     protected final MockOperationsService operationsService;
+    protected final LiquidityModel liquidityModel;
     protected final Map<String, OrderEvent> orderEvents = new HashMap<>();
     protected final Map<Instant, List<OrderEvent>> orderEventsByTime = new HashMap<>();
     protected Duration limitOrderLifeTime = Duration.ofDays(1);
@@ -57,8 +60,9 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
         OrderExecutor orderExecutor,
         OrderRegistry orderRegistry,
         OrderPriceModel priceModel,
-        MockMarketDataService marketDataService,
-        MockOperationsService operationsService
+        SimulationMarketData marketDataService,
+        MockOperationsService operationsService,
+        LiquidityModel liquidityModel
     ) {
         this.clock = clock;
         this.orderExecutor = orderExecutor;
@@ -66,6 +70,7 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
         this.priceModel = priceModel;
         this.marketDataService = marketDataService;
         this.operationsService = operationsService;
+        this.liquidityModel = liquidityModel;
     }
 
     public Duration getLimitOrderLifeTime() {
@@ -94,93 +99,185 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
 
     @Override
     public void onNotFillable(Order order) throws AbstractException {
+        order
+            .setBalanceChange(Quotation.ZERO)
+            .setLotsExecuted(0)
+            .setExecutionStatus(ExecutionStatus.NEW);
+
+        // The order is new to us, so the current bar is fair game: the market may well reach its
+        // price within the bar it was posted in.
+        schedule(order, clock.currentTime());
+        orderRegistry.register(order);
+    }
+
+    /**
+     * The lots that did fill are settled and journalled already; what is left goes back to waiting
+     * for the market, on the same terms and within the order's original lifetime. The search starts
+     * just past the current moment - the bar that just filled has given this order all it is going
+     * to.
+     */
+    @Override
+    public void onPartiallyFilled(Order order) throws AbstractException {
+        schedule(order, clock.currentTime().plusMillis(1));
+    }
+
+    /**
+     * Works out when the rest of this order can fill and books an event for that moment, reserving
+     * what it will need in the meantime.
+     *
+     * @param searchFrom the earliest moment a fill may happen at
+     */
+    protected void schedule(Order order, Instant searchFrom) throws AbstractException {
+        long lotsLeft = lotsLeft(order);
+        Instant expiration = expirationOf(order);
+
         logger.info(
-            String.format("[%s] Predicting market event for order %s", clock.currentTime(), order.getId())
+            String.format(
+                "[%s] Predicting market event for %d lot(s) of order %s, expiring %s",
+                clock.currentTime(),
+                lotsLeft,
+                order.getId(),
+                expiration
+            )
         );
 
-        var currentTime = clock.currentTime();
-        var endOrderLifeTime = currentTime.plus(limitOrderLifeTime);
-        Instrument instrument = order.getInstrument();
+        MarketSignal signal = findMarketSignal(order, lotsLeft, searchFrom, expiration);
 
-        Candle marketSignalCandle = findMarketSignalCandle(
-            order.getDirection(),
-            order.getRequestedPrice(),
-            instrument.getUid(),
-            currentTime,
-            endOrderLifeTime
-        );
-
+        Order futureOrder = futureOrderOf(order);
         Instant eventTime;
-        ExecutionStatus executionStatus;
+        long lotsToFill;
 
-        Order futureOrder = new Order()
-            .setAccountId(order.getAccountId())
-            .setId(order.getId())
-            // Same logical order, so it keeps the key: the fill replaces the scheduled order in
-            // the repository instead of leaving the original key entry behind.
-            .setIdempotencyKey(order.getIdempotencyKey())
-            .setDirection(order.getDirection())
-            .setOrderType(order.getOrderType())
-            .setLotsRequested(order.getLotsRequested())
-            .setRequestedPrice(order.getRequestedPrice())
-            .setCreatedTime(currentTime)
-            .setInstrument(order.getInstrument())
-            .setInstrumentPrice(order.getInstrumentPrice());
+        if (signal != null) {
+            eventTime = signal.candle().getTime();
+            lotsToFill = signal.fillableLots();
+            // No status set here: this event ends in a fill, and only the executor knows how the
+            // order stands once it is applied - whether the bar finished it or left more to do.
 
-        if (marketSignalCandle != null) {
-            eventTime = marketSignalCandle.getTime();
-            executionStatus = ExecutionStatus.FILL;
-            futureOrder.setInstrumentPrice(
-                priceModel.limitFillPrice(
-                    order.getDirection(),
-                    order.getRequestedPrice(),
-                    marketSignalCandle
-                )
-            );
+            if (order.getRequestedPrice() != null) {
+                futureOrder.setInstrumentPrice(
+                    priceModel.limitFillPrice(order.getDirection(), order.getRequestedPrice(), signal.candle())
+                );
+            } else {
+                futureOrder.setInstrumentPrice(signal.candle().open());
+            }
         } else {
-            var lastCandle = marketDataService.findClosestBefore(
-                instrument.getUid(),
-                endOrderLifeTime
-            ).orElse(null);
+            Candle lastCandle = marketDataService
+                .lastCandleAtOrBefore(order.getInstrument().getUid(), expiration)
+                .orElse(null);
 
             if (lastCandle == null) {
                 throw new MockBrokerException("Simulation error: last candle is null. Market data has ran out");
             }
 
             eventTime = lastCandle.getTime();
-            executionStatus = ExecutionStatus.REJECTED;
+            lotsToFill = 0;
+            // Nothing will fill, so this is the status the order is stored with. An order that got
+            // some of what it asked for is not a rejected order - it traded, and simply stops here
+            // with whatever it managed to fill.
+            futureOrder.setExecutionStatus(
+                order.getLotsExecuted() > 0 ? ExecutionStatus.PARTIALLYFILL : ExecutionStatus.REJECTED
+            );
         }
 
-        futureOrder.setExecutionStatus(executionStatus);
-
         Event event = Event.create(eventTime, this);
-        OrderEvent orderEvent = new OrderEvent(futureOrder, event);
-        // Reserve before the order's own balance change is cleared below - that figure is what the
-        // fill is expected to cost.
-        blockFunds(order, orderEvent);
+        OrderEvent orderEvent = new OrderEvent(futureOrder, event, lotsToFill);
+        blockFunds(order, lotsToFill > 0 ? lotsToFill : lotsLeft, orderEvent);
         orderEvents.put(futureOrder.getId(), orderEvent);
         orderEventsByTime.computeIfAbsent(eventTime, k -> new ArrayList<>()).add(orderEvent);
 
-        order
-            .setBalanceChange(Quotation.ZERO)
-            .setLotsExecuted(0)
-            .setExecutionStatus(ExecutionStatus.NEW);
-
-        orderRegistry.register(order);
         eventObserver.scheduleEvent(event);
     }
 
     /**
-     * Holds back what the parked order will need, so the same money or the same lots cannot be
-     * promised to a second order while this one waits. For a buy that is the cost priced at the
-     * current market, which is above the limit price the order will actually fill at - erring
-     * towards reserving slightly too much rather than too little.
+     * The first bar within the window that both reaches the order's price and has the volume to
+     * give it at least one lot. A bar that reaches the price but is too thin to trade against is
+     * skipped rather than treated as a fill of nothing - the order is still waiting, just not here.
      */
-    protected void blockFunds(Order order, OrderEvent orderEvent) throws AbstractException {
+    protected MarketSignal findMarketSignal(Order order, long lotsLeft, Instant from, Instant to) {
+        Instant searchFrom = from;
+
+        while (!searchFrom.isAfter(to)) {
+            Candle candle = order.getRequestedPrice() != null
+                ? findMarketSignalCandle(
+                    order.getDirection(),
+                    order.getRequestedPrice(),
+                    order.getInstrument().getUid(),
+                    searchFrom,
+                    to
+                )
+                : marketDataService.nextCandleAtOrAfter(order.getInstrument().getUid(), searchFrom).orElse(null);
+
+            if (candle == null || candle.getTime().isAfter(to)) {
+                return null;
+            }
+
+            long fillableLots = liquidityModel.fillableLots(lotsLeft, candle);
+
+            if (fillableLots > 0) {
+                return new MarketSignal(candle, fillableLots);
+            }
+
+            searchFrom = candle.getTime().plusMillis(1);
+        }
+
+        return null;
+    }
+
+    /**
+     * The moment this order stops waiting, fixed once and carried on the order so that filling part
+     * of it does not hand the remainder a fresh lifetime.
+     */
+    protected Instant expirationOf(Order order) {
+        if (order.getExpirationTime() == null) {
+            order.setExpirationTime(clock.currentTime().plus(limitOrderLifeTime));
+        }
+
+        return order.getExpirationTime();
+    }
+
+    protected long lotsLeft(Order order) {
+        return order.getLotsRequested() - order.getLotsExecuted();
+    }
+
+    /**
+     * The order as it will stand when the event comes due. It carries the same id and key - it
+     * replaces the stored order rather than living beside it - and the totals filled so far, so the
+     * fill adds to them instead of starting over.
+     */
+    protected Order futureOrderOf(Order order) {
+        return new Order()
+            .setAccountId(order.getAccountId())
+            .setId(order.getId())
+            .setIdempotencyKey(order.getIdempotencyKey())
+            .setDirection(order.getDirection())
+            .setOrderType(order.getOrderType())
+            .setLotsRequested(order.getLotsRequested())
+            .setLotsExecuted(order.getLotsExecuted())
+            .setBalanceChange(order.getBalanceChange())
+            .setExecutedCommission(order.getExecutedCommission())
+            .setRequestedPrice(order.getRequestedPrice())
+            .setExpirationTime(order.getExpirationTime())
+            .setCreatedTime(order.getCreatedTime() != null ? order.getCreatedTime() : clock.currentTime())
+            .setInstrument(order.getInstrument())
+            .setInstrumentPrice(order.getInstrumentPrice());
+    }
+
+    /**
+     * A bar the order can trade against, and how much of it that bar can absorb.
+     */
+    protected record MarketSignal(Candle candle, long fillableLots) {
+    }
+
+    /**
+     * Holds back what the waiting order will need, so the same money or the same lots cannot be
+     * promised to a second order while this one waits. Only for the lots actually still waiting -
+     * the part that already filled is paid for and must not be reserved again.
+     */
+    protected void blockFunds(Order order, long lots, OrderEvent orderEvent) throws AbstractException {
         if (order.getDirection() == OrderDirection.BUY) {
             Money cost = Money.of(
                 order.getInstrument().getCurrency(),
-                order.getBalanceChange().multiply(-1)
+                orderExecutor.quote(reservationPriced(order), lots).cost()
             );
             operationsService.blockMoney(order.getAccountId(), cost);
             orderEvent.setBlockedMoney(cost);
@@ -188,9 +285,28 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
             return;
         }
 
-        long lots = order.getLotsRequested() * order.getInstrument().getLot();
-        operationsService.blockPosition(order.getAccountId(), order.getInstrument().getUid(), lots);
-        orderEvent.setBlockedLots(lots);
+        long reservedLots = lots * order.getInstrument().getLot();
+        operationsService.blockPosition(order.getAccountId(), order.getInstrument().getUid(), reservedLots);
+        orderEvent.setBlockedLots(reservedLots);
+    }
+
+    /**
+     * The order priced at the dearest a fill of it could plausibly be, which is what the reservation
+     * has to cover: the current market when the order is first parked - above the limit it will
+     * actually fill at - and the limit price itself once a fill has moved the order's price down to
+     * what it last traded at. A market order has no ceiling, so the last price seen is the best
+     * estimate available.
+     */
+    protected Order reservationPriced(Order order) {
+        Quotation limitPrice = order.getRequestedPrice();
+
+        if (limitPrice == null || order.getDirection() != OrderDirection.BUY) {
+            return order;
+        }
+
+        return limitPrice.isGreaterThan(order.getInstrumentPrice())
+            ? futureOrderOf(order).setInstrumentPrice(limitPrice)
+            : order;
     }
 
     protected void unblockFunds(OrderEvent orderEvent) throws AbstractException {
@@ -238,12 +354,20 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
     @Override
     public void tick() {
         var currentTime = clock.currentTime();
+        List<OrderEvent> dueEvents = orderEventsByTime.remove(currentTime);
 
-        if (!orderEventsByTime.containsKey(currentTime)) {
+        if (dueEvents == null) {
             return;
         }
 
-        for (var orderEvent : orderEventsByTime.get(currentTime)) {
+        // Acting on an event can book another one, and that one can land on this very moment - a
+        // remainder that finds no further bar stops right here. Taking the due events off the map
+        // and draining whatever reappears keeps those from being either missed or iterated over
+        // while they are being added.
+        Deque<OrderEvent> queue = new ArrayDeque<>(dueEvents);
+
+        while (!queue.isEmpty()) {
+            OrderEvent orderEvent = queue.poll();
             logger.info(
                 String.format("[%s] Executing order event: %s", currentTime, orderEvent.getEvent().getId())
             );
@@ -258,12 +382,14 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
                 // fills - paying out of the freed funds - or expires unfilled.
                 unblockFunds(orderEvent);
 
-                if (order.getExecutionStatus() == ExecutionStatus.REJECTED) {
+                if (orderEvent.getLotsToFill() == 0) {
                     logger.info(
                         String.format(
-                            "[%s] Order %s expired without reaching its price",
+                            "[%s] Order %s stops waiting with %d of %d lot(s) filled",
                             currentTime,
-                            order.getId()
+                            order.getId(),
+                            order.getLotsExecuted(),
+                            order.getLotsRequested()
                         )
                     );
                     orderRegistry.register(order);
@@ -271,12 +397,18 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
                     continue;
                 }
 
-                List<TransactionSpec> transactionSpecs = orderExecutor.calculateTransactions(order);
+                long lots = orderEvent.getLotsToFill();
+                FillQuote quote = orderExecutor.quote(order, lots);
 
                 if (order.getDirection() == OrderDirection.BUY) {
-                    orderExecutor.buy(order, transactionSpecs);
+                    orderExecutor.buy(order, lots, quote);
                 } else {
-                    orderExecutor.sell(order, transactionSpecs);
+                    orderExecutor.sell(order, lots, quote);
+                }
+
+                // The bar gave what it had; if the order still wants more it goes back to waiting.
+                if (lotsLeft(order) > 0) {
+                    onPartiallyFilled(order);
                 }
             } catch (AbstractException e) {
                 logger.severe(
@@ -288,9 +420,13 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
                 );
                 throw new MockBrokerException("Error while executing order", e);
             }
-        }
 
-        orderEventsByTime.remove(currentTime);
+            List<OrderEvent> scheduledNow = orderEventsByTime.remove(currentTime);
+
+            if (scheduledNow != null) {
+                queue.addAll(scheduledNow);
+            }
+        }
     }
 
     /**
@@ -312,7 +448,7 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
     ) {
         boolean isBuy = orderDirection == OrderDirection.BUY;
 
-        return marketDataService.findCandlesByPrice(
+        return marketDataService.findByPrice(
                 CandleInterval.MIN_1,
                 new FindPriceParams(
                     instrumentUid,
