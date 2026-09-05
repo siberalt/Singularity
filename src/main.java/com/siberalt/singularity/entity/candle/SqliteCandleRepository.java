@@ -138,24 +138,24 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
     }
 
     @Override
-    public List<Candle> findByOpenPrice(FindPriceParams params) {
+    public List<Candle> findByPrice(FindPriceParams params) {
         String sql = """
             SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
             FROM candle
             WHERE instrument_uid = ? AND time >= ? AND time <= ?
             """;
 
-        StringBuilder conditionBuilder = new StringBuilder();
-        switch (params.comparisonOperator()) {
-            case EQUAL -> conditionBuilder.append("open_price = ?");
-            case LESS -> conditionBuilder.append("open_price < ?");
-            case LESS_OR_EQUAL -> conditionBuilder.append("open_price <= ?");
-            case MORE -> conditionBuilder.append("open_price > ?");
-            case MORE_OR_EQUAL -> conditionBuilder.append("open_price >= ?");
-            case NOT_EQUAL -> conditionBuilder.append("open_price <> ?");
-        }
+        String column = priceColumn(params.priceField());
+        String comparison = switch (params.comparisonOperator()) {
+            case EQUAL -> "=";
+            case LESS -> "<";
+            case LESS_OR_EQUAL -> "<=";
+            case MORE -> ">";
+            case MORE_OR_EQUAL -> ">=";
+            case NOT_EQUAL -> "<>";
+        };
 
-        sql += " AND " + conditionBuilder + " ORDER BY time ASC LIMIT ?";
+        sql += " AND " + column + " " + comparison + " ? ORDER BY time ASC LIMIT ?";
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             int paramIndex = 1;
@@ -173,8 +173,21 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
                 return candles;
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Ошибка при поиске свечей по цене открытия", e);
+            throw new RuntimeException("Ошибка при поиске свечей по цене", e);
         }
+    }
+
+    /**
+     * Column names are chosen here, never taken from the caller - the price field is an enum, so
+     * the value spliced into the SQL can only be one of these four literals.
+     */
+    private String priceColumn(CandlePriceField priceField) {
+        return switch (priceField) {
+            case OPEN -> "open_price";
+            case CLOSE -> "close_price";
+            case HIGH -> "high_price";
+            case LOW -> "low_price";
+        };
     }
 
     @Override

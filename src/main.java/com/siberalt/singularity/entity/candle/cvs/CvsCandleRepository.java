@@ -117,7 +117,7 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
     }
 
     @Override
-    public List<Candle> findByOpenPrice(FindPriceParams params) {
+    public List<Candle> findByPrice(FindPriceParams params) {
         if (!Objects.equals(this.instrumentUid, params.instrumentUid())) {
             return Collections.emptyList();
         }
@@ -132,7 +132,7 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
         var resultCandles = new ArrayList<Candle>();
 
         for (Candle candle : iterator) {
-            if (candle.open().compare(params.price(), params.comparisonOperator())) {
+            if (params.priceField().of(candle).compare(params.price(), params.comparisonOperator())) {
                 resultCandles.add(candle);
 
                 if (params.maxCount() <= resultCandles.size()) {

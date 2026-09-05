@@ -53,7 +53,7 @@ public class CurrentTimeLimitedCandleRepository implements ReadCandleRepository 
     }
 
     @Override
-    public List<Candle> findByOpenPrice(FindPriceParams params) {
+    public List<Candle> findByPrice(FindPriceParams params) {
         Instant currentTime = clock.currentTime();
 
         if (params.from().isAfter(currentTime)) {
@@ -62,16 +62,7 @@ public class CurrentTimeLimitedCandleRepository implements ReadCandleRepository 
         Instant adjustedFrom = params.from().isBefore(currentTime) ? params.from() : currentTime;
         Instant adjustedTo = params.to().isAfter(currentTime) ? currentTime : params.to();
 
-        FindPriceParams adjustedParams = new FindPriceParams(
-            params.instrumentUid(),
-            adjustedFrom,
-            adjustedTo,
-            params.price(),
-            params.comparisonOperator(),
-            params.maxCount()
-        );
-
-        return delegate.findByOpenPrice(adjustedParams);
+        return delegate.findByPrice(params.withRange(adjustedFrom, adjustedTo));
     }
 
     @Override

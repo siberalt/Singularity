@@ -153,7 +153,7 @@ public class EventMockBrokerIT {
 
         when(candleStorage.findBeforeOrEqual(instrumentUid, postBuyOrderTime, 1))
             .thenReturn(List.of(Candle.of(postBuyOrderTime, 1000, 7.3)));
-        when(candleStorage.findByOpenPrice(any()))
+        when(candleStorage.findByPrice(any()))
             .thenReturn(List.of(Candle.of(executeBuyOrderTime, 1000, 7)))
             .thenReturn(List.of(Candle.of(executeSellOrderTime, 1000, 8)));
         when(candleStorage.findBeforeOrEqual(instrumentUid, postSellOrderTime, 1))
@@ -181,7 +181,7 @@ public class EventMockBrokerIT {
 
         // Verify that the mocks were called at least once
         verify(candleStorage, times(1)).findBeforeOrEqual(instrumentUid, postBuyOrderTime, 1);
-        verify(candleStorage, times(2)).findByOpenPrice(any());
+        verify(candleStorage, times(2)).findByPrice(any());
         verify(candleStorage, times(1)).findBeforeOrEqual(instrumentUid, postSellOrderTime, 1);
 
         // Assert balance after simulation
@@ -209,7 +209,7 @@ public class EventMockBrokerIT {
             .thenReturn(List.of(Candle.of(postBuyLimitTime, 1000, 6)));
         when(candleStorage.findBeforeOrEqual(instrumentUid, postSellLimitTime, 1))
             .thenReturn(List.of(Candle.of(postSellLimitTime, 1000, 6)));
-        when(candleStorage.findByOpenPrice(any()))
+        when(candleStorage.findByPrice(any()))
             .thenReturn(List.of(Candle.of(executeBuyLimitTime, 1000, 4)))
             .thenReturn(List.of(Candle.of(executeSellLimitTime, 1000, 8)));
         when(candleStorage.findBeforeOrEqual(instrumentUid, postBuyMarketTime, 1))

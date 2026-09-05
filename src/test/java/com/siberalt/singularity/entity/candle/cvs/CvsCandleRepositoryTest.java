@@ -4,6 +4,7 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.configuration.ConfigInterface;
 import com.siberalt.singularity.configuration.YamlConfig;
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.CandlePriceField;
 import com.siberalt.singularity.entity.candle.CandleRangeMetadata;
 import com.siberalt.singularity.entity.candle.ComparisonOperator;
 import com.siberalt.singularity.entity.candle.FindPriceParams;
@@ -257,14 +258,14 @@ public class CvsCandleRepositoryTest {
     }
 
     @Test
-    void testFindByOpenPrice() throws IOException {
+    void testFindByPrice() throws IOException {
         var config = createTestConfig();
         String instrumentUid = config.getInstrumentUid();
         String instrumentDataPath = config.getInstrumentDataPath();
         var candleStorageFactory = new CvsFileCandleRepositoryFactory();
 
         try (var candleStorage = candleStorageFactory.create(instrumentUid, instrumentDataPath)) {
-            assertFindByOpenPrice(
+            assertFindByPrice(
                 candleStorage,
                 new FindPriceParams(
                     instrumentUid,
@@ -276,7 +277,7 @@ public class CvsCandleRepositoryTest {
                 )
             );
 
-            assertFindByOpenPrice(
+            assertFindByPrice(
                 candleStorage,
                 new FindPriceParams(
                     instrumentUid,
@@ -288,7 +289,7 @@ public class CvsCandleRepositoryTest {
                 )
             );
 
-            assertFindByOpenPrice(
+            assertFindByPrice(
                 candleStorage,
                 new FindPriceParams(
                     instrumentUid,
@@ -296,6 +297,34 @@ public class CvsCandleRepositoryTest {
                     Instant.parse("2020-12-30T15:44:00Z"),
                     Quotation.of(5.55),
                     ComparisonOperator.LESS,
+                    5
+                )
+            );
+
+            // The same search against the extremes of the bar rather than its open price - what
+            // "the market reached this level" actually asks.
+            assertFindByPrice(
+                candleStorage,
+                new FindPriceParams(
+                    instrumentUid,
+                    Instant.parse("2020-09-07T07:06:00Z"),
+                    Instant.parse("2020-09-07T15:40:00Z"),
+                    Quotation.of(4.89),
+                    CandlePriceField.LOW,
+                    ComparisonOperator.LESS_OR_EQUAL,
+                    5
+                )
+            );
+
+            assertFindByPrice(
+                candleStorage,
+                new FindPriceParams(
+                    instrumentUid,
+                    Instant.parse("2020-09-07T07:06:00Z"),
+                    Instant.parse("2020-09-07T15:40:00Z"),
+                    Quotation.of(4.89),
+                    CandlePriceField.HIGH,
+                    ComparisonOperator.MORE_OR_EQUAL,
                     5
                 )
             );
@@ -312,8 +341,8 @@ public class CvsCandleRepositoryTest {
         }
     }
 
-    void assertFindByOpenPrice(CvsCandleRepository candleStorage, FindPriceParams findPriceParams) {
-        List<Candle> candles = candleStorage.findByOpenPrice(findPriceParams);
+    void assertFindByPrice(CvsCandleRepository candleStorage, FindPriceParams findPriceParams) {
+        List<Candle> candles = candleStorage.findByPrice(findPriceParams);
 
         int totalCount = 0;
         long prevIndex = -1;
@@ -330,7 +359,7 @@ public class CvsCandleRepositoryTest {
             Assertions.assertTrue(candleTime.compareTo(findPriceParams.from()) >= 0);
             Assertions.assertTrue(candleTime.compareTo(findPriceParams.to()) <= 0);
             Assertions.assertTrue(
-                candle.open().compare(
+                findPriceParams.priceField().of(candle).compare(
                     findPriceParams.price(),
                     findPriceParams.comparisonOperator()
                 )

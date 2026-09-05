@@ -259,7 +259,7 @@ class MockMarketDataServiceIT {
             ComparisonOperator.MORE,
             4
         );
-        List<Candle> result = marketDataService.findCandlesByOpenPrice(CandleInterval.MIN_1, params);
+        List<Candle> result = marketDataService.findCandlesByPrice(CandleInterval.MIN_1, params);
 
         assertNotNull(result);
         assertEquals(4, result.size());

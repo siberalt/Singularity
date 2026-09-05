@@ -11,5 +11,9 @@ public interface ReadCandleRepository extends MigrationCandleSource {
 
     List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter);
 
-    List<Candle> findByOpenPrice(FindPriceParams params);
+    /**
+     * Candles matching the price condition the params describe, oldest first. Which of the candle's
+     * prices is compared is the caller's choice - see {@link CandlePriceField}.
+     */
+    List<Candle> findByPrice(FindPriceParams params);
 }

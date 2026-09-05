@@ -9,6 +9,7 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.shared.exception.MockBrokerException;
 import com.siberalt.singularity.broker.impl.mock.shared.order.OrderEvent;
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.CandlePriceField;
 import com.siberalt.singularity.entity.candle.ComparisonOperator;
 import com.siberalt.singularity.entity.candle.FindPriceParams;
 import com.siberalt.singularity.entity.instrument.Instrument;
@@ -30,9 +31,12 @@ import java.util.logging.Logger;
 
 /**
  * Fills orders that have to wait for the market, by looking ahead in the candle history instead of
- * re-checking on every tick: the first candle whose open crosses the limit price becomes a
+ * re-checking on every tick: the first candle in which the market reaches the limit price becomes a
  * scheduled event, and the order is filled when the simulation reaches it. An order whose price is
  * never reached within its lifetime is scheduled as rejected instead.
+ * <p>
+ * Only limit orders ever get here - every other order type fills at whatever the market offers, so
+ * {@link MockOrderService} never finds one unfillable.
  */
 public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventInvoker, TimeDependentUnit {
     private static final Logger logger = Logger.getLogger(SimulatedPendingOrderHandler.class.getName());
@@ -127,7 +131,11 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
             eventTime = marketSignalCandle.getTime();
             executionStatus = ExecutionStatus.FILL;
             futureOrder.setInstrumentPrice(
-                priceModel.currentPrice(order.getOrderType(), order.getDirection(), marketSignalCandle)
+                priceModel.limitFillPrice(
+                    order.getDirection(),
+                    order.getRequestedPrice(),
+                    marketSignalCandle
+                )
             );
         } else {
             var lastCandle = marketDataService.findClosestBefore(
@@ -285,6 +293,16 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
         orderEventsByTime.remove(currentTime);
     }
 
+    /**
+     * The first candle in which the market reaches the order's limit price, or {@code null} if it
+     * never does within the window.
+     * <p>
+     * A parked buy is waiting for the price to come down to its limit, so it triggers on the first
+     * candle whose low touches the limit; a parked sell waits for the price to come up, and
+     * triggers on a high. Comparing against the candle's open instead would ask a different
+     * question - where the price happened to stand at one instant - and would miss every limit the
+     * market crossed inside a bar.
+     */
     protected Candle findMarketSignalCandle(
         OrderDirection orderDirection,
         Quotation requestedPrice,
@@ -292,18 +310,17 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
         Instant from,
         Instant to
     ) {
-        ComparisonOperator comparisonOperator = orderDirection == OrderDirection.BUY
-            ? ComparisonOperator.MORE_OR_EQUAL
-            : ComparisonOperator.LESS_OR_EQUAL;
+        boolean isBuy = orderDirection == OrderDirection.BUY;
 
-        return marketDataService.findCandlesByOpenPrice(
+        return marketDataService.findCandlesByPrice(
                 CandleInterval.MIN_1,
                 new FindPriceParams(
                     instrumentUid,
                     from,
                     to,
                     requestedPrice,
-                    comparisonOperator,
+                    isBuy ? CandlePriceField.LOW : CandlePriceField.HIGH,
+                    isBuy ? ComparisonOperator.LESS_OR_EQUAL : ComparisonOperator.MORE_OR_EQUAL,
                     1
                 )
             )

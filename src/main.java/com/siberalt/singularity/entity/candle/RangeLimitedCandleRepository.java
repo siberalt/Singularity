@@ -64,7 +64,7 @@ public class RangeLimitedCandleRepository implements ReadCandleRepository {
     }
 
     @Override
-    public List<Candle> findByOpenPrice(FindPriceParams params) {
+    public List<Candle> findByPrice(FindPriceParams params) {
         TimeRange timeRange = timeRangeSupplier.get();
         Instant rangeFrom = timeRange.from();
         Instant rangeTo = timeRange.to();
@@ -76,16 +76,7 @@ public class RangeLimitedCandleRepository implements ReadCandleRepository {
         Instant adjustedFrom = params.from().isBefore(rangeFrom) ? rangeFrom : params.from();
         Instant adjustedTo = params.to().isAfter(rangeTo) ? rangeTo : params.to();
 
-        FindPriceParams adjustedParams = new FindPriceParams(
-            params.instrumentUid(),
-            adjustedFrom,
-            adjustedTo,
-            params.price(),
-            params.comparisonOperator(),
-            params.maxCount()
-        );
-
-        return delegate.findByOpenPrice(adjustedParams);
+        return delegate.findByPrice(params.withRange(adjustedFrom, adjustedTo));
     }
 
     @Override

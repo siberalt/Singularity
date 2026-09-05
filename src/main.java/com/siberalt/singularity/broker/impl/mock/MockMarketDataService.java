@@ -95,8 +95,8 @@ public class MockMarketDataService implements MarketDataService {
         return candles.isEmpty() ? Optional.empty() : Optional.ofNullable(candles.getFirst());
     }
 
-    protected List<Candle> findCandlesByOpenPrice(CandleInterval interval, FindPriceParams findParams) {
-        return adaptCandlesForInterval(this.candleRepository.findByOpenPrice(findParams), interval);
+    protected List<Candle> findCandlesByPrice(CandleInterval interval, FindPriceParams findParams) {
+        return adaptCandlesForInterval(this.candleRepository.findByPrice(findParams), interval);
     }
 
     protected List<Candle> adaptCandlesForInterval(Iterable<Candle> candles, CandleInterval candleInterval) {

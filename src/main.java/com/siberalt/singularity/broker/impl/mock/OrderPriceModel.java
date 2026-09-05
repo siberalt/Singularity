@@ -58,6 +58,25 @@ public class OrderPriceModel {
         };
     }
 
+    /**
+     * The price a limit order fills at on the candle that finally triggered it.
+     * <p>
+     * The limit is the worst price the order accepts, so that is what it normally gets - the market
+     * only had to touch it. The exception is a gap: if the candle already opened past the limit,
+     * the order fills at that open, because there was never anything to buy at the limit in
+     * between. Taking the open unconditionally would be wrong the other way - it hands a buy a
+     * price above its own limit whenever the candle merely dipped to it.
+     */
+    public Quotation limitFillPrice(OrderDirection orderDirection, Quotation limitPrice, Candle triggerCandle) {
+        Quotation open = triggerCandle.open();
+
+        return switch (orderDirection) {
+            case BUY -> open.isLessThan(limitPrice) ? open : limitPrice;
+            case SELL -> open.isGreaterThan(limitPrice) ? open : limitPrice;
+            case UNSPECIFIED -> limitPrice;
+        };
+    }
+
     protected Quotation bestPrice(Candle candle, double bestPriceRatio) {
         Quotation priceRange = candle.high().subtract(candle.low());
 
