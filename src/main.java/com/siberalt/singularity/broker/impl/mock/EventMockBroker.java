@@ -1,6 +1,7 @@
 package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.execution.EventSubscriptionBroker;
+import com.siberalt.singularity.broker.contract.simulation.SimulationBroker;
 import com.siberalt.singularity.broker.impl.mock.factory.DefaultEventOrderServiceFactory;
 import com.siberalt.singularity.broker.impl.mock.factory.MockServicesFactory;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
@@ -8,11 +9,14 @@ import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
 import com.siberalt.singularity.entity.operation.OperationRepository;
 import com.siberalt.singularity.entity.order.OrderRepository;
+import com.siberalt.singularity.simulation.SimulationUnit;
 import com.siberalt.singularity.strategy.context.Clock;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.stream.Collectors;
 
-public class EventMockBroker extends MockBroker implements EventSubscriptionBroker {
+public class EventMockBroker extends MockBroker implements EventSubscriptionBroker, SimulationBroker {
     private final NewCandleSubscriptionManager subscriptionManager;
 
     public EventMockBroker(
@@ -106,6 +110,15 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
     @Override
     public NewCandleSubscriptionManager getSubscriptionManager() {
         return subscriptionManager;
+    }
+
+    /**
+     * The candle feed and the handler that fills parked orders - both only move when the simulated
+     * clock does.
+     */
+    @Override
+    public Collection<SimulationUnit> getSimulationUnits() {
+        return List.of(getPendingOrderHandler(), subscriptionManager);
     }
 
     public static Builder builder(

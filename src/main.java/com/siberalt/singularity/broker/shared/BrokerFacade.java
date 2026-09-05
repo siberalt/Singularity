@@ -8,6 +8,7 @@ import com.siberalt.singularity.broker.contract.service.order.request.*;
 import com.siberalt.singularity.broker.contract.service.order.response.CancelOrderResponse;
 import com.siberalt.singularity.broker.contract.service.order.response.GetOrdersResponse;
 import com.siberalt.singularity.broker.contract.service.order.response.PostOrderResponse;
+import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.shared.dto.BuyRequest;
 
@@ -17,6 +18,19 @@ public class BrokerFacade {
 
     public BrokerFacade(Broker broker) {
         this.broker = broker;
+    }
+
+    /**
+     * The account's free money in one currency, or zero when it holds none of it. Read through
+     * {@code getPositions}, which is the only place the {@link Broker} contract exposes balances -
+     * a broker-specific service may offer a direct accessor, but nothing portable can rely on it.
+     */
+    public Money getAvailableMoney(String accountId, String currencyIso) throws AbstractException {
+        return broker.getOperationsService().getPositions(GetPositionsRequest.of(accountId))
+            .getMoney().stream()
+            .filter(money -> currencyIso.equals(money.getCurrencyIso()))
+            .findFirst()
+            .orElseGet(() -> Money.of(currencyIso, Quotation.ZERO));
     }
 
     public long getPositionSize(String accountId, String instrumentId) throws AbstractException {

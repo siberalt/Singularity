@@ -1,12 +1,9 @@
 package com.siberalt.singularity.strategy.simulation.runner;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
-import com.siberalt.singularity.broker.contract.service.user.AccessLevel;
-import com.siberalt.singularity.broker.contract.service.user.Account;
-import com.siberalt.singularity.broker.contract.service.user.AccountType;
+import com.siberalt.singularity.broker.contract.simulation.SimulationBroker;
 import com.siberalt.singularity.broker.contract.value.money.Money;
-import com.siberalt.singularity.broker.impl.mock.EventMockBroker;
-import com.siberalt.singularity.broker.shared.BrokerFacade;
+import com.siberalt.singularity.broker.shared.SandboxBrokerFacade;
 import com.siberalt.singularity.shared.TimeRange;
 import com.siberalt.singularity.simulation.EventSimulator;
 import com.siberalt.singularity.simulation.SimulationClock;
@@ -16,45 +13,49 @@ import com.siberalt.singularity.strategy.observer.Observer;
 import java.time.Duration;
 import java.time.Instant;
 
-public class StrategySimulationRunner {
-    public static final String SIMULATION_ACCOUNT_NAME = "Account";
+/**
+ * Backtests a strategy: replays it against any {@link SimulationBroker} over a past time range on a
+ * freshly opened and funded account, then reports what it earned. Everything it needs from the
+ * broker goes through the contract - the sandbox opens and funds the account, the broker names its
+ * own simulation units - so the same backtest works for any broker that can be simulated, not just
+ * the mock one.
+ */
+public class StrategyBacktester {
+    public static final String BACKTEST_ACCOUNT_NAME = "Account";
 
     private final StrategyStarter strategyStarter;
-    private final EventMockBroker broker;
+    private final SimulationBroker broker;
     private final String instrumentId;
     private final Money initialInvestment;
     private final SimulationClock clock;
     private final EventSimulatorInitializer eventSimulatorInitializer;
 
-    public StrategySimulationRunner(StrategyStarter strategyStarter,
-                                    EventMockBroker broker,
+    public StrategyBacktester(StrategyStarter strategyStarter,
+                                    SimulationBroker broker,
                                     String instrumentId,
                                     Money initialInvestment
     ) {
-        this.strategyStarter = strategyStarter;
-        this.broker = broker;
-        this.instrumentId = instrumentId;
-        this.initialInvestment = initialInvestment;
-        this.clock = new SimpleSimulationClock();
-        this.eventSimulatorInitializer = (timeRange, account, simulator) -> {};
+        this(strategyStarter, broker, instrumentId, initialInvestment, new SimpleSimulationClock());
     }
 
-    public StrategySimulationRunner(StrategyStarter strategyStarter,
-                                    EventMockBroker broker,
+    public StrategyBacktester(StrategyStarter strategyStarter,
+                                    SimulationBroker broker,
                                     String instrumentId,
                                     Money initialInvestment,
                                     SimulationClock clock
     ) {
-        this.strategyStarter = strategyStarter;
-        this.broker = broker;
-        this.instrumentId = instrumentId;
-        this.initialInvestment = initialInvestment;
-        this.clock = clock;
-        this.eventSimulatorInitializer = (timeRange, account, simulator) -> {};
+        this(
+            strategyStarter,
+            broker,
+            instrumentId,
+            initialInvestment,
+            clock,
+            (timeRange, accountId, simulator) -> {}
+        );
     }
 
-    public StrategySimulationRunner(StrategyStarter strategyStarter,
-                                    EventMockBroker broker,
+    public StrategyBacktester(StrategyStarter strategyStarter,
+                                    SimulationBroker broker,
                                     String instrumentId,
                                     Money initialInvestment,
                                     SimulationClock clock,
@@ -70,32 +71,26 @@ public class StrategySimulationRunner {
 
     public StrategyResult run(Instant startTime, Instant endTime) throws AbstractException {
         EventSimulator simulator = new EventSimulator(clock);
+        SandboxBrokerFacade brokerFacade = SandboxBrokerFacade.of(broker);
 
-        Account account = broker.getUserService().openAccount(
-            SIMULATION_ACCOUNT_NAME,
-            AccountType.ORDINARY,
-            AccessLevel.FULL_ACCESS
-        );
-        broker.getOperationsService().addMoney(account.getId(), initialInvestment);
+        String accountId = brokerFacade.openAccount(BACKTEST_ACCOUNT_NAME);
+        brokerFacade.payIn(accountId, initialInvestment);
 
         TimeRange timeRange = new TimeRange(startTime, endTime);
-        eventSimulatorInitializer.initialize(timeRange, account, simulator);
+        eventSimulatorInitializer.initialize(timeRange, accountId, simulator);
 
-        simulator.addSimulationUnit(broker.getPendingOrderHandler());
-        simulator.addSimulationUnit(broker.getSubscriptionManager());
+        broker.getSimulationUnits().forEach(simulator::addSimulationUnit);
         simulator.addInitializableUnit(
-            (start, end) -> strategyStarter.start(new TimeRange(start, end), account, new Observer())
+            (start, end) -> strategyStarter.start(new TimeRange(start, end), accountId, new Observer())
         );
 
         Instant strategyBeginTime = Instant.now();
         simulator.run(startTime, endTime);
         Duration executionDuration = Duration.between(Instant.now(), strategyBeginTime);
 
-        BrokerFacade brokerFacade = BrokerFacade.of(broker);
+        brokerFacade.closePosition(accountId, instrumentId);
 
-        brokerFacade.closePosition(account.getId(), instrumentId);
-
-        Money balance = broker.getOperationsService().getAvailableMoney(account.getId(), initialInvestment.getCurrencyIso());
+        Money balance = brokerFacade.getAvailableMoney(accountId, initialInvestment.getCurrencyIso());
         Money profit = balance.subtract(initialInvestment);
         double profitPercent = profit.div(initialInvestment).multiply(100).getQuotation().toDouble();
 
@@ -107,7 +102,7 @@ public class StrategySimulationRunner {
             balance,
             apy,
             executionDuration,
-            account.getId()
+            accountId
         );
     }
 }

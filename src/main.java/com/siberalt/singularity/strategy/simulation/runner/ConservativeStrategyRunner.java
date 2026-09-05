@@ -43,24 +43,24 @@ public class ConservativeStrategyRunner {
 
         TradeTiming timing = findTradePoints(startTime, endTime);
 
-        StrategySimulationRunner runner = new StrategySimulationRunner(
-            (timeRange, account, observer) -> {
+        StrategyBacktester backtester = new StrategyBacktester(
+            (timeRange, accountId, observer) -> {
             },
             broker,
             instrumentId,
             initialInvestment,
             clock,
-            (timeRange, account, eventSimulator) -> {
+            (timeRange, accountId, eventSimulator) -> {
                 UserActionSimulator<Map<String, Object>> actionSimulator = new UserActionSimulator<>(new HashMap<>());
                 actionSimulator.planAction(timing.buyTime(), x ->
-                    BrokerFacade.of(broker).buyFullBalanceUnchecked(account.getId(), instrumentId));
+                    BrokerFacade.of(broker).buyFullBalanceUnchecked(accountId, instrumentId));
                 actionSimulator.planAction(timing.sellTime(), x ->
-                    BrokerFacade.of(broker).closePositionUnchecked(account.getId(), instrumentId));
+                    BrokerFacade.of(broker).closePositionUnchecked(accountId, instrumentId));
                 eventSimulator.addSimulationUnit(actionSimulator);
             }
         );
 
-        return runner.run(startTime, endTime);
+        return backtester.run(startTime, endTime);
     }
 
     private EventMockBroker createBroker(SimulationClock clock) {

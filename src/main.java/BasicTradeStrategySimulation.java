@@ -116,13 +116,13 @@ public class BasicTradeStrategySimulation {
             .setCommissionRatio(commission)
             .build();
 
-        StrategyStarter strategyStarter = (timeRange, account, observer) ->
+        StrategyStarter strategyStarter = (timeRange, accountId, observer) ->
         {
             Strategy strategy = createLevelsStrategy(
                 operationRepository,
                 candleRepository,
                 broker,
-                account,
+                accountId,
                 supportTracker,
                 resistanceTracker,
                 selectorTracker,
@@ -196,7 +196,7 @@ public class BasicTradeStrategySimulation {
         ReadOperationRepository readOperationRepository,
         ReadCandleRepository candleRepository,
         EventSubscriptionBroker broker,
-        Account account,
+        String accountId,
         LevelDetector supportDetector,
         LevelDetector resistanceDetector,
         LevelPairSelector selectorTracker,
@@ -257,7 +257,7 @@ public class BasicTradeStrategySimulation {
         );
 
         PositionRiskManagerUpsideCalculator riskManagerUpsideCalculator = new PositionRiskManagerUpsideCalculator(
-            account.getId(),
+            accountId,
             new BaseEntryPriceCalculator(readOperationRepository),
             ATRVolatilityCalculator.ofMultiplier(2)
         );
@@ -272,7 +272,7 @@ public class BasicTradeStrategySimulation {
         BasicTradeStrategy strategy = new BasicTradeStrategy(
             broker,
             INSTRUMENT_ID,
-            account.getId(),
+            accountId,
             new WindowUpsideCalculator(switcherUpsideCalculator, 60 * 24),
             candleRepository
         );

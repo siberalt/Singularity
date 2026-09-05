@@ -40,14 +40,14 @@ public class EffectivenessAnalyzer {
     }
 
     public AnalysisReport run(Instant start, Instant end) throws AbstractException {
-        StrategySimulationRunner strategyRunner = new StrategySimulationRunner(
+        StrategyBacktester backtester = new StrategyBacktester(
             strategyStarter,
             broker,
             instrumentId,
             initialInvestment,
             clock
         );
-        StrategyResult mainStrategyResult = strategyRunner.run(start, end);
+        StrategyResult mainStrategyResult = backtester.run(start, end);
 
         ConservativeStrategyRunner conservativeRunner = new ConservativeStrategyRunner(
             instrumentId,
