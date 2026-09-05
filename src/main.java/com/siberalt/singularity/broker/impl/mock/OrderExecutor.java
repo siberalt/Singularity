@@ -12,8 +12,9 @@ import java.util.List;
  * {@link SimulatedPendingOrderHandler} (filling a parked order once the market reaches it) use all
  * of it - storing an order without filling it is {@link OrderRegistry}'s job, not this one's.
  * <p>
- * This is also the single place a future implementation would make a fill transactional: right now
- * a transaction rejected halfway through leaves the earlier ones applied.
+ * A fill applies the money and the position as two separate changes, in that order. Money first is
+ * deliberate: if the second change fails the account is short, which is recoverable, rather than
+ * holding instruments it never paid for. Making the pair genuinely atomic is the one gap left here.
  */
 public interface OrderExecutor {
     /**

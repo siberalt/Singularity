@@ -34,21 +34,36 @@ public class OrderRegistry {
     }
 
     /**
-     * Stores the order under its idempotency key, assigning one if the caller did not supply it.
+     * Claims the order's idempotency key and stores it. Kept as two steps as well
+     * ({@link #claimIdempotencyKey} then {@link #save}) so a caller that changes the account can
+     * do the claim - the part that can be refused - before touching anything.
      */
     public void register(Order order) throws AbstractException {
+        claimIdempotencyKey(order);
+        save(order);
+    }
+
+    /**
+     * Assigns an idempotency key if the caller did not supply one, and refuses a key that already
+     * belongs to a different order. Stores nothing.
+     */
+    public void claimIdempotencyKey(Order order) throws AbstractException {
         if (order.getIdempotencyKey() == null) {
             order.setIdempotencyKey(UUID.randomUUID().toString());
-        } else {
-            Order existingOrder = orderRepository.getByIdempotencyKey(order.getIdempotencyKey());
 
-            // The same order is re-registered as it moves through its states (parked, then
-            // filled); only a different order reusing the key is a duplicate.
-            if (existingOrder != null && !existingOrder.getId().equals(order.getId())) {
-                throw ExceptionBuilder.create(ErrorCode.DUPLICATE_ORDER);
-            }
+            return;
         }
 
+        Order existingOrder = orderRepository.getByIdempotencyKey(order.getIdempotencyKey());
+
+        // The same order is re-registered as it moves through its states (parked, then filled);
+        // only a different order reusing the key is a duplicate.
+        if (existingOrder != null && !existingOrder.getId().equals(order.getId())) {
+            throw ExceptionBuilder.create(ErrorCode.DUPLICATE_ORDER);
+        }
+    }
+
+    public void save(Order order) {
         orderRepository.save(order);
     }
 

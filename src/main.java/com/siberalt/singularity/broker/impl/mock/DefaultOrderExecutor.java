@@ -96,8 +96,8 @@ public class DefaultOrderExecutor implements OrderExecutor {
 
     @Override
     public void buy(Order order, List<TransactionSpec> transactionSpecs) throws AbstractException {
-        markFilled(order);
-        orderRegistry.register(order);
+        // Refuse a duplicate key before the account is touched - it must not cost money.
+        orderRegistry.claimIdempotencyKey(order);
 
         AccountBalance balance = operationsService.getAccountBalance(order.getAccountId());
         checkTransactionsApplied(balance.applyTransactions(transactionSpecs));
@@ -107,13 +107,12 @@ public class DefaultOrderExecutor implements OrderExecutor {
             order.getLotsRequested() * order.getInstrument().getLot()
         );
 
-        registerOperations(order, transactionSpecs);
+        settle(order, transactionSpecs);
     }
 
     @Override
     public void sell(Order order, List<TransactionSpec> transactionSpecs) throws AbstractException {
-        markFilled(order);
-        orderRegistry.register(order);
+        orderRegistry.claimIdempotencyKey(order);
 
         AccountBalance balance = operationsService.getAccountBalance(order.getAccountId());
         checkTransactionsApplied(balance.applyTransactions(transactionSpecs));
@@ -123,6 +122,18 @@ public class DefaultOrderExecutor implements OrderExecutor {
             order.getLotsRequested() * order.getInstrument().getLot()
         );
 
+        settle(order, transactionSpecs);
+    }
+
+    /**
+     * Records the fill, once the account has actually changed. Marking the order filled and
+     * journalling it happens last on purpose: an order stored as FILL is a claim that the trade
+     * took place, and since orders are kept, that claim outlives the failure that would have
+     * contradicted it.
+     */
+    protected void settle(Order order, List<TransactionSpec> transactionSpecs) {
+        markFilled(order);
+        orderRegistry.save(order);
         registerOperations(order, transactionSpecs);
     }
 
