@@ -75,6 +75,9 @@ public class EventSimulator {
         var currentTime = from;
         clock.syncCurrentTime(currentTime);
 
+        // Before the units are wired up, so that anything they book while initialising is already
+        // measured against the start of the run.
+        eventObserver.startAt(from);
         init(from, to);
         synchronizer.start();
         synchronizer.waitForTasks();
