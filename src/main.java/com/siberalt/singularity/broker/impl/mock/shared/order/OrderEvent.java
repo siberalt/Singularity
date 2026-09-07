@@ -1,6 +1,7 @@
 package com.siberalt.singularity.broker.impl.mock.shared.order;
 
 import com.siberalt.singularity.broker.contract.value.money.Money;
+import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.simulation.Event;
 
@@ -13,27 +14,37 @@ import com.siberalt.singularity.simulation.Event;
 public class OrderEvent {
     protected Order order;
     protected Event event;
-    protected long lotsToFill;
+    protected Candle bar;
     protected Money blockedMoney;
     protected long blockedLots;
 
-    public OrderEvent(Order order, Event event, long lotsToFill) {
+    public OrderEvent(Order order, Event event, Candle bar) {
         this.order = order;
         this.event = event;
-        this.lotsToFill = lotsToFill;
+        this.bar = bar;
     }
 
     /**
-     * How many lots this event fills, which is the whole order only when the market has the volume
-     * for it. An order too large for one bar is resolved by a chain of these, each covering what its
-     * own bar could absorb.
+     * The bar this event trades against, or {@code null} when the event ends the order instead of
+     * filling it. Carried from the moment the event was booked rather than looked up again when it
+     * comes due - it is the same bar either way, and a simulation fills often enough for the extra
+     * query to be worth avoiding.
+     * <p>
+     * How much it trades is deliberately not recorded: the bar is shared with every other order
+     * working against the same instrument, so what is left of it is only known once the moment
+     * arrives. An order too large for one bar is resolved by a chain of these, each taking what its
+     * own bar still had.
      */
-    public long getLotsToFill() {
-        return lotsToFill;
+    public Candle getBar() {
+        return bar;
     }
 
-    public OrderEvent setLotsToFill(long lotsToFill) {
-        this.lotsToFill = lotsToFill;
+    public boolean fills() {
+        return bar != null;
+    }
+
+    public OrderEvent setBar(Candle bar) {
+        this.bar = bar;
         return this;
     }
 

@@ -5,6 +5,7 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.TimePoint;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -12,6 +13,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LiquidityModelTest {
+    private static final String INSTRUMENT = "TEST";
+    private static final Instant BAR_TIME = Instant.parse("2021-12-15T15:00:00Z");
+
     private final LiquidityModel liquidityModel = new LiquidityModel();
 
     @Test
@@ -19,21 +23,23 @@ class LiquidityModelTest {
         assertTrue(liquidityModel.isInfiniteLiquidity());
         // A bar that traded a single lot still fills an order a thousand times its size - which is
         // the point of the default: the simulation behaves as it did before there was a model here.
-        assertEquals(1000, liquidityModel.fillableLots(1000, candleWithVolume(1)));
+        assertEquals(1000, liquidityModel.take(INSTRUMENT, bar(1), 1000));
+        // And it stays that way however many orders come through the same bar.
+        assertEquals(1000, liquidityModel.take(INSTRUMENT, bar(1), 1000));
     }
 
     @Test
     void capsAFillAtItsShareOfWhatTheBarTraded() {
         liquidityModel.setInfiniteLiquidity(false).setParticipationRate(0.1);
 
-        assertEquals(10, liquidityModel.fillableLots(1000, candleWithVolume(100)));
+        assertEquals(10, liquidityModel.take(INSTRUMENT, bar(100), 1000));
     }
 
     @Test
     void givesAnOrderNoMoreThanItAskedFor() {
         liquidityModel.setInfiniteLiquidity(false).setParticipationRate(0.1);
 
-        assertEquals(3, liquidityModel.fillableLots(3, candleWithVolume(100)));
+        assertEquals(3, liquidityModel.take(INSTRUMENT, bar(100), 3));
     }
 
     @Test
@@ -41,15 +47,69 @@ class LiquidityModelTest {
         liquidityModel.setInfiniteLiquidity(false).setParticipationRate(0.1);
 
         // A tenth of 99 is 9.9, and there is no such thing as nine tenths of a lot.
-        assertEquals(9, liquidityModel.fillableLots(1000, candleWithVolume(99)));
+        assertEquals(9, liquidityModel.take(INSTRUMENT, bar(99), 1000));
     }
 
     @Test
     void refusesTheWholeFillWhenTheBarIsTooThinForASingleLot() {
         liquidityModel.setInfiniteLiquidity(false).setParticipationRate(0.1);
 
-        assertEquals(0, liquidityModel.fillableLots(1000, candleWithVolume(9)));
-        assertEquals(0, liquidityModel.fillableLots(1000, candleWithVolume(0)));
+        assertEquals(0, liquidityModel.take(INSTRUMENT, bar(9), 1000));
+        assertEquals(0, liquidityModel.take(INSTRUMENT, barAt(BAR_TIME.plusSeconds(60), 0), 1000));
+    }
+
+    /**
+     * The point of the whole class: a bar is one stretch of tape. Handing every order its own share
+     * of it independently would let the same volume be traded over and over, which is exactly the
+     * fiction the model exists to remove.
+     */
+    @Test
+    void sharesOneBarBetweenEveryOrderTradingAgainstIt() {
+        liquidityModel.setInfiniteLiquidity(false).setParticipationRate(0.1);
+
+        Candle bar = bar(100);
+
+        assertEquals(6, liquidityModel.take(INSTRUMENT, bar, 6));
+        // Four of the ten lots are left, so an order wanting six gets what remains and no more.
+        assertEquals(4, liquidityModel.take(INSTRUMENT, bar, 6));
+        // And the next one finds the bar used up.
+        assertEquals(0, liquidityModel.take(INSTRUMENT, bar, 6));
+    }
+
+    @Test
+    void keepsOneBudgetPerInstrument() {
+        liquidityModel.setInfiniteLiquidity(false).setParticipationRate(0.1);
+
+        assertEquals(10, liquidityModel.take(INSTRUMENT, bar(100), 1000));
+        // A different instrument's bar is its own tape.
+        assertEquals(10, liquidityModel.take("OTHER", bar(100), 1000));
+        assertEquals(0, liquidityModel.take(INSTRUMENT, bar(100), 1000));
+    }
+
+    @Test
+    void startsAFreshBudgetOnTheNextBar() {
+        liquidityModel.setInfiniteLiquidity(false).setParticipationRate(0.1);
+
+        assertEquals(10, liquidityModel.take(INSTRUMENT, bar(100), 1000));
+        assertEquals(0, liquidityModel.take(INSTRUMENT, bar(100), 1000));
+
+        Candle nextBar = barAt(BAR_TIME.plus(Duration.ofMinutes(1)), 100);
+
+        assertEquals(10, liquidityModel.take(INSTRUMENT, nextBar, 1000));
+    }
+
+    @Test
+    void reportsWhatIsLeftWithoutClaimingIt() {
+        liquidityModel.setInfiniteLiquidity(false).setParticipationRate(0.1);
+
+        Candle bar = bar(100);
+
+        assertEquals(10, liquidityModel.available(INSTRUMENT, bar));
+        assertEquals(10, liquidityModel.available(INSTRUMENT, bar));
+
+        liquidityModel.take(INSTRUMENT, bar, 4);
+
+        assertEquals(6, liquidityModel.available(INSTRUMENT, bar));
     }
 
     @Test
@@ -63,13 +123,17 @@ class LiquidityModelTest {
     void takesTheWholeBarAtARateOfOne() {
         liquidityModel.setInfiniteLiquidity(false).setParticipationRate(1);
 
-        assertEquals(100, liquidityModel.fillableLots(1000, candleWithVolume(100)));
+        assertEquals(100, liquidityModel.take(INSTRUMENT, bar(100), 1000));
     }
 
-    private Candle candleWithVolume(long volume) {
+    private Candle bar(long volume) {
+        return barAt(BAR_TIME, volume);
+    }
+
+    private Candle barAt(Instant time, long volume) {
         return new Candle(
-            "TEST",
-            new TimePoint(Instant.parse("2021-12-15T15:00:00Z")),
+            INSTRUMENT,
+            new TimePoint(time),
             Quotation.of(10),
             Quotation.of(10),
             Quotation.of(10),

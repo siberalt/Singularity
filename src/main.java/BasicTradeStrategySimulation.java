@@ -116,6 +116,9 @@ public class BasicTradeStrategySimulation {
             .setCommissionRatio(commission)
             .build();
 
+//        broker.getOrderService().getPriceModel().setSlippageImpactRatio(0.00001);
+//        broker.getOrderService().getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.01);
+
         StrategyStarter strategyStarter = (timeRange, accountId, observer) ->
         {
             Strategy strategy = createLevelsStrategy(

@@ -5,18 +5,26 @@ import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.ExceptionBuilder;
 import com.siberalt.singularity.entity.order.Order;
 
+import java.time.Instant;
+
 /**
  * Refuses orders that cannot fill right away. This is the plain mock broker's behaviour: it has no
  * notion of time passing, so an order that has to wait for the market can never be filled.
  * Simulating the wait is {@link SimulatedPendingOrderHandler}'s job.
  */
 public class RejectingPendingOrderHandler implements PendingOrderHandler {
+    /**
+     * There is no later here, whatever the order is waiting for - a price the market has not
+     * reached, or the trip to the exchange a configured latency stands for. Refusing beats
+     * silently ignoring the wait, which would hand back a fill at a price the order could not
+     * have got.
+     */
     @Override
-    public void onNotFillable(Order order) throws AbstractException {
+    public void onPending(Order order, Instant tradableFrom) throws AbstractException {
         throw ExceptionBuilder
             .newBuilder(ErrorCode.UNIMPLEMENTED)
             .withMessage(
-                "This broker fills only what the market takes right now, and this order takes none of it"
+                "This broker fills only what the market takes the moment an order is posted, and this one has to wait"
             )
             .build();
     }

@@ -1,6 +1,9 @@
 package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
+import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
+import com.siberalt.singularity.broker.contract.service.exception.UnimplementedException;
+import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
@@ -9,6 +12,8 @@ import com.siberalt.singularity.entity.operation.OperationRepository;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.strategy.context.Clock;
 import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
 
 
 /**
@@ -49,5 +54,25 @@ public class MockBrokerOrderServiceTest extends AbstractMockOrderServiceTest {
         addInstruments(80);
 
         assertSellRefused(validCandle, 10, Quotation.of(11));
+    }
+
+    /**
+     * Latency needs a clock that moves, and this broker has none. Filling the order anyway would
+     * quietly hand back a price it could not have reached, so configuring one is refused instead.
+     */
+    @Test
+    public void testLatencyIsRefusedByABrokerWhereTimeDoesNotPass() throws AbstractException {
+        Candle validCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+
+        orderService.setExecutionLatency(Duration.ofMinutes(5));
+        addMoney(Quotation.of(100000));
+
+        assertThrowsWithErrorCode(
+            UnimplementedException.class,
+            ErrorCode.UNIMPLEMENTED,
+            () -> postBuy(validCandle, OrderType.MARKET, 10, null)
+        );
     }
 }

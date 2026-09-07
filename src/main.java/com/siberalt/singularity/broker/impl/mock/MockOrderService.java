@@ -18,6 +18,7 @@ import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.strategy.context.Clock;
 
+import java.time.Duration;
 import java.util.*;
 
 /**
@@ -41,6 +42,7 @@ public class MockOrderService implements OrderService {
     protected LiquidityModel liquidityModel;
     protected OrderExecutor orderExecutor;
     protected PendingOrderHandler pendingOrderHandler;
+    protected Duration executionLatency = Duration.ZERO;
 
     public MockOrderService(
         Clock clock,
@@ -167,22 +169,46 @@ public class MockOrderService implements OrderService {
         return pendingOrderHandler;
     }
 
-    public double getBuyBestPriceRatio() {
-        return priceModel.getBuyBestPriceRatio();
+    /**
+     * What a fill is priced at - the spread it crosses, its own market impact, and where inside a
+     * bar a best-price order is assumed to land. All of it off or neutral by default.
+     */
+    public OrderPriceModel getPriceModel() {
+        return priceModel;
     }
 
-    public MockOrderService setBuyBestPriceRatio(double buyBestPriceRatio) {
-        priceModel.setBuyBestPriceRatio(buyBestPriceRatio);
+    public Duration getExecutionLatency() {
+        return executionLatency;
+    }
+
+    /**
+     * How long an order takes to reach the exchange. Zero by default, which lets an order trade
+     * against the very bar it was placed in - convenient, and the single most flattering assumption
+     * a backtest can make, since a strategy reacting to a bar could not in reality have traded
+     * inside it.
+     * <p>
+     * Anything above zero means no order fills synchronously any more: {@code post} comes back NEW
+     * and the fill arrives later, so a caller reading lots executed straight off the response will
+     * see none. Only a broker that advances time can honour it - a plain one refuses. Cancellation
+     * is not delayed; only the order's own arrival is modelled.
+     */
+    public MockOrderService setExecutionLatency(Duration executionLatency) {
+        if (executionLatency.isNegative()) {
+            throw new IllegalArgumentException("Execution latency cannot be negative, got " + executionLatency);
+        }
+
+        this.executionLatency = executionLatency;
         return this;
     }
 
-    public double getSellBestPriceRatio() {
-        return priceModel.getSellBestPriceRatio();
-    }
+    protected Candle requireCurrentCandle(String instrumentUid) throws AbstractException {
+        Candle currentCandle = marketDataService.currentCandle(instrumentUid);
 
-    public MockOrderService setSellBestPriceRatio(double sellBestPriceRatio) {
-        priceModel.setSellBestPriceRatio(sellBestPriceRatio);
-        return this;
+        if (currentCandle == null) {
+            throw new MockBrokerException("Candle not found");
+        }
+
+        return currentCandle;
     }
 
     protected void validatePostOrderRequest(PostOrderRequest request) throws AbstractException {
@@ -221,16 +247,18 @@ public class MockOrderService implements OrderService {
 
     protected PostOrderResponse buy(PostOrderRequest request) throws AbstractException {
         Order order = createOrder(request);
+        long fillableLots = reachesMarketNow() && canBuyNow(order) ? fillableLots(order) : 0;
+
+        priceFill(order, fillableLots);
         checkEnoughOfMoneyToBuy(order, orderExecutor.quote(order, order.getLotsRequested()));
 
-        long fillableLots = canBuyNow(order) ? fillableLots(order) : 0;
-
         if (fillableLots == 0) {
-            pendingOrderHandler.onNotFillable(order);
+            park(order);
 
             return toServiceResponse(order);
         }
 
+        claimLiquidity(order, fillableLots);
         orderExecutor.buy(order, fillableLots, orderExecutor.quote(order, fillableLots));
         handleRemainder(order);
 
@@ -241,14 +269,17 @@ public class MockOrderService implements OrderService {
         Order order = createOrder(request);
         checkEnoughOfPositionToSell(order);
 
-        long fillableLots = canSellNow(order) ? fillableLots(order) : 0;
+        long fillableLots = reachesMarketNow() && canSellNow(order) ? fillableLots(order) : 0;
+
+        priceFill(order, fillableLots);
 
         if (fillableLots == 0) {
-            pendingOrderHandler.onNotFillable(order);
+            park(order);
 
             return toServiceResponse(order);
         }
 
+        claimLiquidity(order, fillableLots);
         orderExecutor.sell(order, fillableLots, orderExecutor.quote(order, fillableLots));
         handleRemainder(order);
 
@@ -256,18 +287,63 @@ public class MockOrderService implements OrderService {
     }
 
     /**
-     * How much of the order the market can absorb right now. Zero means this bar cannot trade
-     * against the order at all, which for these purposes is the same situation as the price not
-     * being met - the order has to wait either way.
+     * Whether an order placed now is at the exchange now. With a latency configured it is not, and
+     * nothing can fill against the bar it was placed in - the market it is reacting to has already
+     * moved on by the time the order arrives.
      */
-    protected long fillableLots(Order order) throws AbstractException {
-        Candle currentCandle = marketDataService.currentCandle(order.getInstrument().getUid());
+    protected boolean reachesMarketNow() {
+        return executionLatency.isZero();
+    }
 
-        if (currentCandle == null) {
-            throw new MockBrokerException("Candle not found");
+    /**
+     * Hands an order that is not filling now to the pending handler, together with the moment it
+     * may start trading from. With no latency that moment is now - the order is at the exchange
+     * already and only the price is missing; with one it is when the order gets there.
+     */
+    protected void park(Order order) throws AbstractException {
+        pendingOrderHandler.onPending(order, clock.currentTime().plus(executionLatency));
+    }
+
+    /**
+     * Moves the order from the price the instrument is quoted at to the price this fill actually
+     * goes through at - the spread it has to cross, plus the impact of its own size. An order that
+     * is not filling now keeps the quoted price: it is what the limit is compared against and what
+     * the reservation is sized by, and there is no fill yet to charge for.
+     */
+    protected void priceFill(Order order, long fillableLots) throws AbstractException {
+        if (fillableLots == 0) {
+            return;
         }
 
-        return liquidityModel.fillableLots(order.getLotsRequested() - order.getLotsExecuted(), currentCandle);
+        Candle currentCandle = requireCurrentCandle(order.getInstrument().getUid());
+
+        order.setInstrumentPrice(priceModel.fillPrice(order, currentCandle, fillableLots));
+    }
+
+    /**
+     * How much of the order the market could absorb right now, without claiming any of it. Zero
+     * means this bar has nothing left for the order - either it traded too little to begin with, or
+     * orders already filled against it took the lot - which for these purposes is the same
+     * situation as the price not being met: the order has to wait either way.
+     */
+    protected long fillableLots(Order order) throws AbstractException {
+        Candle currentCandle = requireCurrentCandle(order.getInstrument().getUid());
+
+        return Math.min(
+            order.getLotsRequested() - order.getLotsExecuted(),
+            liquidityModel.available(order.getInstrument().getUid(), currentCandle)
+        );
+    }
+
+    /**
+     * Takes the lots out of the bar's budget, so the orders filling after this one on the same bar
+     * see what is left rather than the whole of it again. Claimed only once the fill is going
+     * ahead - an order refused for want of money must not eat into the bar on its way out.
+     */
+    protected void claimLiquidity(Order order, long lots) throws AbstractException {
+        Candle currentCandle = requireCurrentCandle(order.getInstrument().getUid());
+
+        liquidityModel.take(order.getInstrument().getUid(), currentCandle, lots);
     }
 
     /**
@@ -302,10 +378,7 @@ public class MockOrderService implements OrderService {
             throw ExceptionBuilder.create(ErrorCode.INSTRUMENT_NOT_FOUND);
         }
 
-        Candle currentCandle = marketDataService.currentCandle(request.getInstrumentId());
-        if (currentCandle == null) {
-            throw new MockBrokerException("Candle not found");
-        }
+        Candle currentCandle = requireCurrentCandle(request.getInstrumentId());
 
         Quotation instrumentPrice = priceModel.currentPrice(
             request.getOrderType(),

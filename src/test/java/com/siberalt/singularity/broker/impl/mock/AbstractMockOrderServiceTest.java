@@ -264,7 +264,7 @@ public abstract class AbstractMockOrderServiceTest {
         // The fee is proportional to the traded value, so the two of them together come to what one
         // order for the combined quantity would have cost.
         assertEquals(
-            expectedCommission(testCandle.open(), 3),
+            expectedCommissionPayment(testCandle.open(), 3),
             Quotation.sum(feeOperations.stream().map(Operation::payment).toList())
         );
     }
@@ -334,12 +334,75 @@ public abstract class AbstractMockOrderServiceTest {
         assertEquals(10, freePositionLots());
     }
 
-    protected Quotation expectedCommission(Quotation instrumentPrice, long quantity) {
+    /**
+     * An order that takes liquidity does not trade at the price the bar is quoted at - it crosses
+     * the spread, and the account pays for it.
+     */
+    @Test
+    public void testMarketFillCrossesTheSpread() throws AbstractException {
+        Candle testCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+
+        orderService.getPriceModel().setHalfSpreadRatio(0.01);
+        addMoney(Quotation.of(10000));
+
+        Money moneyBefore = broker.getOperationsService()
+            .getAvailableMoney(testAccount.getId(), config.getInstrument().getCurrency());
+
+        PostOrderResponse response = postBuy(testCandle, OrderType.MARKET, 10, null);
+
+        // The bar opens at 10, and a spread of two percent makes a buy pay 10.1 for it.
+        Quotation fillPrice = Quotation.of(10.1);
+
+        assertEquals(ExecutionStatus.FILL, response.getExecutionStatus());
+        assertEquals(fillPrice, response.getInstrumentPrice().getQuotation());
+
+        Quotation spent = fillPrice.multiply(10).add(expectedCommissionCost(fillPrice, 10));
+
+        assertEquals(
+            moneyBefore.subtract(Money.of(config.getInstrument().getCurrency(), spent)),
+            broker.getOperationsService()
+                .getAvailableMoney(testAccount.getId(), config.getInstrument().getCurrency())
+        );
+    }
+
+    /**
+     * A limit order is the passive side - others cross the spread to reach it, not the other way
+     * round - so it gets the price it named however wide the spread is.
+     */
+    @Test
+    public void testLimitFillDoesNotCrossTheSpread() throws AbstractException {
+        Candle testCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+
+        orderService.getPriceModel().setHalfSpreadRatio(0.01);
+        addMoney(Quotation.of(10000));
+
+        PostOrderResponse response = postBuy(testCandle, OrderType.LIMIT, 10, Quotation.of(10));
+
+        assertEquals(ExecutionStatus.FILL, response.getExecutionStatus());
+        assertEquals(Quotation.of(10), response.getInstrumentPrice().getQuotation());
+    }
+
+    /**
+     * What the commission costs the account - a positive amount, to be added to the price of the
+     * lots when working out what an order came to in total.
+     */
+    protected Quotation expectedCommissionCost(Quotation instrumentPrice, long quantity) {
         return instrumentPrice
             .multiply(quantity)
             .multiply(config.getInstrument().getLot())
-            .multiply(commissionRatio)
-            .multiply(-1);
+            .multiply(commissionRatio);
+    }
+
+    /**
+     * The same commission as the journal records it: a balance change, and so negative. This is the
+     * form to compare an operation's payment against, not the form to add up a cost with.
+     */
+    protected Quotation expectedCommissionPayment(Quotation instrumentPrice, long quantity) {
+        return expectedCommissionCost(instrumentPrice, quantity).multiply(-1);
     }
 
     @Test
@@ -602,7 +665,7 @@ public abstract class AbstractMockOrderServiceTest {
         Quotation instrumentPrice = getPriceInstrumentPrice(
             priceCandle,
             orderType,
-            orderService.getBuyBestPriceRatio()
+            orderService.getPriceModel().getBuyBestPriceRatio()
         );
 
         PostOrderResponse response = postBuy(priceCandle, orderType, quantity, priceLimit);
@@ -638,7 +701,7 @@ public abstract class AbstractMockOrderServiceTest {
         Quotation instrumentPrice = getPriceInstrumentPrice(
             priceCandle,
             orderType,
-            orderService.getSellBestPriceRatio()
+            orderService.getPriceModel().getSellBestPriceRatio()
         );
 
         PostOrderResponse response = postSell(priceCandle, orderType, quantity, priceLimit);

@@ -294,7 +294,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         // Paid for thirty lots in the end, no more and no less, commission included.
         Quotation expectedSpend = firstBar.open()
             .multiply(30)
-            .add(expectedCommission(firstBar.open(), 30).multiply(-1));
+            .add(expectedCommissionCost(firstBar.open(), 30));
 
         assertEquals(
             Money.of(config.getInstrument().getCurrency(), Quotation.of(100000).subtract(expectedSpend)),
@@ -322,12 +322,195 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
 
         tickAt(currentTime);
 
-        assertEquals(ExecutionStatus.PARTIALLYFILL, stateOf(posted).getExecutionStatus());
+        // What traded stands; the part still working is what stopped, so the order reads as
+        // cancelled rather than as one still sitting in the market.
+        assertEquals(ExecutionStatus.CANCELLED, stateOf(posted).getExecutionStatus());
         assertEquals(10, stateOf(posted).getLotsExecuted());
         assertEquals(10, freePositionLots());
 
         // The reservation for the lots that never filled is released, so nothing is left blocked.
         assertEquals(0, blockedPositionLots());
+
+        // And it is no longer one of the account's working orders.
+        assertTrue(orderService.get(GetOrdersRequest.of(testAccount.getId())).getOrders().isEmpty());
+    }
+
+    /**
+     * The flattering assumption a zero latency makes is that a strategy reacting to a bar could
+     * have traded inside that same bar. With a latency the order misses it: it reaches the market
+     * afterwards and trades against whatever is there then, at that bar's price rather than the one
+     * it was reacting to.
+     */
+    @Test
+    public void testOrderReachingTheMarketLateTradesAgainstTheBarItArrivesIn() throws AbstractException {
+        Candle postedBar = createCandle(currentTime, 10, 15, 5, 10, 100);
+        Instant arrivalTime = currentTime.plus(Duration.ofMinutes(5));
+        Candle arrivalBar = createCandle(arrivalTime, 12, 17, 11, 12, 100);
+
+        orderService.setExecutionLatency(Duration.ofMinutes(5));
+        addMoney(Quotation.of(100000));
+        when(candleStorage.findAfterOrEqual(eq(config.getInstrument().getUid()), any(), eq(1L)))
+            .thenReturn(List.of(arrivalBar));
+
+        PostOrderResponse posted = postBuy(postedBar, OrderType.MARKET, 10, null);
+
+        // Nothing traded yet - the order is only acknowledged.
+        assertEquals(ExecutionStatus.NEW, posted.getExecutionStatus());
+        assertEquals(0, posted.getLotsExecuted());
+        assertEquals(0, freePositionLots());
+
+        tickAt(arrivalTime);
+
+        OrderState filled = stateOf(posted);
+
+        assertEquals(ExecutionStatus.FILL, filled.getExecutionStatus());
+        assertEquals(10, filled.getLotsExecuted());
+        assertEquals(10, freePositionLots());
+
+        // Filled at 12, the price when it got there - not the 10 it was placed against.
+        Operation trade = operationRepository.getByAccountId(testAccount.getId(), TimeRange.MAX)
+            .stream()
+            .filter(operation -> operation.price() != null)
+            .findFirst()
+            .orElseThrow();
+
+        assertEquals(arrivalBar.open(), trade.price());
+    }
+
+    /**
+     * An order sized to the whole balance has no room for the price to move. Once part of it fills
+     * and the market ticks up, the rest costs more than what is left on the account - which is a
+     * thing markets do, not a broken simulation, so the order stops with what it got instead of
+     * taking the run down with it.
+     */
+    @Test
+    public void testRemainderTheAccountCanNoLongerAffordStopsTheOrderRatherThanTheRun() throws AbstractException {
+        Candle firstBar = createCandle(currentTime, 10, 15, 5, 10, 100);
+        // The same bar a minute later, but dearer: what is left of the order now costs more than
+        // the fill left behind.
+        Candle dearerBar = createCandle(currentTime.plus(Duration.ofMinutes(1)), 12, 17, 11, 12, 100);
+
+        orderService.getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
+
+        // Exactly enough for thirty lots at the price the order is posted at, and not a kopek more.
+        Quotation wholeBalance = firstBar.open()
+            .multiply(30)
+            .add(expectedCommissionCost(firstBar.open(), 30));
+
+        addMoney(wholeBalance);
+        when(candleStorage.findAfterOrEqual(eq(config.getInstrument().getUid()), any(), eq(1L)))
+            .thenReturn(List.of(dearerBar));
+        // Where the data ends, so a remainder with no further bar to trade against can be scheduled
+        // to stop rather than run off the end of the history.
+        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1L))).thenReturn(List.of(dearerBar));
+
+        PostOrderResponse posted = postBuy(firstBar, OrderType.MARKET, 30, null);
+
+        // Ten lots at ten, and the remaining twenty reserved at the same price - which takes the
+        // account down to nothing.
+        assertEquals(10, posted.getLotsExecuted());
+        assertEquals(ExecutionStatus.PARTIALLYFILL, posted.getExecutionStatus());
+
+        tickAt(dearerBar.getTime());
+
+        OrderState stopped = stateOf(posted);
+
+        // Ten more traded at twelve, out of the freed reservation. The last ten would cost 120.36
+        // and only 80.24 is left, so the order stops there rather than refusing what already stands.
+        assertEquals(ExecutionStatus.CANCELLED, stopped.getExecutionStatus());
+        assertEquals(20, stopped.getLotsExecuted());
+        assertEquals(20, freePositionLots());
+
+        // No longer working, so it drops out of the active orders.
+        assertTrue(
+            orderService.get(GetOrdersRequest.of(testAccount.getId())).getOrders().isEmpty()
+        );
+
+        // Nothing is left held back for an order that is done, and the account paid for exactly
+        // the two fills that happened.
+        Money blocked = broker.getOperationsService()
+            .getAccountBalance(testAccount.getId())
+            .getBlockedMoney(config.getInstrument().getCurrency());
+
+        assertTrue(blocked == null || blocked.getQuotation().isEqual(Quotation.ZERO));
+
+        Quotation spent = firstBar.open()
+            .multiply(10)
+            .add(expectedCommissionCost(firstBar.open(), 10))
+            .add(dearerBar.open().multiply(10))
+            .add(expectedCommissionCost(dearerBar.open(), 10));
+
+        assertEquals(
+            Money.of(config.getInstrument().getCurrency(), wholeBalance.subtract(spent)),
+            broker.getOperationsService()
+                .getAvailableMoney(testAccount.getId(), config.getInstrument().getCurrency())
+        );
+    }
+
+    /**
+     * A bar is one stretch of tape, and every order trading against it draws from the same budget.
+     * Handing each order its own share independently would let the same volume be bought several
+     * times over - the very fiction the liquidity cap exists to remove.
+     */
+    @Test
+    public void testOrdersTradingOnOneBarShareWhatItTraded() throws AbstractException {
+        Candle bar = createCandle(currentTime, 10, 15, 5, 10, 100);
+
+        orderService.getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
+        addMoney(Quotation.of(100000));
+        when(candleStorage.findAfterOrEqual(eq(config.getInstrument().getUid()), any(), eq(1L)))
+            .thenReturn(List.of(bar));
+        // Only the one bar exists, so a remainder looking past it finds where the data ends.
+        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1L))).thenReturn(List.of(bar));
+
+        PostOrderResponse first = postBuy(bar, OrderType.MARKET, 30, null);
+
+        // A tenth of the hundred lots the bar traded, and that is the whole of what it had.
+        assertEquals(10, first.getLotsExecuted());
+
+        PostOrderResponse second = postBuy(bar, OrderType.MARKET, 30, null);
+
+        assertEquals(0, second.getLotsExecuted());
+        assertEquals(ExecutionStatus.NEW, second.getExecutionStatus());
+
+        // Ten lots bought in total - not twenty, which is what two orders each taking their own
+        // tenth of the same bar would have produced.
+        assertEquals(10, freePositionLots());
+    }
+
+    /**
+     * While an order is working, the money for all of it is spoken for. Holding back only the next
+     * bar's worth would leave the rest looking spendable, and a strategy sizing its next order by
+     * the balance would commit the same money twice.
+     */
+    @Test
+    public void testAWorkingOrderHoldsBackWhatTheWholeOfItWillCost() throws AbstractException {
+        Candle bar = createCandle(currentTime, 10, 15, 5, 10, 100);
+
+        orderService.getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
+        addMoney(Quotation.of(100000));
+        when(candleStorage.findAfterOrEqual(eq(config.getInstrument().getUid()), any(), eq(1L)))
+            .thenReturn(List.of(bar));
+        // Only the one bar exists, so a remainder looking past it finds where the data ends.
+        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1L))).thenReturn(List.of(bar));
+
+        String currency = config.getInstrument().getCurrency();
+        Money before = broker.getOperationsService().getAvailableMoney(testAccount.getId(), currency);
+
+        PostOrderResponse posted = postBuy(bar, OrderType.MARKET, 30, null);
+
+        assertEquals(10, posted.getLotsExecuted());
+
+        // Ten lots are paid for and twenty are still to come, and the account is short the price of
+        // all thirty.
+        Quotation wholeOrder = bar.open()
+            .multiply(30)
+            .add(expectedCommissionCost(bar.open(), 30));
+
+        assertEquals(
+            before.subtract(Money.of(currency, wholeOrder)),
+            broker.getOperationsService().getAvailableMoney(testAccount.getId(), currency)
+        );
     }
 
     protected void tickAt(Instant eventTime) {
