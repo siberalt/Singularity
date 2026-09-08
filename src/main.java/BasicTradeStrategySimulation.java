@@ -28,7 +28,6 @@ import com.siberalt.singularity.presenter.google.series.OrderSeriesProvider;
 import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.shared.TimeRange;
 import com.siberalt.singularity.simulation.SimulationClock;
-import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
 import com.siberalt.singularity.strategy.Strategy;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.LastExtremeLocator;
@@ -43,6 +42,7 @@ import com.siberalt.singularity.strategy.market.position.BaseEntryPriceCalculato
 import com.siberalt.singularity.strategy.simulation.runner.AnalysisReport;
 import com.siberalt.singularity.strategy.simulation.runner.EffectivenessAnalyzer;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyResult;
+import com.siberalt.singularity.strategy.simulation.runner.SimulationBrokerFactory;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyStarter;
 import com.siberalt.singularity.strategy.upside.*;
 import com.siberalt.singularity.strategy.upside.extreme.MaximinUpsideCalculator;
@@ -105,21 +105,13 @@ public class BasicTradeStrategySimulation {
         double commission = 0.0005;
         Money initialInvestment = Money.of("RUB", 1000000.00);
 
-        SimulationClock clock = new SimpleSimulationClock();
-        EventMockBroker broker = EventMockBroker.builder(
-            candleRepository,
-            instrumentRepository,
-            orderRepository,
-            operationRepository,
-            clock
-        )
-            .setCommissionRatio(commission)
-            .build();
+        // One definition of the execution terms, used for the strategy's broker and for the
+        // benchmark's - a buy-and-hold measured on easier terms than the strategy is not a
+        // comparison.
+        SimulationBrokerFactory<EventMockBroker> brokerFactory = (clock, orders, operations) ->
+            createBroker(candleRepository, instrumentRepository, orders, operations, clock, commission);
 
-//        broker.getOrderService().getPriceModel().setSlippageImpactRatio(0.00001);
-//        broker.getOrderService().getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.01);
-
-        StrategyStarter strategyStarter = (timeRange, accountId, observer) ->
+        StrategyStarter<EventMockBroker> strategyStarter = (timeRange, accountId, broker, observer) ->
         {
             Strategy strategy = createLevelsStrategy(
                 operationRepository,
@@ -135,15 +127,14 @@ public class BasicTradeStrategySimulation {
             strategy.run(observer);
         };
 
-        EffectivenessAnalyzer analyzer = new EffectivenessAnalyzer(
+        EffectivenessAnalyzer<EventMockBroker> analyzer = new EffectivenessAnalyzer<>(
             strategyStarter,
             INSTRUMENT_ID,
             initialInvestment,
             candleRepository,
-            instrumentRepository,
-            broker,
-            clock,
-            commission
+            brokerFactory,
+            orderRepository,
+            operationRepository
         );
 
         AnalysisReport report = analyzer.run(startTime, endTime);
@@ -264,7 +255,7 @@ public class BasicTradeStrategySimulation {
             new BaseEntryPriceCalculator(readOperationRepository),
             ATRVolatilityCalculator.ofMultiplier(2)
         );
-        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(5);
+        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(3);
 
         ThresholdSwitchUpsideCalculator switcherUpsideCalculator = new ThresholdSwitchUpsideCalculator(
             new UpsideSignalAmplifier(slopeUpsideCalculator, 0.9, 0.9),
@@ -285,6 +276,35 @@ public class BasicTradeStrategySimulation {
         strategy.setStep(1);
 
         return strategy;
+    }
+
+    /**
+     * The broker one simulation run trades through, and the only place the execution terms are
+     * written down. Both the strategy and the benchmark it is measured against are built from here,
+     * so neither can quietly get an easier market than the other.
+     */
+    private static EventMockBroker createBroker(
+        ReadCandleRepository candleRepository,
+        InstrumentRepository instrumentRepository,
+        OrderRepository orderRepository,
+        OperationRepository operationRepository,
+        SimulationClock clock,
+        double commission
+    ) {
+        EventMockBroker broker = EventMockBroker.builder(
+            candleRepository,
+            instrumentRepository,
+            orderRepository,
+            operationRepository,
+            clock
+        )
+            .setCommissionRatio(commission)
+            .build();
+
+//        broker.getOrderService().getPriceModel().setHalfSpreadRatio(0.00015).setSlippageImpactRatio(0.0006);
+//        broker.getOrderService().getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
+
+        return broker;
     }
 
     private static void drawOrdersChart(

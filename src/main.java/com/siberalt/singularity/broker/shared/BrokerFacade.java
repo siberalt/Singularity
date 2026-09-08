@@ -2,6 +2,7 @@ package com.siberalt.singularity.broker.shared;
 
 import com.siberalt.singularity.broker.contract.execution.Broker;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
+import com.siberalt.singularity.broker.contract.service.market.request.GetCurrentPriceRequest;
 import com.siberalt.singularity.broker.contract.service.operation.request.GetPositionsRequest;
 import com.siberalt.singularity.entity.position.Position;
 import com.siberalt.singularity.broker.contract.service.order.request.*;
@@ -11,6 +12,8 @@ import com.siberalt.singularity.broker.contract.service.order.response.PostOrder
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.shared.dto.BuyRequest;
+
+import java.util.Collection;
 
 public class BrokerFacade {
     protected Broker broker;
@@ -31,6 +34,46 @@ public class BrokerFacade {
             .filter(money -> currencyIso.equals(money.getCurrencyIso()))
             .findFirst()
             .orElseGet(() -> Money.of(currencyIso, Quotation.ZERO));
+    }
+
+    /**
+     * Money set aside for orders that are still working, which is the account's just as much as the
+     * free balance is - it is only spoken for. Valuing an account without it makes every pending
+     * order look like a loss.
+     */
+    public Money getBlockedMoney(String accountId, String currencyIso) throws AbstractException {
+        Collection<Money> blocked = broker.getOperationsService()
+            .getPositions(GetPositionsRequest.of(accountId))
+            .getBlocked();
+
+        if (blocked == null) {
+            return Money.of(currencyIso, Quotation.ZERO);
+        }
+
+        return blocked.stream()
+            .filter(money -> currencyIso.equals(money.getCurrencyIso()))
+            .findFirst()
+            .orElseGet(() -> Money.of(currencyIso, Quotation.ZERO));
+    }
+
+    /**
+     * Everything the account holds of this instrument - the free lots and the ones reserved for a
+     * sell that has not finished. {@link #getPositionSize} counts only what is free, because that is
+     * what another order could be placed against; this counts what is owned.
+     */
+    public long getHeldPositionSize(String accountId, String instrumentId) throws AbstractException {
+        return broker.getOperationsService().getPositions(GetPositionsRequest.of(accountId))
+            .getSecurities().stream()
+            .filter(position -> position.getInstrumentUid().equals(instrumentId))
+            .mapToLong(position -> position.getBalance() + position.getBlocked())
+            .findFirst()
+            .orElse(0L);
+    }
+
+    public Quotation getLastPrice(String instrumentId) throws AbstractException {
+        return broker.getMarketDataService()
+            .getCurrentPrice(new GetCurrentPriceRequest(instrumentId))
+            .getPrice();
     }
 
     public long getPositionSize(String accountId, String instrumentId) throws AbstractException {

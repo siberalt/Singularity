@@ -1,11 +1,10 @@
 package com.siberalt.singularity.strategy.simulation.runner;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
+import com.siberalt.singularity.broker.contract.simulation.SimulationBroker;
 import com.siberalt.singularity.broker.contract.value.money.Money;
-import com.siberalt.singularity.broker.impl.mock.EventMockBroker;
 import com.siberalt.singularity.broker.shared.BrokerFacade;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
-import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
 import com.siberalt.singularity.entity.operation.InMemoryOperationRepository;
 import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
 import com.siberalt.singularity.simulation.SimulationClock;
@@ -16,35 +15,46 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Buy at the start of the period, sell at the end - what the instrument would have paid for simply
+ * being held. The benchmark any strategy has to beat to have been worth running.
+ * <p>
+ * Its broker comes from the same factory as the one the strategy was measured with, so both are on
+ * identical execution terms. It has to be a separate instance rather than the strategy's own: that
+ * one is still carrying its run - the strategy stays subscribed to its candles and the pending
+ * order handler still holds its scheduled fills - so replaying the period on it would have the
+ * strategy trading through the benchmark.
+ */
 public class ConservativeStrategyRunner {
     private final String instrumentId;
     private final ReadCandleRepository candleRepository;
-    private final ReadInstrumentRepository instrumentRepository;
-    private final double brokerCommission;
+    private final SimulationBrokerFactory<?> brokerFactory;
     private final Money initialInvestment;
 
     public ConservativeStrategyRunner(
         String instrumentId,
         ReadCandleRepository candleRepository,
-        ReadInstrumentRepository instrumentRepository,
-        double brokerCommission,
+        SimulationBrokerFactory<?> brokerFactory,
         Money initialInvestment
     ) {
         this.instrumentId = instrumentId;
         this.candleRepository = candleRepository;
-        this.instrumentRepository = instrumentRepository;
-        this.brokerCommission = brokerCommission;
+        this.brokerFactory = brokerFactory;
         this.initialInvestment = initialInvestment;
     }
 
     public StrategyResult run(Instant startTime, Instant endTime) throws AbstractException {
         SimulationClock clock = new SimpleSimulationClock();
-        EventMockBroker broker = createBroker(clock);
+        SimulationBroker broker = brokerFactory.create(
+            clock,
+            new InMemoryOrderRepository(),
+            new InMemoryOperationRepository()
+        );
 
         TradeTiming timing = findTradePoints(startTime, endTime);
 
-        StrategyBacktester backtester = new StrategyBacktester(
-            (timeRange, accountId, observer) -> {
+        StrategyBacktester<SimulationBroker> backtester = new StrategyBacktester<>(
+            (timeRange, accountId, runBroker, observer) -> {
             },
             broker,
             instrumentId,
@@ -61,18 +71,6 @@ public class ConservativeStrategyRunner {
         );
 
         return backtester.run(startTime, endTime);
-    }
-
-    private EventMockBroker createBroker(SimulationClock clock) {
-        return EventMockBroker.builder(
-                candleRepository,
-                instrumentRepository,
-                new InMemoryOrderRepository(),
-                new InMemoryOperationRepository(),
-                clock
-            )
-            .setCommissionRatio(brokerCommission)
-            .build();
     }
 
     private TradeTiming findTradePoints(Instant startTime, Instant endTime) {
