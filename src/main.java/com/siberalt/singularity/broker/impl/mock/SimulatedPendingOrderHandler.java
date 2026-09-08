@@ -3,7 +3,6 @@ package com.siberalt.singularity.broker.impl.mock;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.ExceptionBuilder;
-import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.broker.contract.service.order.response.ExecutionStatus;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.shared.exception.MockBrokerException;
@@ -418,7 +417,8 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
      * Which of the three outcomes it reports is {@link #resolve}'s to act on.
      */
     protected BarFill claimFromBar(Order order, Candle bar) throws AbstractException {
-        long lots = liquidityModel.take(order.getInstrument().getUid(), bar, lotsLeft(order));
+        String instrumentUid = order.getInstrument().getUid();
+        long lots = liquidityModel.take(instrumentUid, bar, lotsLeft(order));
 
         if (lots == 0) {
             return BarFill.barUsedUp();
@@ -427,6 +427,10 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
         Quotation price = priceModel.fillPrice(order, bar, lots);
         long affordable = fundsReserve.affordableLots(order, lots, price);
 
+        // What the account cannot pay for goes back to the bar. Holding it would deny the orders
+        // behind this one a share it was never going to trade.
+        liquidityModel.give(instrumentUid, bar, lots - affordable);
+
         return affordable == 0 ? BarFill.unaffordable() : BarFill.trades(affordable, price);
     }
 
@@ -434,13 +438,8 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
         order.setInstrumentPrice(barFill.price());
 
         long lots = barFill.lots();
-        FillQuote quote = orderExecutor.quote(order, lots);
 
-        if (order.getDirection() == OrderDirection.BUY) {
-            orderExecutor.buy(order, lots, quote);
-        } else {
-            orderExecutor.sell(order, lots, quote);
-        }
+        orderExecutor.fill(order, lots, orderExecutor.quote(order, lots));
     }
 
     /**

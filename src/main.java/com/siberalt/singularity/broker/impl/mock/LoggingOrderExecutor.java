@@ -2,6 +2,7 @@ package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
+import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.strategy.context.Clock;
 
@@ -35,15 +36,9 @@ public class LoggingOrderExecutor implements OrderExecutor {
     }
 
     @Override
-    public void buy(Order order, long lots, FillQuote quote) throws AbstractException {
-        log("Buying", order, lots, quote);
-        delegate.buy(order, lots, quote);
-    }
-
-    @Override
-    public void sell(Order order, long lots, FillQuote quote) throws AbstractException {
-        log("Selling", order, lots, quote);
-        delegate.sell(order, lots, quote);
+    public void fill(Order order, long lots, FillQuote quote) throws AbstractException {
+        log(order.getDirection() == OrderDirection.BUY ? "Buying" : "Selling", order, lots, quote);
+        delegate.fill(order, lots, quote);
     }
 
     /**

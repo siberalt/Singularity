@@ -13,6 +13,7 @@ import com.siberalt.singularity.entity.operation.Operation;
 import com.siberalt.singularity.entity.operation.OperationRepository;
 import com.siberalt.singularity.entity.operation.OperationState;
 import com.siberalt.singularity.entity.operation.OperationType;
+import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.entity.transaction.Transaction;
 import com.siberalt.singularity.entity.transaction.TransactionSpec;
@@ -113,34 +114,34 @@ public class DefaultOrderExecutor implements OrderExecutor {
     }
 
     @Override
-    public void buy(Order order, long lots, FillQuote quote) throws AbstractException {
+    public void fill(Order order, long lots, FillQuote quote) throws AbstractException {
         // Refuse a duplicate key before the account is touched - it must not cost money.
         orderRegistry.claimIdempotencyKey(order);
 
         AccountBalance balance = operationsService.getAccountBalance(order.getAccountId());
         checkTransactionsApplied(balance.applyTransactions(quote.transactionSpecs()));
-        operationsService.addToPosition(
-            order.getAccountId(),
-            order.getInstrument().getUid(),
-            lots * order.getInstrument().getLot()
-        );
+        movePosition(order, lots);
 
         settle(order, lots, quote);
     }
 
-    @Override
-    public void sell(Order order, long lots, FillQuote quote) throws AbstractException {
-        orderRegistry.claimIdempotencyKey(order);
+    /**
+     * The one thing a buy and a sell do differently. The money has already moved by this point, and
+     * it moved by a signed amount the transaction specs worked out - the position is the only part
+     * that still has to be told which way the instrument went.
+     */
+    protected void movePosition(Order order, long lots) throws AbstractException {
+        String accountId = order.getAccountId();
+        String instrumentUid = order.getInstrument().getUid();
+        long units = lots * order.getInstrument().getLot();
 
-        AccountBalance balance = operationsService.getAccountBalance(order.getAccountId());
-        checkTransactionsApplied(balance.applyTransactions(quote.transactionSpecs()));
-        operationsService.subtractFromPosition(
-            order.getAccountId(),
-            order.getInstrument().getUid(),
-            lots * order.getInstrument().getLot()
-        );
+        if (order.getDirection() == OrderDirection.BUY) {
+            operationsService.addToPosition(accountId, instrumentUid, units);
 
-        settle(order, lots, quote);
+            return;
+        }
+
+        operationsService.subtractFromPosition(accountId, instrumentUid, units);
     }
 
     /**

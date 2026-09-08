@@ -88,8 +88,8 @@ public class LiquidityModel {
 
     /**
      * Everything this bar has to give, before any order has taken from it. Used to tell a bar worth
-     * waiting for from one too thin to trade against at all - what is actually left of it by the
-     * time an order gets there is {@link #available}.
+     * waiting for from one too thin to trade against at all. What is left of it by the time an order
+     * gets there is not asked here - only {@link #take} can answer that, and taking is the asking.
      */
     public long barCapacity(Candle candle) {
         if (infiniteLiquidity) {
@@ -106,21 +106,13 @@ public class LiquidityModel {
     }
 
     /**
-     * What is left of this bar for an order asking now. Claims nothing - it is there so a caller
-     * can price and check a fill before committing to it.
-     */
-    public long available(String instrumentUid, Candle candle) {
-        if (infiniteLiquidity) {
-            return Long.MAX_VALUE;
-        }
-
-        return budgetOf(instrumentUid, candle).remaining;
-    }
-
-    /**
      * Claims up to {@code lotsWanted} of what the bar has left, and returns what it actually gave.
      * Zero means the bar is used up: earlier orders took all of it, and this one has to wait for
      * the next.
+     * <p>
+     * Whatever is taken here and does not end up trading has to come back through
+     * {@link #give} - a bar held by an order that never used it is a bar the orders behind it
+     * were denied for nothing.
      */
     public long take(String instrumentUid, Candle candle, long lotsWanted) {
         if (infiniteLiquidity) {
@@ -132,6 +124,20 @@ public class LiquidityModel {
         budget.remaining -= granted;
 
         return granted;
+    }
+
+    /**
+     * Returns lots claimed but not traded, so the orders behind get their turn at them. The other
+     * half of {@link #take}, and the same bargain the account makes with its money: hold back what
+     * a fill might need, hand back what it turned out not to.
+     */
+    public void give(String instrumentUid, Candle candle, long lots) {
+        if (infiniteLiquidity || lots <= 0) {
+            return;
+        }
+
+        BarBudget budget = budgetOf(instrumentUid, candle);
+        budget.remaining = Math.min(budget.remaining + lots, barCapacity(candle));
     }
 
     /**

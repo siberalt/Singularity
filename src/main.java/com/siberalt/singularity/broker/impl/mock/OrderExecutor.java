@@ -37,7 +37,10 @@ public interface OrderExecutor {
      */
     FillQuote quoteAt(Order order, long lots, Quotation price);
 
-    void buy(Order order, long lots, FillQuote quote) throws AbstractException;
-
-    void sell(Order order, long lots, FillQuote quote) throws AbstractException;
+    /**
+     * Carries out the fill the quote describes. Which way the instrument moves is the order's to
+     * say, not the caller's - a separate buy and sell here bought nothing but the chance for the
+     * two to drift apart, and made every caller repeat the same fork to pick between them.
+     */
+    void fill(Order order, long lots, FillQuote quote) throws AbstractException;
 }

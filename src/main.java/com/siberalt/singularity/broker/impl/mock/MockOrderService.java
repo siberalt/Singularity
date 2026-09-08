@@ -92,11 +92,11 @@ public class MockOrderService implements OrderService {
     public PostOrderResponse post(PostOrderRequest request) throws AbstractException {
         validatePostOrderRequest(request);
 
-        return switch (request.getDirection()) {
-            case BUY -> buy(request);
-            case SELL -> sell(request);
-            case UNSPECIFIED -> throw ExceptionBuilder.create(ErrorCode.INVALID_PARAMETER_DIRECTION);
-        };
+        if (request.getDirection() == OrderDirection.UNSPECIFIED) {
+            throw ExceptionBuilder.create(ErrorCode.INVALID_PARAMETER_DIRECTION);
+        }
+
+        return fill(request);
     }
 
     @Override
@@ -245,45 +245,44 @@ public class MockOrderService implements OrderService {
         }
     }
 
-    protected PostOrderResponse buy(PostOrderRequest request) throws AbstractException {
+    /**
+     * Buying and selling differ in three places and nowhere else - what the account has to have
+     * enough of, which side of the limit price the market must be on, and which way the instrument
+     * moves - so they are one method with three forks rather than two that drift apart.
+     * <p>
+     * The order of the steps carries weight. What the account can cover is checked before any of
+     * the bar is claimed: an order refused here must not have taken a share of the bar with it on
+     * the way out. And the fill is priced only once it is going ahead, since the price a fill goes
+     * through at is a fact about a fill that happens.
+     */
+    protected PostOrderResponse fill(PostOrderRequest request) throws AbstractException {
         Order order = createOrder(request);
-        long fillableLots = reachesMarketNow() && canBuyNow(order) ? fillableLots(order) : 0;
 
-        priceFill(order, fillableLots);
-        checkEnoughOfMoneyToBuy(order, orderExecutor.quote(order, order.getLotsRequested()));
+        checkAccountCanCover(order);
 
-        if (fillableLots == 0) {
+        long lots = reachesMarketNow() && marketMeetsPrice(order) ? takeLiquidity(order) : 0;
+
+        if (lots == 0) {
             park(order);
 
             return toServiceResponse(order);
         }
 
-        claimLiquidity(order, fillableLots);
-        orderExecutor.buy(order, fillableLots, orderExecutor.quote(order, fillableLots));
+        priceFill(order, lots);
+        orderExecutor.fill(order, lots, orderExecutor.quote(order, lots));
         handleRemainder(order);
 
         return toServiceResponse(order);
     }
 
-    protected PostOrderResponse sell(PostOrderRequest request) throws AbstractException {
-        Order order = createOrder(request);
-        checkEnoughOfPositionToSell(order);
+    protected void checkAccountCanCover(Order order) throws AbstractException {
+        if (order.getDirection() == OrderDirection.BUY) {
+            checkEnoughOfMoneyToBuy(order, orderExecutor.quote(order, order.getLotsRequested()));
 
-        long fillableLots = reachesMarketNow() && canSellNow(order) ? fillableLots(order) : 0;
-
-        priceFill(order, fillableLots);
-
-        if (fillableLots == 0) {
-            park(order);
-
-            return toServiceResponse(order);
+            return;
         }
 
-        claimLiquidity(order, fillableLots);
-        orderExecutor.sell(order, fillableLots, orderExecutor.quote(order, fillableLots));
-        handleRemainder(order);
-
-        return toServiceResponse(order);
+        checkEnoughOfPositionToSell(order);
     }
 
     /**
@@ -306,44 +305,36 @@ public class MockOrderService implements OrderService {
 
     /**
      * Moves the order from the price the instrument is quoted at to the price this fill actually
-     * goes through at - the spread it has to cross, plus the impact of its own size. An order that
-     * is not filling now keeps the quoted price: it is what the limit is compared against and what
-     * the reservation is sized by, and there is no fill yet to charge for.
+     * goes through at - the spread it has to cross, plus the impact of its own size.
+     * <p>
+     * Called only for a fill that is going ahead. An order left waiting keeps the quoted price
+     * instead: that is what its limit is compared against and what its reservation is sized by, and
+     * there is no fill yet to charge for.
      */
-    protected void priceFill(Order order, long fillableLots) throws AbstractException {
-        if (fillableLots == 0) {
-            return;
-        }
-
+    protected void priceFill(Order order, long lots) throws AbstractException {
         Candle currentCandle = requireCurrentCandle(order.getInstrument().getUid());
 
-        order.setInstrumentPrice(priceModel.fillPrice(order, currentCandle, fillableLots));
+        order.setInstrumentPrice(priceModel.fillPrice(order, currentCandle, lots));
     }
 
     /**
-     * How much of the order the market could absorb right now, without claiming any of it. Zero
-     * means this bar has nothing left for the order - either it traded too little to begin with, or
-     * orders already filled against it took the lot - which for these purposes is the same
-     * situation as the price not being met: the order has to wait either way.
+     * Takes this order's share out of the current bar's budget, so the orders filling after it on
+     * the same bar see what is left rather than the whole of it again. Zero means the bar has
+     * nothing to give - either it traded too little to begin with, or the orders ahead took the
+     * lot - which for these purposes is the same situation as the price not being met: the order
+     * has to wait either way.
+     * <p>
+     * Nothing that follows can refuse the order, so nothing has to be handed back. That is why the
+     * account is checked first.
      */
-    protected long fillableLots(Order order) throws AbstractException {
-        Candle currentCandle = requireCurrentCandle(order.getInstrument().getUid());
+    protected long takeLiquidity(Order order) throws AbstractException {
+        String instrumentUid = order.getInstrument().getUid();
 
-        return Math.min(
-            order.getLotsRequested() - order.getLotsExecuted(),
-            liquidityModel.available(order.getInstrument().getUid(), currentCandle)
+        return liquidityModel.take(
+            instrumentUid,
+            requireCurrentCandle(instrumentUid),
+            order.getLotsRequested() - order.getLotsExecuted()
         );
-    }
-
-    /**
-     * Takes the lots out of the bar's budget, so the orders filling after this one on the same bar
-     * see what is left rather than the whole of it again. Claimed only once the fill is going
-     * ahead - an order refused for want of money must not eat into the bar on its way out.
-     */
-    protected void claimLiquidity(Order order, long lots) throws AbstractException {
-        Candle currentCandle = requireCurrentCandle(order.getInstrument().getUid());
-
-        liquidityModel.take(order.getInstrument().getUid(), currentCandle, lots);
     }
 
     /**
@@ -357,16 +348,21 @@ public class MockOrderService implements OrderService {
         }
     }
 
-    protected boolean canBuyNow(Order order) {
+    /**
+     * Whether the market is on the right side of the order's price. Only a limit order names one -
+     * anything else takes what the market offers - and it is the mirror of itself by direction: a
+     * buy will not pay more than its limit, a sell will not accept less.
+     */
+    protected boolean marketMeetsPrice(Order order) {
+        if (OrderType.LIMIT != order.getOrderType()) {
+            return true;
+        }
+
         Quotation priceLimit = order.getRequestedPrice();
 
-        return OrderType.LIMIT != order.getOrderType() || priceLimit.isGreaterOrEqual(order.getInstrumentPrice());
-    }
-
-    protected boolean canSellNow(Order order) {
-        Quotation priceLimit = order.getRequestedPrice();
-
-        return OrderType.LIMIT != order.getOrderType() || priceLimit.isLessOrEqual(order.getInstrumentPrice());
+        return order.getDirection() == OrderDirection.BUY
+            ? priceLimit.isGreaterOrEqual(order.getInstrumentPrice())
+            : priceLimit.isLessOrEqual(order.getInstrumentPrice());
     }
 
     protected Order createOrder(PostOrderRequest request) throws AbstractException {

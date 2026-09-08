@@ -98,18 +98,35 @@ class LiquidityModelTest {
         assertEquals(10, liquidityModel.take(INSTRUMENT, nextBar, 1000));
     }
 
+    /**
+     * The other half of taking. Lots claimed by an order that turns out not to trade them would
+     * otherwise sit held for the rest of the bar, denied to everyone behind it for nothing.
+     */
     @Test
-    void reportsWhatIsLeftWithoutClaimingIt() {
+    void handsBackWhatWasClaimedButNotTraded() {
         liquidityModel.setInfiniteLiquidity(false).setParticipationRate(0.1);
 
         Candle bar = bar(100);
 
-        assertEquals(10, liquidityModel.available(INSTRUMENT, bar));
-        assertEquals(10, liquidityModel.available(INSTRUMENT, bar));
+        assertEquals(10, liquidityModel.take(INSTRUMENT, bar, 10));
+        assertEquals(0, liquidityModel.take(INSTRUMENT, bar, 1));
 
-        liquidityModel.take(INSTRUMENT, bar, 4);
+        liquidityModel.give(INSTRUMENT, bar, 4);
 
-        assertEquals(6, liquidityModel.available(INSTRUMENT, bar));
+        assertEquals(4, liquidityModel.take(INSTRUMENT, bar, 10));
+    }
+
+    @Test
+    void neverGivesBackMoreThanTheBarEverHad() {
+        liquidityModel.setInfiniteLiquidity(false).setParticipationRate(0.1);
+
+        Candle bar = bar(100);
+
+        liquidityModel.take(INSTRUMENT, bar, 3);
+        // More than was ever taken - the bar still cannot end up richer than it traded.
+        liquidityModel.give(INSTRUMENT, bar, 1000);
+
+        assertEquals(10, liquidityModel.take(INSTRUMENT, bar, 1000));
     }
 
     @Test
