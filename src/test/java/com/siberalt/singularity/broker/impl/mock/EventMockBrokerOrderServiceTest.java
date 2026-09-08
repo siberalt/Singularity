@@ -56,12 +56,17 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         OperationRepository operationRepository,
         Clock clock
     ) {
+        // No latency here: these tests are about what posting an order does, and they read the
+        // fill off the response. The one bar EventMockBroker defaults to is there to stop a
+        // strategy trading inside a bar it has already seen, which is a question about running a
+        // simulation and not about the order service. Latency itself is covered by its own test.
         EventMockBroker broker = new EventMockBroker(
             candleStorage,
             instrumentStorage,
             orderRepository,
             operationRepository,
-            clock
+            clock,
+            Duration.ZERO
         );
         eventObserver = new EventObserver();
         broker.getPendingOrderHandler().observeEventsBy(eventObserver);

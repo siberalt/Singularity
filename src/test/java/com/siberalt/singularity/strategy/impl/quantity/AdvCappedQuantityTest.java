@@ -44,8 +44,8 @@ class AdvCappedQuantityTest {
         // Two trading days of 2 000 lots each, so ADV is 2 000 and a twentieth of it is 100.
         stubLookback(twoDaysOf(1000));
 
-        assertEquals(100, quantity.toBuy(moment(1.0), 100_000));
-        assertEquals(100, quantity.toSell(moment(-1.0), 100_000));
+        assertEquals(100, quantity.toBuy(moment(1.0), TradeCapacity.of(100_000, 0)));
+        assertEquals(100, quantity.toSell(moment(-1.0), TradeCapacity.of(0, 100_000)));
     }
 
     @Test
@@ -53,7 +53,7 @@ class AdvCappedQuantityTest {
         stubLookback(twoDaysOf(1000));
 
         // Forty is under the cap of a hundred, so the underlying sizing keeps its answer.
-        assertEquals(40, quantity.toBuy(moment(1.0), 40));
+        assertEquals(40, quantity.toBuy(moment(1.0), TradeCapacity.of(40, 0)));
     }
 
     /**
@@ -64,8 +64,8 @@ class AdvCappedQuantityTest {
     void neverTurnsNothingIntoSomething() {
         stubLookback(twoDaysOf(1000));
 
-        assertEquals(0, quantity.toBuy(moment(1.0), 0));
-        assertEquals(0, quantity.toSell(moment(-1.0), 0));
+        assertEquals(0, quantity.toBuy(moment(1.0), TradeCapacity.of(0, 0)));
+        assertEquals(0, quantity.toSell(moment(-1.0), TradeCapacity.of(0, 0)));
     }
 
     /**
@@ -82,7 +82,7 @@ class AdvCappedQuantityTest {
         stubLookback(candles);
 
         // 4 000 lots over 2 trading days is an ADV of 2 000, a twentieth of which is 100.
-        assertEquals(100, quantity.toBuy(moment(1.0), 100_000));
+        assertEquals(100, quantity.toBuy(moment(1.0), TradeCapacity.of(100_000, 0)));
     }
 
     /**
@@ -94,7 +94,7 @@ class AdvCappedQuantityTest {
     void letsTheUnderlyingSizingStandWhenThereIsNoHistory() {
         stubLookback(List.of());
 
-        assertEquals(100_000, quantity.toBuy(moment(1.0), 100_000));
+        assertEquals(100_000, quantity.toBuy(moment(1.0), TradeCapacity.of(100_000, 0)));
     }
 
     /**
@@ -106,7 +106,7 @@ class AdvCappedQuantityTest {
         stubLookback(twoDaysOf(1000));
         quantity.setLookbackCandles(500);
 
-        quantity.toBuy(moment(1.0), 100_000);
+        quantity.toBuy(moment(1.0), TradeCapacity.of(100_000, 0));
 
         // Ending at the moment being decided on - bars from after it would be reading the future.
         verify(candleRepository).findBeforeOrEqual(INSTRUMENT, NOW, 500);
@@ -118,7 +118,7 @@ class AdvCappedQuantityTest {
         quantity.setDailyVolumeShare(0.5);
 
         // Half of an ADV of 2 000.
-        assertEquals(1000, quantity.toBuy(moment(1.0), 100_000));
+        assertEquals(1000, quantity.toBuy(moment(1.0), TradeCapacity.of(100_000, 0)));
     }
 
     @Test

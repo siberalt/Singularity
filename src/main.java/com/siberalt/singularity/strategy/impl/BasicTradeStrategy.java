@@ -4,6 +4,7 @@ import com.siberalt.singularity.broker.contract.execution.EventSubscriptionBroke
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.events.NewCandleEvent;
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.subscriptions.NewCandleSubscriptionSpec;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
+import com.siberalt.singularity.broker.contract.service.order.request.OrderType;
 import com.siberalt.singularity.broker.shared.EventSubscriptionBrokerFacade;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
@@ -11,6 +12,7 @@ import com.siberalt.singularity.event.subscription.Subscription;
 import com.siberalt.singularity.event.subscription.SubscriptionSpec;
 import com.siberalt.singularity.strategy.Strategy;
 import com.siberalt.singularity.strategy.impl.quantity.SignalScaledQuantity;
+import com.siberalt.singularity.strategy.impl.quantity.TradeCapacity;
 import com.siberalt.singularity.strategy.impl.quantity.TradeMoment;
 import com.siberalt.singularity.strategy.impl.quantity.TradeQuantity;
 import com.siberalt.singularity.strategy.observer.Observer;
@@ -86,7 +88,9 @@ public class BasicTradeStrategy implements Strategy {
     /**
      * How much to ask for once the signal says to trade. As much as the account allows by default;
      * wrap it in an {@link com.siberalt.singularity.strategy.impl.quantity.AdvCappedQuantity} to
-     * hold orders down to a share of what the instrument actually trades.
+     * hold orders down to a share of what the instrument actually trades, or replace it with a
+     * {@link com.siberalt.singularity.strategy.impl.quantity.TargetPositionQuantity} to have a
+     * lasting signal ask for a position rather than for another purchase every bar.
      */
     public BasicTradeStrategy setTradeQuantity(TradeQuantity tradeQuantity) {
         this.tradeQuantity = tradeQuantity;
@@ -104,6 +108,24 @@ public class BasicTradeStrategy implements Strategy {
         if (subscription != null && subscription.isActive()) {
             subscription.stop();
         }
+    }
+
+    /**
+     * What the account could do with the instrument right now: what the rest of its money would
+     * buy, and what it already holds. Both are read whichever way the decision goes, because a
+     * sizing that thinks in positions needs the pair - what the account is worth is what a target
+     * is a share of.
+     * <p>
+     * Held is what is free to trade, not what is owned: lots reserved for a sell that has not
+     * finished cannot be sold again. Under a liquidity limit an order can stay working for a good
+     * while, so a buy decided while a sell is still out sees a smaller position than the account
+     * really has, and asks for more than it needs to.
+     */
+    protected TradeCapacity capacity() throws AbstractException {
+        return TradeCapacity.of(
+            broker.getMaxBuyQuantity(accountId, instrumentId, OrderType.BEST_PRICE),
+            broker.getPositionSize(accountId, instrumentId)
+        );
     }
 
     public void handleNewCandle(NewCandleEvent event, Subscription subscription) {
@@ -137,15 +159,13 @@ public class BasicTradeStrategy implements Strategy {
 
             try {
                 if (upside.signal() >= buyThreshold) {
-                    long possibleToBuy = broker.getMaxBuyQuantity(accountId, instrumentId);
-                    long quantityToBuy = tradeQuantity.toBuy(moment, possibleToBuy);
+                    long quantityToBuy = tradeQuantity.toBuy(moment, capacity());
 
                     if (quantityToBuy > 0) {
                         broker.buyBestPrice(accountId, instrumentId, quantityToBuy);
                     }
                 } else if (upside.signal() <= sellThreshold) {
-                    long positionSize = broker.getPositionSize(accountId, instrumentId);
-                    long quantityToSell = tradeQuantity.toSell(moment, positionSize);
+                    long quantityToSell = tradeQuantity.toSell(moment, capacity());
 
                     if (quantityToSell > 0) {
                         broker.sellBestPrice(accountId, instrumentId, quantityToSell);

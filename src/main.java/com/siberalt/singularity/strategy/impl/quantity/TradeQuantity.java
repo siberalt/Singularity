@@ -8,17 +8,12 @@ package com.siberalt.singularity.strategy.impl.quantity;
  * the order becoming the market - and a size that looked fine against a backtest with unlimited
  * liquidity is the first thing to go wrong once the simulation stops pretending.
  *
- * @see SignalScaledQuantity the plain answer - as much as the account allows, scaled by conviction
- * @see AdvCappedQuantity     the same, held down to a share of what the instrument actually trades
+ * @see SignalScaledQuantity   the plain answer - as much as the account allows, scaled by conviction
+ * @see TargetPositionQuantity the same conviction read as a position to hold rather than a step to take
+ * @see AdvCappedQuantity      either of them, held down to a share of what the instrument trades
  */
 public interface TradeQuantity {
-    /**
-     * @param affordableLots the most the account could buy at the current price
-     */
-    long toBuy(TradeMoment moment, long affordableLots);
+    long toBuy(TradeMoment moment, TradeCapacity capacity);
 
-    /**
-     * @param positionLots what the account currently holds
-     */
-    long toSell(TradeMoment moment, long positionLots);
+    long toSell(TradeMoment moment, TradeCapacity capacity);
 }

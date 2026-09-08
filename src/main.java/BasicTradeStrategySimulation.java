@@ -33,6 +33,9 @@ import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.LastExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
+import com.siberalt.singularity.strategy.impl.quantity.BarVolumeCappedQuantity;
+import com.siberalt.singularity.strategy.impl.quantity.SignalScaledQuantity;
+import com.siberalt.singularity.strategy.impl.quantity.TargetPositionQuantity;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetector;
@@ -302,7 +305,8 @@ public class BasicTradeStrategySimulation {
             .build();
 
 //        broker.getOrderService().getPriceModel().setHalfSpreadRatio(0.00015).setSlippageImpactRatio(0.0006);
-//        broker.getOrderService().getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
+//        broker.getOrderService().getLiquidityModel().setInfiniteLiquidity(true).setParticipationRate(0.1);
+//        broker.getOrderService().setExecutionLatency(Duration.ofMinutes(0));
 
         return broker;
     }

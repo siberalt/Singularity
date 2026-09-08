@@ -28,52 +28,8 @@ import java.util.Objects;
  * fills worse than the price it named.
  */
 public class OrderPriceModel {
-    /**
-     * Where inside the bar a best-price order is assumed to trade: three tenths up from the low for
-     * a buy, seven tenths for a sell - better than the middle, well short of the extreme.
-     * <p>
-     * This is a guess, not a measurement. Nothing in a candle says whether an order routed for the
-     * best price would have caught the low of the bar or missed it, and a backtest leaning on
-     * best-price orders is leaning on these two numbers - calibrate them against real fills before
-     * trusting such a result.
-     * <p>
-     * Note which way the default leans: buying below the middle of the bar and selling above it is
-     * an <em>optimistic</em> assumption, and it flatters every best-price order in the run. Two
-     * alternatives worth knowing, neither of which needs calibrating:
-     * <ul>
-     *   <li>0.5 for both - neutral, the middle of the bar's range, assuming no skill and no bad
-     *       luck in where inside the bar the order landed;</li>
-     *   <li>1.0 for buys and 0.0 for sells - the worst price the bar ever showed, which gives a
-     *       lower bound on what the strategy could have earned.</li>
-     * </ul>
-     * A result that survives the pessimistic pair is worth rather more than one that needs the
-     * optimistic one.
-     */
-    public static final double DEFAULT_BUY_BEST_PRICE_RATIO = 0.3;
-    public static final double DEFAULT_SELL_BEST_PRICE_RATIO = 0.7;
-
-    private double buyBestPriceRatio = DEFAULT_BUY_BEST_PRICE_RATIO;
-    private double sellBestPriceRatio = DEFAULT_SELL_BEST_PRICE_RATIO;
     private double halfSpreadRatio = 0;
     private double slippageImpactRatio = 0;
-
-    public double getBuyBestPriceRatio() {
-        return buyBestPriceRatio;
-    }
-
-    public OrderPriceModel setBuyBestPriceRatio(double buyBestPriceRatio) {
-        this.buyBestPriceRatio = buyBestPriceRatio;
-        return this;
-    }
-
-    public double getSellBestPriceRatio() {
-        return sellBestPriceRatio;
-    }
-
-    public OrderPriceModel setSellBestPriceRatio(double sellBestPriceRatio) {
-        this.sellBestPriceRatio = sellBestPriceRatio;
-        return this;
-    }
 
     public double getHalfSpreadRatio() {
         return halfSpreadRatio;
@@ -130,20 +86,22 @@ public class OrderPriceModel {
     /**
      * Where the instrument is trading, before any cost of trading it. This is the figure a limit
      * price is compared against and an order is quoted at while it waits - not what a fill costs.
+     * <p>
+     * The same for every type of order, BEST_PRICE included. It used to trade three tenths up from
+     * the low of the bar for a buy and seven tenths for a sell, which was a claim that the order
+     * landed in the better part of the minute - and nothing in the strategy or in the candle decides
+     * where inside a bar an order lands. That handed every round trip four tenths of the bar range
+     * for free, and at fifteen thousand round trips a year it was the whole of what a strategy
+     * appeared to earn.
+     * <p>
+     * A best-price order is a real order type - the broker routes it to the top of the book, and
+     * some instruments accept nothing else - but what makes it different from a market order is how
+     * far down the book it is willing to go, not what part of the bar it catches. At bar resolution
+     * that difference is about size, which { LiquidityModel} already answers, and not about
+     * price.
      */
-    public Quotation currentPrice(OrderType orderType, OrderDirection orderDirection, Candle currentCandle) {
-        double bestPriceRatio = switch (orderDirection) {
-            case BUY -> buyBestPriceRatio;
-            case SELL -> sellBestPriceRatio;
-            case UNSPECIFIED -> 1;
-        };
-
-        orderType = Objects.requireNonNullElse(orderType, OrderType.LIMIT);
-
-        return switch (orderType) {
-            case UNSPECIFIED, LIMIT, MARKET -> currentCandle.open();
-            case BEST_PRICE -> bestPrice(currentCandle, bestPriceRatio);
-        };
+    public Quotation currentPrice(Candle currentCandle) {
+        return currentCandle.open();
     }
 
     /**
@@ -158,7 +116,7 @@ public class OrderPriceModel {
         }
 
         return worsen(
-            currentPrice(order.getOrderType(), order.getDirection(), candle),
+            currentPrice(candle),
             order.getDirection(),
             halfSpreadRatio + slippage(lots, candle)
         );
@@ -218,14 +176,6 @@ public class OrderPriceModel {
         );
 
         return price.multiply(factor);
-    }
-
-    protected Quotation bestPrice(Candle candle, double bestPriceRatio) {
-        Quotation priceRange = candle.high().subtract(candle.low());
-
-        return candle
-            .low()
-            .add(priceRange.multiply(BigDecimal.valueOf(bestPriceRatio)));
     }
 
     private double requireRatio(double ratio, String name) {

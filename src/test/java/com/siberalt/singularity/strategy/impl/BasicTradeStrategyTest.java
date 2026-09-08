@@ -68,7 +68,7 @@ class BasicTradeStrategyTest {
         when(event.getCandle()).thenReturn(candle1);
         when(candleRepository.findBeforeOrEqual(anyString(), any(), anyLong())).thenReturn(List.of(candle1));
         when(upsideCalculator.calculate(anyList())).thenReturn(new Upside(0.7, 1.0));
-        when(broker.getMaxBuyQuantity("accountId", "instrumentId"))
+        when(broker.getMaxBuyQuantity("accountId", "instrumentId", OrderType.BEST_PRICE))
             .thenReturn(100L);
 
         strategy.setBuyThreshold(0.6);

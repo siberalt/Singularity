@@ -103,11 +103,25 @@ public class EventMockBrokerIT {
         Money initialMoney = Money.of("RUB", Quotation.of(1000000));
         String instrumentUid = config.getInstrument().getUid();
 
+        // An order reaches the market one bar after it is placed, so the bar it trades against is
+        // the one after the bar it was posted on. The posting bar is still needed - that is what
+        // the order is quoted at while it waits.
+        Instant buyFillTime = buyingTime.plusSeconds(60);
+        Instant sellFillTime = sellingTime.plusSeconds(60);
+
         SandboxBrokerFacade brokerFacade = SandboxBrokerFacade.of(broker);
         when(candleStorage.findBeforeOrEqual(instrumentUid, buyingTime, 1))
             .thenReturn(List.of(Candle.of(buyingTime, 1000, 7.1)));
+        when(candleStorage.findAfterOrEqual(instrumentUid, buyFillTime, 1))
+            .thenReturn(List.of(Candle.of(buyFillTime, 1000, 7.1)));
+        when(candleStorage.findBeforeOrEqual(instrumentUid, buyFillTime, 1))
+            .thenReturn(List.of(Candle.of(buyFillTime, 1000, 7.1)));
         when(candleStorage.findBeforeOrEqual(instrumentUid, sellingTime,1))
             .thenReturn(List.of(Candle.of(sellingTime, 1000, 7.2)));
+        when(candleStorage.findAfterOrEqual(instrumentUid, sellFillTime, 1))
+            .thenReturn(List.of(Candle.of(sellFillTime, 1000, 7.2)));
+        when(candleStorage.findBeforeOrEqual(instrumentUid, sellFillTime, 1))
+            .thenReturn(List.of(Candle.of(sellFillTime, 1000, 7.2)));
 
         userActionSimulator.planAction(openingTime, (userContext) -> {
             System.out.printf("[%s]: Opening account\n", clock.currentTime());
@@ -124,10 +138,9 @@ public class EventMockBrokerIT {
             brokerFacade.sellBestPriceUnchecked((String) userContext.get("accountId"), instrumentUid, 20);
         });
 
-        eventSimulator.run(
-            Instant.parse("1997-05-02T08:10:00.00Z"),
-            Instant.parse("1997-05-04T08:20:00.00Z")
-        );
+        // Past the last fill, not up to the last order: the sell only reaches the market a bar
+        // after it is placed, and a run ending on the placing bar would stop before it traded.
+        eventSimulator.run(openingTime, sellFillTime);
 
         // Assert balance after simulation
         Money money = operationsService.getAvailableMoney((String) userContext.get("accountId"), "RUB");
@@ -201,6 +214,7 @@ public class EventMockBrokerIT {
         Instant postSellLimitTime = startTime.plus(40, java.time.temporal.ChronoUnit.MINUTES);
         Instant executeSellLimitTime = startTime.plus(42, java.time.temporal.ChronoUnit.MINUTES);
         Instant postBuyMarketTime = startTime.plus(48, java.time.temporal.ChronoUnit.MINUTES);
+        Instant executeBuyMarketTime = postBuyMarketTime.plusSeconds(60);
         Instant executeBuyLimitTime = startTime.plus(50, java.time.temporal.ChronoUnit.MINUTES);
         Instant endTime = startTime.plus(60, java.time.temporal.ChronoUnit.MINUTES);
 
@@ -214,6 +228,10 @@ public class EventMockBrokerIT {
             .thenReturn(List.of(Candle.of(executeSellLimitTime, 1000, 8)));
         when(candleStorage.findBeforeOrEqual(instrumentUid, postBuyMarketTime, 1))
             .thenReturn(List.of(Candle.of(postBuyMarketTime, 1000, 5)));
+        when(candleStorage.findAfterOrEqual(instrumentUid, executeBuyMarketTime, 1))
+            .thenReturn(List.of(Candle.of(executeBuyMarketTime, 1000, 5)));
+        when(candleStorage.findBeforeOrEqual(instrumentUid, executeBuyMarketTime, 1))
+            .thenReturn(List.of(Candle.of(executeBuyMarketTime, 1000, 5)));
 
         Money initialMoney = Money.of("RUB", Quotation.of(1000000));
         SandboxBrokerFacade brokerFacade = SandboxBrokerFacade.of(broker);

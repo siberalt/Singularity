@@ -194,9 +194,18 @@ public class BrokerFacade {
     }
 
     public long getMaxBuyQuantity(String accountId, String instrumentId) throws AbstractException {
+        return getMaxBuyQuantity(accountId, instrumentId, OrderType.MARKET);
+    }
+
+    /**
+     * The most the account could buy, priced as the kind of order that will be sent. Ask for one
+     * type and post another and the answer is off by whatever the two types cost differently.
+     */
+    public long getMaxBuyQuantity(String accountId, String instrumentId, OrderType orderType)
+        throws AbstractException {
         return orderCalculationService.calculateMaxBuyQuantity(
             broker,
-            new BuyRequest(accountId, instrumentId)
+            new BuyRequest(accountId, instrumentId, orderType)
         );
     }
 
@@ -209,10 +218,12 @@ public class BrokerFacade {
     }
 
     public long buyFullBalance(String accountId, String instrumentId) throws AbstractException {
-        long possibleBuyQuantity = orderCalculationService.calculateMaxBuyQuantity(
-            broker,
-            new BuyRequest(accountId, instrumentId)
-        );
+        return buyFullBalance(accountId, instrumentId, OrderType.MARKET);
+    }
+
+    public long buyFullBalance(String accountId, String instrumentId, OrderType orderType)
+        throws AbstractException {
+        long possibleBuyQuantity = getMaxBuyQuantity(accountId, instrumentId, orderType);
 
         if (possibleBuyQuantity <= 0) {
             return possibleBuyQuantity;
@@ -222,13 +233,14 @@ public class BrokerFacade {
             .setAccountId(accountId)
             .setInstrumentId(instrumentId)
             .setQuantity(possibleBuyQuantity)
+            .setOrderType(orderType)
             .setDirection(OrderDirection.BUY));
 
         return possibleBuyQuantity;
     }
 
     public long buyBestPriceFullBalance(String accountId, String instrumentId) throws AbstractException {
-        return buyFullBalance(accountId, instrumentId);
+        return buyFullBalance(accountId, instrumentId, OrderType.BEST_PRICE);
     }
 
     public PostOrderResponse buyMarket(String accountId, String instrumentId, long amount) throws AbstractException {

@@ -170,8 +170,8 @@ public class MockOrderService implements OrderService {
     }
 
     /**
-     * What a fill is priced at - the spread it crosses, its own market impact, and where inside a
-     * bar a best-price order is assumed to land. All of it off or neutral by default.
+     * What a fill is priced at - the spread it crosses and its own market impact. Both off by
+     * default.
      */
     public OrderPriceModel getPriceModel() {
         return priceModel;
@@ -376,11 +376,7 @@ public class MockOrderService implements OrderService {
 
         Candle currentCandle = requireCurrentCandle(request.getInstrumentId());
 
-        Quotation instrumentPrice = priceModel.currentPrice(
-            request.getOrderType(),
-            request.getDirection(),
-            currentCandle
-        );
+        Quotation instrumentPrice = priceModel.currentPrice(currentCandle);
 
         return new Order()
             .setId(UUID.randomUUID().toString())

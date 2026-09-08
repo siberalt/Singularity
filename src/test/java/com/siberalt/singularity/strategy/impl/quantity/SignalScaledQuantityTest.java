@@ -14,25 +14,25 @@ class SignalScaledQuantityTest {
 
     @Test
     void commitsTheWholeBalanceOnFullConviction() {
-        assertEquals(1000, quantity.toBuy(moment(1.0), 1000));
+        assertEquals(1000, quantity.toBuy(moment(1.0), TradeCapacity.of(1000, 0)));
     }
 
     @Test
     void scalesWithTheStrengthOfTheSignal() {
-        assertEquals(700, quantity.toBuy(moment(0.7), 1000));
+        assertEquals(700, quantity.toBuy(moment(0.7), TradeCapacity.of(1000, 0)));
     }
 
     @Test
     void closesTheWholePositionOnFullConviction() {
         // The sell signal is negative, and it is its strength that decides how much goes.
-        assertEquals(1000, quantity.toSell(moment(-1.0), 1000));
-        assertEquals(500, quantity.toSell(moment(-0.5), 1000));
+        assertEquals(1000, quantity.toSell(moment(-1.0), TradeCapacity.of(0, 1000)));
+        assertEquals(500, quantity.toSell(moment(-0.5), TradeCapacity.of(0, 1000)));
     }
 
     @Test
     void roundsDownToWholeLots() {
         // Seven tenths of three lots is 2.1, and there is no such thing as a tenth of a lot.
-        assertEquals(2, quantity.toBuy(moment(0.7), 3));
+        assertEquals(2, quantity.toBuy(moment(0.7), TradeCapacity.of(3, 0)));
     }
 
     private TradeMoment moment(double signal) {

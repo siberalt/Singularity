@@ -12,11 +12,28 @@ import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.simulation.SimulationUnit;
 import com.siberalt.singularity.strategy.context.Clock;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class EventMockBroker extends MockBroker implements EventSubscriptionBroker, SimulationBroker {
+    /**
+     * One bar, so an order placed in reaction to a bar cannot trade inside that bar.
+     * <p>
+     * Zero is what {@link MockOrderService} defaults to, and it has to: a broker that does not
+     * advance time cannot honour a delay. This one always advances time, and there zero is not a
+     * convenience but a look-ahead - a strategy reads a bar to its close, decides, and fills at
+     * that same bar's open, at a price that came before everything it just looked at. On minute
+     * data of TMOS that alone turned a strategy losing half its capital into one apparently
+     * doubling it, which is not a small distortion but the whole of the result.
+     * <p>
+     * A minute because that is the bar this project stores. Coarser data needs a coarser delay -
+     * the delay has to clear the bar the decision was made on, whatever that bar is - so raise it
+     * with {@link Builder#setExecutionLatency} when the candles are not minutes.
+     */
+    public static final Duration DEFAULT_EXECUTION_LATENCY = Duration.ofMinutes(1);
+
     private final NewCandleSubscriptionManager subscriptionManager;
 
     public EventMockBroker(
@@ -43,6 +60,27 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
         OrderRepository orderRepository,
         OperationRepository operationRepository,
         Clock clock,
+        Duration executionLatency
+    ) {
+        this(
+            candleRepository,
+            instrumentRepository,
+            orderRepository,
+            operationRepository,
+            clock,
+            MockBroker.DEFAULT_COMMISSION_RATIO,
+            MockBroker.DEFAULT_ID,
+            new DefaultEventOrderServiceFactory(),
+            executionLatency
+        );
+    }
+
+    public EventMockBroker(
+        ReadCandleRepository candleRepository,
+        ReadInstrumentRepository instrumentRepository,
+        OrderRepository orderRepository,
+        OperationRepository operationRepository,
+        Clock clock,
         double commissionRatio,
         String id
     ) {
@@ -54,7 +92,8 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
             clock,
             commissionRatio,
             id,
-            new DefaultEventOrderServiceFactory()
+            new DefaultEventOrderServiceFactory(),
+            DEFAULT_EXECUTION_LATENCY
         );
     }
 
@@ -73,7 +112,8 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
         Clock clock,
         double commissionRatio,
         String id,
-        DefaultEventOrderServiceFactory orderServiceFactory
+        DefaultEventOrderServiceFactory orderServiceFactory,
+        Duration executionLatency
     ) {
         super(
             candleRepository,
@@ -85,6 +125,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
             id,
             new MockServicesFactory().orderServiceFactory(orderServiceFactory)
         );
+        orderService.setExecutionLatency(executionLatency);
         // Resolved when the simulation starts, not here - instruments are often registered after
         // the broker is built.
         this.subscriptionManager = new NewCandleSubscriptionManager(
@@ -141,6 +182,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
         protected String id = EventMockBroker.DEFAULT_ID;
         protected double commissionRatio = DEFAULT_COMMISSION_RATIO;
         protected DefaultEventOrderServiceFactory orderServiceFactory = new DefaultEventOrderServiceFactory();
+        protected Duration executionLatency = DEFAULT_EXECUTION_LATENCY;
         protected final ReadCandleRepository candleRepository;
         protected final ReadInstrumentRepository instrumentRepository;
         protected final OrderRepository orderRepository;
@@ -176,6 +218,16 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
             return this;
         }
 
+        /**
+         * How long an order takes to reach the market, one bar by default. Lower it only for a
+         * test that needs a fill it can read straight off the response; a run that lowers it is
+         * letting its strategy trade on a bar it has already read to the end.
+         */
+        public Builder setExecutionLatency(Duration executionLatency) {
+            this.executionLatency = executionLatency;
+            return this;
+        }
+
         public EventMockBroker build() {
             return new EventMockBroker(
                 candleRepository,
@@ -185,7 +237,8 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
                 clock,
                 commissionRatio,
                 id,
-                orderServiceFactory
+                orderServiceFactory,
+                executionLatency
             );
         }
     }

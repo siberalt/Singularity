@@ -662,11 +662,7 @@ public abstract class AbstractMockOrderServiceTest {
         MockOperationsService operationsService = broker.getOperationsService();
 
         Money moneyBefore = operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
-        Quotation instrumentPrice = getPriceInstrumentPrice(
-            priceCandle,
-            orderType,
-            orderService.getPriceModel().getBuyBestPriceRatio()
-        );
+        Quotation instrumentPrice = priceCandle.open();
 
         PostOrderResponse response = postBuy(priceCandle, orderType, quantity, priceLimit);
 
@@ -698,11 +694,7 @@ public abstract class AbstractMockOrderServiceTest {
 
         Money moneyBefore = operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
         long lotsBefore = freePositionLots();
-        Quotation instrumentPrice = getPriceInstrumentPrice(
-            priceCandle,
-            orderType,
-            orderService.getPriceModel().getSellBestPriceRatio()
-        );
+        Quotation instrumentPrice = priceCandle.open();
 
         PostOrderResponse response = postSell(priceCandle, orderType, quantity, priceLimit);
 
@@ -886,25 +878,6 @@ public abstract class AbstractMockOrderServiceTest {
             Quotation.of(lowPrice),
             volume
         );
-    }
-
-    protected Quotation getPriceInstrumentPrice(
-        Candle priceCandle,
-        OrderType orderType,
-        double bestPriceRatio
-    ) {
-        return switch (orderType) {
-            case MARKET, LIMIT -> priceCandle.open();
-            case BEST_PRICE -> priceCandle
-                .low()
-                .add(
-                    priceCandle
-                        .high()
-                        .subtract(priceCandle.low())
-                        .multiply(bestPriceRatio)
-                );
-            default -> throw new IllegalArgumentException("Unexpected value: " + orderType);
-        };
     }
 
     protected <T extends AbstractException> void assertThrowsWithErrorCode(

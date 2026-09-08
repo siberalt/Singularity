@@ -61,7 +61,8 @@ class OrderPriceModelTest {
 
     /**
      * A best-price order carries a price too, but it is not the one it trades at - it is not a
-     * limit, so it crosses the spread like any other order taking liquidity.
+     * limit, so it crosses the spread like any other order taking liquidity, and at the same
+     * reference price a market order would.
      */
     @Test
     void treatsABestPriceOrderAsTakingLiquidityEvenWhenItCarriesAPrice() {
@@ -77,9 +78,9 @@ class OrderPriceModelTest {
             1000
         );
 
-        // Three tenths up a range of ten is 103, and the spread is charged on top of it.
+        // The bar opened at 100, and the spread is charged on top of it.
         assertEquals(
-            Quotation.of(103.515),
+            Quotation.of(100.5),
             priceModel.fillPrice(order(OrderType.BEST_PRICE, OrderDirection.BUY, Quotation.of(95)), candle, 10)
         );
     }

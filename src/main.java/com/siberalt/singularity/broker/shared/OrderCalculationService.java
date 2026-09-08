@@ -70,7 +70,7 @@ public class OrderCalculationService {
             broker.getOrderService(),
             balance,
             instrumentPrice,
-            new BuyRequest(request.accountId(), request.instrumentId())
+            request
         );
     }
 
@@ -115,6 +115,7 @@ public class OrderCalculationService {
                     .setAccountId(accountId)
                     .setInstrumentId(instrumentId)
                     .setQuantity(amount)
+                    .setOrderType(request.orderType())
                     .setDirection(OrderDirection.BUY)
                 )
             );

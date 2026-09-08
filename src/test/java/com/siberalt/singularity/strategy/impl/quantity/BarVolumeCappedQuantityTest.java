@@ -44,23 +44,23 @@ class BarVolumeCappedQuantityTest {
         stubBars(1000);
 
         // A tenth of a thousand-lot bar.
-        assertEquals(100, quantity.toBuy(moment(1.0), 100_000));
-        assertEquals(100, quantity.toSell(moment(-1.0), 100_000));
+        assertEquals(100, quantity.toBuy(moment(1.0), TradeCapacity.of(100_000, 0)));
+        assertEquals(100, quantity.toSell(moment(-1.0), TradeCapacity.of(0, 100_000)));
     }
 
     @Test
     void leavesASizeThatAlreadyFitsAlone() {
         stubBars(1000);
 
-        assertEquals(40, quantity.toBuy(moment(1.0), 40));
+        assertEquals(40, quantity.toBuy(moment(1.0), TradeCapacity.of(40, 0)));
     }
 
     @Test
     void neverTurnsNothingIntoSomething() {
         stubBars(1000);
 
-        assertEquals(0, quantity.toBuy(moment(1.0), 0));
-        assertEquals(0, quantity.toSell(moment(-1.0), 0));
+        assertEquals(0, quantity.toBuy(moment(1.0), TradeCapacity.of(0, 0)));
+        assertEquals(0, quantity.toSell(moment(-1.0), TradeCapacity.of(0, 0)));
     }
 
     /**
@@ -78,14 +78,14 @@ class BarVolumeCappedQuantityTest {
         candles.add(candleAt(NOW.minus(Duration.ofMinutes(3)), 0));
         when(candleRepository.findBeforeOrEqual(eq(INSTRUMENT), any(), anyLong())).thenReturn(candles);
 
-        assertEquals(100, quantity.toBuy(moment(1.0), 100_000));
+        assertEquals(100, quantity.toBuy(moment(1.0), TradeCapacity.of(100_000, 0)));
     }
 
     @Test
     void letsTheUnderlyingSizingStandWhenThereIsNoHistory() {
         when(candleRepository.findBeforeOrEqual(eq(INSTRUMENT), any(), anyLong())).thenReturn(List.of());
 
-        assertEquals(100_000, quantity.toBuy(moment(1.0), 100_000));
+        assertEquals(100_000, quantity.toBuy(moment(1.0), TradeCapacity.of(100_000, 0)));
     }
 
     @Test
@@ -93,7 +93,7 @@ class BarVolumeCappedQuantityTest {
         stubBars(1000);
         quantity.setLookbackCandles(50);
 
-        quantity.toBuy(moment(1.0), 100_000);
+        quantity.toBuy(moment(1.0), TradeCapacity.of(100_000, 0));
 
         verify(candleRepository).findBeforeOrEqual(INSTRUMENT, NOW, 50);
     }
@@ -103,7 +103,7 @@ class BarVolumeCappedQuantityTest {
         stubBars(1000);
         quantity.setBarVolumeShare(0.5);
 
-        assertEquals(500, quantity.toBuy(moment(1.0), 100_000));
+        assertEquals(500, quantity.toBuy(moment(1.0), TradeCapacity.of(100_000, 0)));
     }
 
     @Test
@@ -128,7 +128,7 @@ class BarVolumeCappedQuantityTest {
         );
 
         // The daily cap is deliberately loose here, so the per-bar one decides.
-        assertEquals(100, stacked.toBuy(moment(1.0), 100_000));
+        assertEquals(100, stacked.toBuy(moment(1.0), TradeCapacity.of(100_000, 0)));
     }
 
     private void stubBars(long volumePerCandle) {
