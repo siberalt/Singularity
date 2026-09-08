@@ -86,7 +86,7 @@ public class StrategyBacktester {
 
         Instant strategyBeginTime = Instant.now();
         simulator.run(startTime, endTime);
-        Duration executionDuration = Duration.between(Instant.now(), strategyBeginTime);
+        Duration executionDuration = Duration.between(strategyBeginTime, Instant.now());
 
         brokerFacade.closePosition(accountId, instrumentId);
 

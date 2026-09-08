@@ -10,6 +10,9 @@ import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.event.subscription.Subscription;
 import com.siberalt.singularity.event.subscription.SubscriptionSpec;
 import com.siberalt.singularity.strategy.Strategy;
+import com.siberalt.singularity.strategy.impl.quantity.SignalScaledQuantity;
+import com.siberalt.singularity.strategy.impl.quantity.TradeMoment;
+import com.siberalt.singularity.strategy.impl.quantity.TradeQuantity;
 import com.siberalt.singularity.strategy.observer.Observer;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 
@@ -30,6 +33,7 @@ public class BasicTradeStrategy implements Strategy {
     private int step = 5; // Process every 'step' candles
     private List<Candle> lastCandles;
     private Subscription subscription;
+    private TradeQuantity tradeQuantity = new SignalScaledQuantity();
 
     public BasicTradeStrategy(
         EventSubscriptionBrokerFacade broker,
@@ -79,6 +83,16 @@ public class BasicTradeStrategy implements Strategy {
         return this;
     }
 
+    /**
+     * How much to ask for once the signal says to trade. As much as the account allows by default;
+     * wrap it in an {@link com.siberalt.singularity.strategy.impl.quantity.AdvCappedQuantity} to
+     * hold orders down to a share of what the instrument actually trades.
+     */
+    public BasicTradeStrategy setTradeQuantity(TradeQuantity tradeQuantity) {
+        this.tradeQuantity = tradeQuantity;
+        return this;
+    }
+
     @Override
     public void run(Observer observer) {
         SubscriptionSpec<NewCandleEvent> subscriptionSpec = new NewCandleSubscriptionSpec(Set.of(instrumentId));
@@ -115,17 +129,23 @@ public class BasicTradeStrategy implements Strategy {
             var upside = upsideCalculator.calculate(lastCandles);
             lastCandles.clear();
 
+            TradeMoment moment = new TradeMoment(
+                instrumentId,
+                event.getCandle().getTime(),
+                upside
+            );
+
             try {
                 if (upside.signal() >= buyThreshold) {
                     long possibleToBuy = broker.getMaxBuyQuantity(accountId, instrumentId);
-                    long quantityToBuy = (long) (possibleToBuy * upside.signal());
+                    long quantityToBuy = tradeQuantity.toBuy(moment, possibleToBuy);
 
                     if (quantityToBuy > 0) {
                         broker.buyBestPrice(accountId, instrumentId, quantityToBuy);
                     }
                 } else if (upside.signal() <= sellThreshold) {
                     long positionSize = broker.getPositionSize(accountId, instrumentId);
-                    long quantityToSell = (long) (positionSize * Math.abs(upside.signal()));
+                    long quantityToSell = tradeQuantity.toSell(moment, positionSize);
 
                     if (quantityToSell > 0) {
                         broker.sellBestPrice(accountId, instrumentId, quantityToSell);
