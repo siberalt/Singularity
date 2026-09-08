@@ -1,6 +1,7 @@
 package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
+import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.order.Order;
 import com.siberalt.singularity.strategy.context.Clock;
 
@@ -29,8 +30,8 @@ public class LoggingOrderExecutor implements OrderExecutor {
     }
 
     @Override
-    public FillQuote quote(Order order, long lots) {
-        return delegate.quote(order, lots);
+    public FillQuote quoteAt(Order order, long lots, Quotation price) {
+        return delegate.quoteAt(order, lots, price);
     }
 
     @Override

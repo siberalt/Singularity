@@ -1,6 +1,7 @@
 package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
+import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.order.Order;
 
 /**
@@ -24,7 +25,17 @@ public interface OrderExecutor {
      * What a fill of {@code lots} lots would consist of and cost, at the price the order currently
      * carries. Pure - neither the account nor the order is touched.
      */
-    FillQuote quote(Order order, long lots);
+    default FillQuote quote(Order order, long lots) {
+        return quoteAt(order, lots, order.getInstrumentPrice());
+    }
+
+    /**
+     * The same, at a price of the caller's choosing rather than the order's own. What a reservation
+     * needs: it has to cover a fill that has not happened yet, at a price the order will only carry
+     * once it has. Asking here rather than quoting a re-priced copy of the order keeps the
+     * commission in the one place that knows it.
+     */
+    FillQuote quoteAt(Order order, long lots, Quotation price);
 
     void buy(Order order, long lots, FillQuote quote) throws AbstractException;
 

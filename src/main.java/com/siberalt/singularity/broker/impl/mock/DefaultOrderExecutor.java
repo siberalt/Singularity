@@ -72,8 +72,8 @@ public class DefaultOrderExecutor implements OrderExecutor {
      * priced through a slice - a copy of the order requesting just those lots.
      */
     @Override
-    public FillQuote quote(Order order, long lots) {
-        Order slice = fillSlice(order, lots);
+    public FillQuote quoteAt(Order order, long lots, Quotation price) {
+        Order slice = fillSlice(order, lots).setInstrumentPrice(price);
         Optional<TransactionSpec> orderTransactionSpec = orderTransactionSpecProvider.provide(slice);
         Optional<TransactionSpec> commissionTransactionSpec = commissionTransactionSpecProvider.provide(slice);
 
