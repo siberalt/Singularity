@@ -2,11 +2,12 @@ package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.events.NewCandleEvent;
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.subscriptions.NewCandleSubscriptionSpec;
+import com.siberalt.singularity.broker.shared.CandleEventMatcher;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.event.Event;
 import com.siberalt.singularity.event.EventHandler;
-import com.siberalt.singularity.event.subscription.DefaultSubscription;
+import com.siberalt.singularity.event.EventManager;
 import com.siberalt.singularity.event.subscription.Subscription;
 import com.siberalt.singularity.event.subscription.SubscriptionManager;
 import com.siberalt.singularity.event.subscription.SubscriptionSpec;
@@ -19,20 +20,42 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletionException;
 import java.util.function.Supplier;
 
+/**
+ * Replays an instrument's recorded candles as if they were arriving live, one at a time as the
+ * simulated clock reaches each of them.
+ * <p>
+ * That replay is the whole of what is specific to a simulation. Keeping track of who is subscribed
+ * to what, matching an event against the specs, handing it to the right handlers and letting a
+ * handler unsubscribe itself are the same problems a live broker has, and {@link EventManager}
+ * already solves them - so they are delegated to it rather than done again here, the same way
+ * {@code TinkoffCandleSubscriptionManager} does.
+ * <p>
+ * The one thing that differs is which thread the handlers run on. A live feed dispatches on its own
+ * executor; a simulation must not, because a strategy reacting to a candle has to have finished
+ * reacting before the clock moves on. So the event manager is given an executor that runs the work
+ * on the caller's thread, which keeps a run ordered and repeatable.
+ */
 public class NewCandleSubscriptionManager implements SubscriptionManager, EventInvoker, Initializable, TimeDependentUnit {
     private static final Logger logger = LoggerFactory.getLogger(NewCandleSubscriptionManager.class);
+
     private final ReadCandleRepository candleRepository;
-    private HashMap<String, Iterator<Candle>> candleIterator;
     private final Supplier<Set<String>> instrumentIdsSupplier;
+    private final EventManager eventManager;
+    private final Map<Instant, List<Candle>> candlesByTime = new HashMap<>();
+    private Map<String, Iterator<Candle>> candlesByInstrument;
     private Set<String> instrumentIds;
     private EventObserver eventObserver;
     private Clock clock;
-    private final HashMap<Instant, List<Candle>> eventCandles = new HashMap<>();
-    private final HashMap<SubscriptionSpec<?>, List<EventHandler<?>>> eventHandlers = new HashMap<>();
-    private final HashMap<EventHandler<?>, DefaultSubscription> handlerSubscriptions = new HashMap<>();
     private boolean interruptOnError = true;
 
     public NewCandleSubscriptionManager(ReadCandleRepository candleRepository, Set<String> instrumentIds) {
@@ -50,12 +73,22 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
     ) {
         this.candleRepository = candleRepository;
         this.instrumentIdsSupplier = instrumentIdsSupplier;
+        // Runnable::run - handlers run on the simulation's own thread, in order, before the clock
+        // is allowed to move.
+        this.eventManager = new EventManager(Runnable::run, Set.of(NewCandleEvent.class));
+        this.eventManager.setEventMatcher(new CandleEventMatcher());
     }
 
     public boolean isInterruptOnError() {
         return interruptOnError;
     }
 
+    /**
+     * Whether a handler throwing takes the run down with it. On by default: in a backtest a broken
+     * strategy usually means the numbers that follow are meaningless, and finding out at the end is
+     * worse than stopping. Switch it off to let the run continue - the error is kept on the
+     * subscription either way.
+     */
     public NewCandleSubscriptionManager setInterruptOnError(boolean interruptOnError) {
         this.interruptOnError = interruptOnError;
         return this;
@@ -95,15 +128,7 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
             );
         }
 
-        List<EventHandler<?>> handlers = eventHandlers.computeIfAbsent(
-            spec, subscriptionSpec -> new ArrayList<>()
-        );
-        handlers.add(handler);
-
-        DefaultSubscription existingSubscription = new DefaultSubscription(true, () -> {});
-        handlerSubscriptions.put(handler, existingSubscription);
-
-        return existingSubscription;
+        return eventManager.subscribe(spec, handler);
     }
 
     @Override
@@ -114,15 +139,12 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
     @Override
     public void init(Instant startTime, Instant endTime) {
         instrumentIds = instrumentIdsSupplier.get();
-        candleIterator = new HashMap<>();
-        for (String instrumentId : instrumentIds) {
-            Iterable<Candle> candles = candleRepository.getPeriod(instrumentId, startTime, endTime);
-            Iterator<Candle> iterator = candles.iterator();
-            candleIterator.put(instrumentId, iterator);
+        candlesByInstrument = new HashMap<>();
 
-            if (iterator.hasNext()) {
-                scheduleCandleEvent(iterator.next());
-            }
+        for (String instrumentId : instrumentIds) {
+            Iterator<Candle> candles = candleRepository.getPeriod(instrumentId, startTime, endTime).iterator();
+            candlesByInstrument.put(instrumentId, candles);
+            scheduleNext(instrumentId);
         }
     }
 
@@ -133,54 +155,64 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
 
     @Override
     public void tick() {
-        Instant currentTime = clock.currentTime();
+        List<Candle> dueCandles = candlesByTime.remove(clock.currentTime());
 
-        if (eventCandles.containsKey(currentTime)) {
-            for (Candle eventCandle : eventCandles.get(currentTime)) {
-                NewCandleEvent newCandleEvent = new NewCandleEvent(eventCandle);
-                // Notify all event handlers for the new candle
-                for (Map.Entry<SubscriptionSpec<?>, List<EventHandler<?>>> entry : eventHandlers.entrySet()) {
-                    if (matches(entry.getKey(), newCandleEvent)) {
-                        for (EventHandler<?> handler : entry.getValue()) {
-                            @SuppressWarnings("unchecked")
-                            EventHandler<NewCandleEvent> specificHandler = (EventHandler<NewCandleEvent>) handler;
-                            DefaultSubscription subscription = handlerSubscriptions.get(handler);
+        if (dueCandles == null) {
+            return;
+        }
 
-                            if (!subscription.isActive()) {
-                                // If the subscription is inactive, skip handling
-                                continue;
-                            }
+        for (Candle candle : dueCandles) {
+            deliver(candle);
+            scheduleNext(candle.instrumentUid());
+        }
+    }
 
-                            try {
-                                specificHandler.handle(newCandleEvent, subscription);
-                            } catch (Throwable throwable) {
-                                logger.error("Error occurred while handling event", throwable);
-                                subscription.addError(throwable);
+    /**
+     * Hands the candle to whoever is subscribed to its instrument. The handlers have all run by the
+     * time the dispatch returns - that is what the caller-thread executor buys - so the failure of
+     * any of them is known here rather than somewhere later.
+     */
+    protected void deliver(Candle candle) {
+        try {
+            eventManager.dispatch(new NewCandleEvent(candle)).join();
+        } catch (CompletionException dispatchFailed) {
+            Throwable cause = dispatchFailed.getCause() != null ? dispatchFailed.getCause() : dispatchFailed;
+            logger.error("Error occurred while handling event", cause);
 
-                                if (interruptOnError) {
-                                    throw throwable;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Iterator<Candle> iterator = candleIterator.get(eventCandle.instrumentUid());
-
-                if (iterator != null && iterator.hasNext()) {
-                    scheduleCandleEvent(iterator.next());
-                } else {
-                    // If no more candles are available, we can stop scheduling events for this instrument
-                    candleIterator.remove(eventCandle.instrumentUid());
-                }
+            if (!interruptOnError) {
+                return;
             }
 
-            // Clear the processed candles for the current time
-            eventCandles.remove(currentTime);
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
 
-            // Clear inactive subscriptions from the event handlers
-            clearInactiveSubscriptions();
+            if (cause instanceof Error error) {
+                throw error;
+            }
+
+            throw dispatchFailed;
         }
+    }
+
+    /**
+     * Books the instrument's next recorded candle as a simulation event. An instrument whose
+     * candles have run out simply stops being scheduled.
+     */
+    protected void scheduleNext(String instrumentUid) {
+        Iterator<Candle> candles = candlesByInstrument.get(instrumentUid);
+
+        if (candles == null || !candles.hasNext()) {
+            candlesByInstrument.remove(instrumentUid);
+
+            return;
+        }
+
+        Candle candle = candles.next();
+        candlesByTime.computeIfAbsent(candle.getTime(), moment -> new ArrayList<>()).add(candle);
+        eventObserver.scheduleEvent(
+            com.siberalt.singularity.simulation.Event.create(candle.getTime(), this)
+        );
     }
 
     private Set<String> getInstrumentIds() {
@@ -189,33 +221,5 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
         }
 
         return instrumentIds;
-    }
-
-    private void clearInactiveSubscriptions() {
-        eventHandlers.values()
-            .forEach(handlers -> handlers.removeIf(handler -> !handlerSubscriptions.get(handler).isActive()));
-        eventHandlers.entrySet().removeIf(entry -> entry.getValue().isEmpty());
-    }
-
-    private boolean matches(SubscriptionSpec<?> subscription, Event event) {
-        // Check if the event type matches the subscription
-        if (!subscription.getEventType().isAssignableFrom(event.getClass())) {
-            return false;
-        }
-        // Check if the event matches the subscription criteria
-        return event instanceof NewCandleEvent newCandleEvent &&
-            ((NewCandleSubscriptionSpec) subscription).getInstrumentIds()
-                .contains(newCandleEvent.getCandle().instrumentUid());
-    }
-
-    private void scheduleCandleEvent(Candle candle) {
-        // Schedule the next candle event
-        eventCandles
-            .computeIfAbsent(candle.getTime(), k -> new ArrayList<>())
-            .add(candle);
-
-        eventObserver.scheduleEvent(
-            com.siberalt.singularity.simulation.Event.create(candle.getTime(), this)
-        );
     }
 }
