@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.upside;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.math.LinearRegression;
 import com.siberalt.singularity.strategy.market.PriceExtractor;
 
 import java.util.List;
@@ -34,6 +35,7 @@ public class MeanReversionUpsideCalculator implements UpsideCalculator {
 
     private final int period;
     private PriceExtractor priceExtractor = Candle::getTypical;
+    private double minStraightness = 0;
 
     public MeanReversionUpsideCalculator() {
         this(DEFAULT_PERIOD);
@@ -64,6 +66,36 @@ public class MeanReversionUpsideCalculator implements UpsideCalculator {
         return this;
     }
 
+    public double getMinStraightness() {
+        return minStraightness;
+    }
+
+    /**
+     * How straight the departure has to have been before it is worth betting against, as the share
+     * of the window's movement a straight line accounts for - the R squared of a line fitted
+     * through it. Off by default, so every stray counts.
+     * <p>
+     * Worth having because of what turning {@link SlopeUpsideCalculator} round turned out to do. On
+     * a reverting share that inversion beat this calculator handily, and the one thing it has that
+     * this lacks is the slope's own goodness-of-fit gate: it fires only on clean, well-formed moves
+     * and bets against their continuing. That is a narrower claim than reversion - not every stray
+     * comes back, but a stray that arrived in a straight line may be a move that has run its course.
+     * <p>
+     * Set high, this and an inverted slope are close cousins, since a price that rose in a straight
+     * line ends above its own average. What separates them is that the sign here comes from where
+     * the price sits rather than from where it was going.
+     */
+    public MeanReversionUpsideCalculator setMinStraightness(double minStraightness) {
+        if (minStraightness < 0 || minStraightness > 1) {
+            throw new IllegalArgumentException(
+                String.format("Straightness must be within [0, 1], got %s", minStraightness)
+            );
+        }
+
+        this.minStraightness = minStraightness;
+        return this;
+    }
+
     @Override
     public Upside calculate(List<Candle> lastCandles) {
         if (lastCandles == null || lastCandles.size() < period) {
@@ -71,6 +103,11 @@ public class MeanReversionUpsideCalculator implements UpsideCalculator {
         }
 
         double[] prices = pricesOf(lastCandles.subList(lastCandles.size() - period, lastCandles.size()));
+
+        if (minStraightness > 0 && straightness(prices) < minStraightness) {
+            return Upside.NEUTRAL;
+        }
+
         double mean = mean(prices);
         double deviation = deviation(prices, mean);
 
@@ -103,6 +140,17 @@ public class MeanReversionUpsideCalculator implements UpsideCalculator {
         }
 
         return (double) crossings / (prices.length - 1);
+    }
+
+    /** How much of the window a straight line accounts for - the same measure the slope gates on. */
+    protected double straightness(double[] prices) {
+        double[] positions = new double[prices.length];
+
+        for (int index = 0; index < positions.length; index++) {
+            positions[index] = index;
+        }
+
+        return new LinearRegression(positions, prices).getR2();
     }
 
     protected double[] pricesOf(List<Candle> candles) {

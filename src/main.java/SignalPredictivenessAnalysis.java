@@ -116,7 +116,8 @@ public class SignalPredictivenessAnalysis {
             String family = System.getProperty("signal", "slope");
             UpsideCalculator calculator = switch (family) {
                 case "flow" -> new VolumeImbalanceUpsideCalculator(period);
-                case "reversion" -> new MeanReversionUpsideCalculator(period);
+                case "reversion" -> new MeanReversionUpsideCalculator(period)
+                    .setMinStraightness(Double.parseDouble(System.getProperty("straight", "0")));
                 default -> new SlopeUpsideCalculator(period);
             };
 

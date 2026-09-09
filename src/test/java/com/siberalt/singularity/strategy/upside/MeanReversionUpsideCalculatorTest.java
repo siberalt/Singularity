@@ -68,6 +68,31 @@ class MeanReversionUpsideCalculatorTest {
         assertTrue(walking.strength() <= 0.25, "a straight line barely crosses: " + walking.strength());
     }
 
+    /**
+     * The gate the inverted slope carries and this one lacked: only a stray that arrived in a
+     * straight line is a move that may have run its course.
+     */
+    @Test
+    void saysNothingAboutAStrayThatDidNotArriveInAStraightLine() {
+        calculator.setMinStraightness(0.8);
+
+        // Wanders up and down and happens to end low: a stray, but not a spent move.
+        assertEquals(Upside.NEUTRAL, calculator.calculate(bars(100, 108, 96, 106, 92)));
+        // Walks down steadily, ending below its own average.
+        assertTrue(calculator.calculate(bars(108, 104, 100, 96, 92)).signal() > 0);
+    }
+
+    @Test
+    void countsEveryStrayWithNoGate() {
+        assertTrue(calculator.calculate(bars(100, 108, 96, 106, 92)).signal() > 0);
+    }
+
+    @Test
+    void refusesAStraightnessOutsideItsRange() {
+        assertThrows(IllegalArgumentException.class, () -> calculator.setMinStraightness(-0.1));
+        assertThrows(IllegalArgumentException.class, () -> calculator.setMinStraightness(1.5));
+    }
+
     @Test
     void refusesAPeriodTooShortToHaveASpread() {
         assertThrows(IllegalArgumentException.class, () -> new MeanReversionUpsideCalculator(1));
