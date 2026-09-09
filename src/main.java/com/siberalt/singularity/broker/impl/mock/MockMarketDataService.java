@@ -82,7 +82,7 @@ public class MockMarketDataService implements MarketDataService, SimulationMarke
             throw ExceptionBuilder.create(ErrorCode.INSTRUMENT_NOT_FOUND);
         }
 
-        Candle candle = candleList.getFirst();
+        Candle candle = candleList.getLast();
         Quotation price = candle.open();
 
         return new GetCurrentPriceResponse()
@@ -93,7 +93,7 @@ public class MockMarketDataService implements MarketDataService, SimulationMarke
     @Override
     public Optional<Candle> lastCandleAtOrBefore(String instrumentUid, Instant at) {
         List<Candle> candles = candleRepository.findBeforeOrEqual(instrumentUid, at, 1);
-        return candles.isEmpty() ? Optional.empty() : Optional.ofNullable(candles.getFirst());
+        return candles.isEmpty() ? Optional.empty() : Optional.ofNullable(candles.getLast());
     }
 
     @Override
@@ -187,6 +187,6 @@ public class MockMarketDataService implements MarketDataService, SimulationMarke
             clock.currentTime(),
             1
         );
-        return candles.isEmpty() ? null : candles.getFirst();
+        return candles.isEmpty() ? null : candles.getLast();
     }
 }

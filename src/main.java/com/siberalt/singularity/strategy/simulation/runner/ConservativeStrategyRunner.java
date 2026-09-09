@@ -4,6 +4,7 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.broker.contract.simulation.SimulationBroker;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.shared.BrokerFacade;
+import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.entity.operation.InMemoryOperationRepository;
 import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
@@ -12,6 +13,7 @@ import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
 import com.siberalt.singularity.strategy.simulation.UserActionSimulator;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -80,11 +82,15 @@ public class ConservativeStrategyRunner {
             .orElseThrow(() -> new IllegalArgumentException("No buy candle found"))
             .getTime();
 
-        Instant sellTime = candleRepository.findBeforeOrEqual(instrumentId, endTime, 1)
-            .stream()
-            .findFirst()
-            .orElseThrow(() -> new IllegalArgumentException("No sell candle found"))
-            .getTime();
+        List<Candle> lastCandles = candleRepository.findBeforeOrEqual(instrumentId, endTime, 1);
+
+        if (lastCandles.isEmpty()) {
+            throw new IllegalArgumentException("No sell candle found");
+        }
+
+        // Oldest first, so the last of them is the one at or before the end - the first is a bar
+        // earlier still.
+        Instant sellTime = lastCandles.getLast().getTime();
 
         return new TradeTiming(instrumentId, buyTime, sellTime);
     }
