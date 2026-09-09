@@ -17,11 +17,22 @@ import java.util.List;
  * lost more than half the account; the same signal inverted made money. This is that bet made
  * properly rather than by negation.
  * <p>
- * Made properly matters, because negating a trend signal inherits its machinery. The slope
- * calculator gates on how straight the line is, which selects for clean trends - exactly the bars a
- * reversion bet should be avoiding - and scales by the average bar-to-bar move, which is not the
- * quantity a distance from the mean should be measured in. Here the distance is measured in the
- * spread of the window it strayed from, which is what makes it comparable across instruments.
+ * Measured against that inversion on the reverting share, this lost, and the measuring is worth
+ * more than the class. The two differ in where the sign comes from: from the price's distance to
+ * its average here, from the direction it was travelling there. On that share only the second knew
+ * anything, which makes the working bet a statement about a move running out of steam rather than
+ * about a price being far from home - and those are not the same claim, since a price can keep
+ * walking away from its average long after the walk has turned.
+ * <p>
+ * The other suspected difference turned out not to be one. Inverting the slope also inherits its
+ * goodness-of-fit gate, which was easy to read as a flaw - it selects for clean trends, and a
+ * reversion bet has no business there. Adding the same gate here (see {@link #setMinStraightness})
+ * roughly doubled what this earns per trade while cutting how often it fires by two thirds, which
+ * is help rather than harm. It was not enough to close the gap, and the sample it left was too
+ * small to be sure of either way.
+ * <p>
+ * The distance is measured in the spread of the window it strayed from, which is what makes it
+ * comparable across instruments.
  * <p>
  * The default price is the typical one rather than the close, and that is not a detail. Close-to-
  * close returns on minute bars of the shares measured here had autocorrelation around minus a fifth
