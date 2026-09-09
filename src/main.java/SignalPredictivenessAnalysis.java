@@ -8,6 +8,7 @@ import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.strategy.analysis.PredictivenessReport;
 import com.siberalt.singularity.strategy.analysis.SignalPredictiveness;
+import com.siberalt.singularity.strategy.upside.MeanReversionUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.SlopeUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.VolumeImbalanceUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
@@ -111,9 +112,12 @@ public class SignalPredictivenessAnalysis {
             "horizon: corr(exec) / edge bp vs hold bp / n   (same-bar corr)");
 
         for (int period : calculatorPeriods()) {
-            UpsideCalculator calculator = "flow".equals(System.getProperty("signal"))
-                ? new VolumeImbalanceUpsideCalculator(period)
-                : new SlopeUpsideCalculator(period);
+            String family = System.getProperty("signal", "slope");
+            UpsideCalculator calculator = switch (family) {
+                case "flow" -> new VolumeImbalanceUpsideCalculator(period);
+                case "reversion" -> new MeanReversionUpsideCalculator(period);
+                default -> new SlopeUpsideCalculator(period);
+            };
             PredictivenessReport report = new SignalPredictiveness()
                 .setLookbackCandles(lookback)
                 .setStride(stride)
@@ -136,7 +140,7 @@ public class SignalPredictivenessAnalysis {
 
             System.out.printf(
                 "%-4s%-4d %5.1f%% %+.3f |%s%n",
-                "flow".equals(System.getProperty("signal")) ? "flow" : "slp",
+                switch (System.getProperty("signal", "slope")) { case "flow" -> "flow"; case "reversion" -> "rev"; default -> "slp"; },
                 period,
                 100.0 * report.firedBars() / Math.max(1, report.bars()),
                 report.lag1Autocorrelation(),
