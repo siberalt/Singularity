@@ -9,6 +9,7 @@ import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.strategy.analysis.PredictivenessReport;
 import com.siberalt.singularity.strategy.analysis.SignalPredictiveness;
 import com.siberalt.singularity.strategy.upside.SlopeUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.VolumeImbalanceUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 
 import java.io.IOException;
@@ -32,6 +33,10 @@ import java.util.Map;
  * the distance between the two columns is the size of that mistake.
  * <p>
  * Arguments: instrument uid, from, to, and one or more intervals. Everything has a default.
+ * <p>
+ * { -Dsignal=flow} measures the order-flow imbalance instead of the price slope. The two are
+ * worth comparing directly: everything price-derived is a rearrangement of the same closes, and
+ * only the flow is a separate observation.
  */
 public class SignalPredictivenessAnalysis {
     private static final String DEFAULT_INSTRUMENT = "TMOS";
@@ -106,7 +111,9 @@ public class SignalPredictivenessAnalysis {
             "horizon: corr(exec) / edge bp vs hold bp / n   (same-bar corr)");
 
         for (int period : calculatorPeriods()) {
-            UpsideCalculator calculator = new SlopeUpsideCalculator(period);
+            UpsideCalculator calculator = "flow".equals(System.getProperty("signal"))
+                ? new VolumeImbalanceUpsideCalculator(period)
+                : new SlopeUpsideCalculator(period);
             PredictivenessReport report = new SignalPredictiveness()
                 .setLookbackCandles(lookback)
                 .setStride(stride)
@@ -128,7 +135,8 @@ public class SignalPredictivenessAnalysis {
             }
 
             System.out.printf(
-                "slope%-3d %5.1f%% %+.3f |%s%n",
+                "%-4s%-4d %5.1f%% %+.3f |%s%n",
+                "flow".equals(System.getProperty("signal")) ? "flow" : "slp",
                 period,
                 100.0 * report.firedBars() / Math.max(1, report.bars()),
                 report.lag1Autocorrelation(),
