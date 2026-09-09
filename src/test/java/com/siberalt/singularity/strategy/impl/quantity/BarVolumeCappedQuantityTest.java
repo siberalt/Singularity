@@ -48,6 +48,18 @@ class BarVolumeCappedQuantityTest {
         assertEquals(100, quantity.toSell(moment(-1.0), TradeCapacity.of(0, 100_000)));
     }
 
+    /**
+     * A bar hands a buyer what its offers held, not what both sides traded between them, so that is
+     * what a share of it has to be measured against.
+     */
+    @Test
+    void capsAgainstTheSideTheOrderTradesAgainst() {
+        stubSplitBars(800, 200);
+
+        assertEquals(80, quantity.toBuy(moment(1.0), TradeCapacity.of(100_000, 0)));
+        assertEquals(20, quantity.toSell(moment(-1.0), TradeCapacity.of(0, 100_000)));
+    }
+
     @Test
     void leavesASizeThatAlreadyFitsAlone() {
         stubBars(1000);
@@ -129,6 +141,21 @@ class BarVolumeCappedQuantityTest {
 
         // The daily cap is deliberately loose here, so the per-bar one decides.
         assertEquals(100, stacked.toBuy(moment(1.0), TradeCapacity.of(100_000, 0)));
+    }
+
+    private void stubSplitBars(long buy, long sell) {
+        List<Candle> candles = new ArrayList<>();
+
+        for (int i = 0; i < 4; i++) {
+            candles.add(new Candle(
+                INSTRUMENT,
+                new TimePoint(NOW.minus(Duration.ofMinutes(i))),
+                Quotation.of(6), Quotation.of(6), Quotation.of(6), Quotation.of(6),
+                buy + sell, buy, sell
+            ));
+        }
+
+        when(candleRepository.findBeforeOrEqual(eq(INSTRUMENT), any(), anyLong())).thenReturn(candles);
     }
 
     private void stubBars(long volumePerCandle) {

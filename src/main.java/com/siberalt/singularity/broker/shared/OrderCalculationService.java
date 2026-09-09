@@ -18,13 +18,56 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.shared.dto.BuyRequest;
 
 public class OrderCalculationService {
-    private double extraRatio = 0.03;
+    /**
+     * Three per cent held back from every buy.
+     * <p>
+     * What it guards against is the price moving between the quote and the order: the size is worked
+     * out against what the instrument costs now, and by the time the order reaches the exchange it
+     * may cost more, which would have the account short of what it just committed to.
+     * <p>
+     * What it costs is the same three per cent of every position, every time - not lost, but never
+     * invested. That looks like a price worth removing in a simulation, and it is not: a simulation
+     * with any execution latency prices the fill from a later bar than the quote, which is the very
+     * gap this covers. Set to zero, a walk-forward over one share died of INSUFFICIENT_BALANCE -
+     * every buy sized to the last rouble, and the bar that filled it wanted a rouble more.
+     * <p>
+     * So it is a real margin against a real risk, and the number is a guess about how far a price
+     * can move in the time an order takes to arrive. Three per cent is generous for a bar or two
+     * and mean for a day; it deserves to be set from the same knowledge as the execution latency it
+     * is covering, rather than left at a default.
+     * <p>
+     * It also spent a long time hiding a real fault. The quote used to be taken for a market order
+     * while the order sent was a best-price one, and the two agreed only because this margin was
+     * wider than they disagreed; the day they disagreed by more, the run died of insufficient funds.
+     * A margin is a margin, not a way to keep mismatched prices from meeting.
+     */
+    public static final double DEFAULT_PRICE_SAFETY_MARGIN = 0.03;
 
-    public OrderCalculationService(double extraRatio) {
-        this.extraRatio = extraRatio;
+    private double priceSafetyMargin = DEFAULT_PRICE_SAFETY_MARGIN;
+
+    public OrderCalculationService(double priceSafetyMargin) {
+        setPriceSafetyMargin(priceSafetyMargin);
     }
 
     public OrderCalculationService() {
+    }
+
+    public double getPriceSafetyMargin() {
+        return priceSafetyMargin;
+    }
+
+    /**
+     *  #DEFAULT_PRICE_SAFETY_MARGIN
+     */
+    public OrderCalculationService setPriceSafetyMargin(double priceSafetyMargin) {
+        if (priceSafetyMargin < 0 || priceSafetyMargin >= 1) {
+            throw new IllegalArgumentException(
+                String.format("Price safety margin must be within [0, 1), got %s", priceSafetyMargin)
+            );
+        }
+
+        this.priceSafetyMargin = priceSafetyMargin;
+        return this;
     }
 
     public long calculateMaxBuyQuantity(Broker broker, Quotation limit, BuyRequest request) throws AbstractException {
@@ -91,8 +134,7 @@ public class OrderCalculationService {
             throw new ArithmeticException("Price per unit cannot be negative or zero.");
         }
 
-        // Adjust the limit to account for extra costs (e.g., fees)
-        limit = limit.subtract(limit.multiply(Quotation.of(extraRatio)));
+        limit = limit.subtract(limit.multiply(Quotation.of(priceSafetyMargin)));
 
         if (limit.isZero() || limit.isLessThan(instrumentPrice)) {
             // If the price or limit is zero, return zero quantity

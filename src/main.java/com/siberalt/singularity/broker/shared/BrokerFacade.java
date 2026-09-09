@@ -19,6 +19,21 @@ public class BrokerFacade {
     protected Broker broker;
     protected OrderCalculationService orderCalculationService = new OrderCalculationService();
 
+    public OrderCalculationService getOrderCalculationService() {
+        return orderCalculationService;
+    }
+
+    /**
+     * How buy sizes are worked out, and in particular how much is held back against the price
+     * moving between the quote and the order - see
+     * {@link OrderCalculationService#DEFAULT_PRICE_SAFETY_MARGIN}. A simulation pricing both from
+     * the same candle has nothing to hold back for.
+     */
+    public BrokerFacade setOrderCalculationService(OrderCalculationService orderCalculationService) {
+        this.orderCalculationService = orderCalculationService;
+        return this;
+    }
+
     public BrokerFacade(Broker broker) {
         this.broker = broker;
     }

@@ -1,5 +1,6 @@
 package com.siberalt.singularity.strategy.impl.quantity;
 
+import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 
@@ -89,20 +90,20 @@ public class AdvCappedQuantity implements TradeQuantity {
 
     @Override
     public long toBuy(TradeMoment moment, TradeCapacity capacity) {
-        return capped(moment, delegate.toBuy(moment, capacity));
+        return capped(moment, OrderDirection.BUY, delegate.toBuy(moment, capacity));
     }
 
     @Override
     public long toSell(TradeMoment moment, TradeCapacity capacity) {
-        return capped(moment, delegate.toSell(moment, capacity));
+        return capped(moment, OrderDirection.SELL, delegate.toSell(moment, capacity));
     }
 
-    private long capped(TradeMoment moment, long wanted) {
+    private long capped(TradeMoment moment, OrderDirection direction, long wanted) {
         if (wanted <= 0) {
             return wanted;
         }
 
-        long cap = dailyVolumeCap(moment);
+        long cap = dailyVolumeCap(moment, direction);
 
         // No history to judge by is not a licence to trade any size, but neither is it a reason to
         // refuse - the underlying sizing is left to stand.
@@ -113,12 +114,15 @@ public class AdvCappedQuantity implements TradeQuantity {
      * A share of the instrument's average daily volume over the last {@link #getLookbackCandles()}
      * bars before this moment.
      * <p>
+     * The share is of the flow on the order's own side - a buy takes what the offers hold - which is
+     * what a bar will actually hand over.
+     * <p>
      * Both halves of the average dodge the calendar. The bars are taken by count, so the sample is
      * always the same amount of trading; and they are divided by the days those bars actually fall
      * on rather than by the days the span covers, so a holiday in the middle does not make the
      * instrument look quieter than it is.
      */
-    protected long dailyVolumeCap(TradeMoment moment) {
+    protected long dailyVolumeCap(TradeMoment moment, OrderDirection direction) {
         List<Candle> candles = candleRepository.findBeforeOrEqual(
             moment.instrumentId(),
             moment.at(),
@@ -133,7 +137,7 @@ public class AdvCappedQuantity implements TradeQuantity {
         Set<Instant> tradingDays = new HashSet<>();
 
         for (Candle candle : candles) {
-            totalVolume += candle.volume();
+            totalVolume += candle.reachableVolume(direction);
             tradingDays.add(candle.getTime().truncatedTo(ChronoUnit.DAYS));
         }
 

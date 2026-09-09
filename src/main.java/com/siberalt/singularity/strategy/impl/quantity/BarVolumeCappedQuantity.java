@@ -1,5 +1,6 @@
 package com.siberalt.singularity.strategy.impl.quantity;
 
+import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 
@@ -82,20 +83,20 @@ public class BarVolumeCappedQuantity implements TradeQuantity {
 
     @Override
     public long toBuy(TradeMoment moment, TradeCapacity capacity) {
-        return capped(moment, delegate.toBuy(moment, capacity));
+        return capped(moment, OrderDirection.BUY, delegate.toBuy(moment, capacity));
     }
 
     @Override
     public long toSell(TradeMoment moment, TradeCapacity capacity) {
-        return capped(moment, delegate.toSell(moment, capacity));
+        return capped(moment, OrderDirection.SELL, delegate.toSell(moment, capacity));
     }
 
-    private long capped(TradeMoment moment, long wanted) {
+    private long capped(TradeMoment moment, OrderDirection direction, long wanted) {
         if (wanted <= 0) {
             return wanted;
         }
 
-        long cap = barVolumeCap(moment);
+        long cap = barVolumeCap(moment, direction);
 
         return cap <= 0 ? wanted : Math.min(wanted, cap);
     }
@@ -106,8 +107,12 @@ public class BarVolumeCappedQuantity implements TradeQuantity {
      * Averaged rather than taken from the last bar, because the order will fill against the bars
      * that come <em>after</em> the decision, and a single bar is a noisy guess at those. The last
      * bar being unusually busy is not a reason to send an order the next one cannot absorb.
+     * <p>
+     * The share is of the flow on the order's own side, matching what a bar will actually hand over:
+     * a buy takes what the offers hold. Measured against both sides it asked for about twice what
+     * it could get, and the excess came back every bar to be asked for again.
      */
-    protected long barVolumeCap(TradeMoment moment) {
+    protected long barVolumeCap(TradeMoment moment, OrderDirection direction) {
         List<Candle> candles = candleRepository.findBeforeOrEqual(
             moment.instrumentId(),
             moment.at(),
@@ -121,7 +126,7 @@ public class BarVolumeCappedQuantity implements TradeQuantity {
         long totalVolume = 0;
 
         for (Candle candle : candles) {
-            totalVolume += candle.volume();
+            totalVolume += candle.reachableVolume(direction);
         }
 
         return (long) (((double) totalVolume / candles.size()) * barVolumeShare);
