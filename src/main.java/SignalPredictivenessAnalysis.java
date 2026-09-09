@@ -8,6 +8,7 @@ import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.strategy.analysis.PredictivenessReport;
 import com.siberalt.singularity.strategy.analysis.SignalPredictiveness;
+import com.siberalt.singularity.strategy.upside.InvertedUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.MeanReversionUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.SlopeUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.VolumeImbalanceUpsideCalculator;
@@ -118,6 +119,10 @@ public class SignalPredictivenessAnalysis {
                 case "reversion" -> new MeanReversionUpsideCalculator(period);
                 default -> new SlopeUpsideCalculator(period);
             };
+
+            if (Boolean.getBoolean("invert")) {
+                calculator = new InvertedUpsideCalculator(calculator);
+            }
             PredictivenessReport report = new SignalPredictiveness()
                 .setLookbackCandles(lookback)
                 .setStride(stride)
@@ -140,7 +145,8 @@ public class SignalPredictivenessAnalysis {
 
             System.out.printf(
                 "%-4s%-4d %5.1f%% %+.3f |%s%n",
-                switch (System.getProperty("signal", "slope")) { case "flow" -> "flow"; case "reversion" -> "rev"; default -> "slp"; },
+                (Boolean.getBoolean("invert") ? "-" : "") + switch (System.getProperty("signal", "slope")) {
+                    case "flow" -> "flow"; case "reversion" -> "rev"; default -> "slp"; },
                 period,
                 100.0 * report.firedBars() / Math.max(1, report.bars()),
                 report.lag1Autocorrelation(),
