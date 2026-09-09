@@ -6,6 +6,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
 
 /**
  * Chooses a strategy's settings the way they would have had to be chosen at the time - on the past
@@ -29,6 +32,26 @@ public class WalkForward {
 
     private int folds = DEFAULT_FOLDS;
     private double trainRatio = DEFAULT_TRAIN_RATIO;
+    private Executor executor = Runnable::run;
+
+    /**
+     * Where the candidates of a fold are scored. The default runs them one after another on the
+     * calling thread, which is the only safe assumption to make about somebody else's evaluation.
+     * <p>
+     * Handing it a pool is worth it: a backtest here spends under a tenth of its time reading
+     * candles and the rest computing, so the work scales with cores. What the pool requires is that
+     * the evaluation can be called from several threads at once - and the usual reason it cannot is
+     * a shared database connection, which is not thread-safe. Give each run its own repository, or
+     * read the candles into memory once and share them read-only.
+     */
+    public WalkForward setExecutor(Executor executor) {
+        if (executor == null) {
+            throw new IllegalArgumentException("Executor cannot be null");
+        }
+
+        this.executor = executor;
+        return this;
+    }
 
     public WalkForward setFolds(int folds) {
         if (folds < 1) {
@@ -76,15 +99,17 @@ public class WalkForward {
             Instant testTo = testFrom.plus(testSpan);
             Instant trainFrom = testFrom.minus(trainSpan);
 
-            C chosen = null;
-            double bestTrain = Double.NEGATIVE_INFINITY;
+            double[] trained = score(candidates, trainFrom, testFrom, evaluation);
 
-            for (C candidate : candidates) {
-                double trained = evaluation.profitPercent(candidate, trainFrom, testFrom);
+            C chosen = candidates.getFirst();
+            double bestTrain = trained[0];
 
-                if (trained > bestTrain) {
-                    bestTrain = trained;
-                    chosen = candidate;
+            // Strictly greater, so an equal score leaves the earlier candidate in place and the
+            // choice does not depend on the order the scores happened to finish in.
+            for (int candidate = 1; candidate < candidates.size(); candidate++) {
+                if (trained[candidate] > bestTrain) {
+                    bestTrain = trained[candidate];
+                    chosen = candidates.get(candidate);
                 }
             }
 
@@ -100,5 +125,60 @@ public class WalkForward {
         }
 
         return new WalkForwardReport<>(results);
+    }
+
+    /**
+     * Scores every candidate over one stretch, on {@link #setExecutor the executor} if one was
+     * given. The candidates of a fold do not depend on each other, and a backtest spends its time
+     * computing rather than waiting, so this is where the work parallelises.
+     * <p>
+     * The scores come back in the order the candidates were given whatever order they finished in,
+     * which is what keeps the choice - and so the whole report - the same run to run.
+     */
+    protected <C> double[] score(
+        List<C> candidates,
+        Instant from,
+        Instant to,
+        CandidateEvaluation<C> evaluation
+    ) throws AbstractException {
+        List<CompletableFuture<Double>> pending = new ArrayList<>(candidates.size());
+
+        for (C candidate : candidates) {
+            pending.add(CompletableFuture.supplyAsync(
+                () -> {
+                    try {
+                        return evaluation.profitPercent(candidate, from, to);
+                    } catch (AbstractException failed) {
+                        throw new CompletionException(failed);
+                    }
+                },
+                executor
+            ));
+        }
+
+        double[] scores = new double[candidates.size()];
+
+        for (int candidate = 0; candidate < scores.length; candidate++) {
+            scores[candidate] = await(pending.get(candidate));
+        }
+
+        return scores;
+    }
+
+    /**
+     * Unwraps what the evaluation threw, so a failure inside a worker reaches the caller as the
+     * exception it was rather than wrapped in whatever carried it back.
+     */
+    private double await(CompletableFuture<Double> pending) throws AbstractException {
+        try {
+            return pending.join();
+        } catch (CompletionException wrapped) {
+            switch (wrapped.getCause()) {
+                case AbstractException failed -> throw failed;
+                case RuntimeException failed -> throw failed;
+                case Error failed -> throw failed;
+                case null, default -> throw wrapped;
+            }
+        }
     }
 }

@@ -6,6 +6,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.locks.LockSupport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -82,6 +87,75 @@ class WalkForwardTest {
         // Halved then doubled is back where it started, which averaging to +25 per cent would hide.
         assertEquals(0, report.compoundedProfitPercent(), 1e-9);
         assertEquals(1, report.profitableFolds());
+    }
+
+    /**
+     * A report that came out differently depending on how the threads were scheduled would be
+     * worthless, so the scores are read back in the order the candidates were given and an equal
+     * score leaves the earlier one in place.
+     */
+    @Test
+    void givesTheSameReportOnAPoolAsOnOneThread() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(8);
+
+        try {
+            CandidateEvaluation<Integer> evaluation = (candidate, from, to) -> {
+                // Uneven work, so the candidates finish in an order unrelated to their own.
+                LockSupport.parkNanos(((17L * candidate) % 11) * 1_000_000);
+
+                return candidate % 3;
+            };
+            List<Integer> candidates = List.of(0, 1, 2, 3, 4, 5, 6, 7, 8);
+
+            WalkForwardReport<Integer> sequential = new WalkForward().setFolds(3)
+                .run(candidates, START, END, evaluation);
+            WalkForwardReport<Integer> parallel = new WalkForward().setFolds(3).setExecutor(pool)
+                .run(candidates, START, END, evaluation);
+
+            // Candidates 2, 5 and 8 all score two; the first of them is the one that must win.
+            assertEquals(2, sequential.folds().getFirst().chosen());
+            assertEquals(sequential, parallel);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void scoresEveryCandidateOnEveryTrainingStretch() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(4);
+
+        try {
+            Set<String> scored = ConcurrentHashMap.newKeySet();
+
+            new WalkForward().setFolds(2).setExecutor(pool).run(
+                List.of("a", "b", "c"), START, END,
+                (candidate, from, to) -> {
+                    scored.add(candidate + "@" + from);
+
+                    return 0;
+                }
+            );
+
+            // Three candidates over two training stretches, plus the chosen one on each test.
+            assertEquals(8, scored.size());
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** A failure inside a worker has to reach the caller as itself, not wrapped in a carrier. */
+    @Test
+    void reportsWhatAnEvaluationThrewOnAPool() {
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+
+        try {
+            assertThrows(IllegalStateException.class, () -> new WalkForward().setFolds(1).setExecutor(pool)
+                .run(List.of("a"), START, END, (candidate, from, to) -> {
+                    throw new IllegalStateException("nothing to trade");
+                }));
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     @Test
