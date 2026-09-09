@@ -1,5 +1,6 @@
 package com.siberalt.singularity.entity.candle;
 
+import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 
 import java.math.BigDecimal;
@@ -112,6 +113,24 @@ public record Candle (
 
     public double getLowAsDouble(){
         return this.low().toDouble();
+    }
+
+    /**
+     * How much of this bar an order taking liquidity in this direction could have reached: the side
+     * of the flow it trades against, or the whole bar where the split is not recorded.
+     * <p>
+     * A buy takes what the offers hold and a sell takes what the bids hold, so a bar whose whole
+     * volume was sell-initiated had nothing in it for a buyer. Both the cap on how much a bar can
+     * absorb and the impact charged for taking it are shares of this number, and they have to be
+     * shares of the same one - measuring the cap against one side and the impact against both left
+     * the impact understated by about half.
+     */
+    public long reachableVolume(OrderDirection direction) {
+        if (!hasVolumeSplit() || direction == null || direction == OrderDirection.UNSPECIFIED) {
+            return tradedVolume();
+        }
+
+        return direction == OrderDirection.BUY ? volumeBuy : volumeSell;
     }
 
     /**

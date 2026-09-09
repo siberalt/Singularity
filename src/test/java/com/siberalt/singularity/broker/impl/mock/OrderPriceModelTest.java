@@ -150,6 +150,53 @@ class OrderPriceModelTest {
             .setInstrument(new Instrument().setUid("TEST").setCurrency("RUB").setLot(1));
     }
 
+    /**
+     * Impact is a share of what the order could actually have traded against, not of the whole bar.
+     * The same eighty lots are a tenth of the offers and two fifths of the bids here, and cost
+     * accordingly - measuring both against the bar's total would have understated the seller by
+     * four times and let the two halves of the model disagree about the same bar.
+     */
+    @Test
+    void chargesImpactAgainstTheSideTheOrderTradesAgainst() {
+        priceModel.setSlippageImpactRatio(0.01);
+
+        Candle bar = splitBar(800, 200);
+
+        assertEquals(
+            Quotation.of(100.1),
+            priceModel.fillPrice(order(OrderType.MARKET, OrderDirection.BUY, null), bar, 80)
+        );
+        assertEquals(
+            Quotation.of(99.6),
+            priceModel.fillPrice(order(OrderType.MARKET, OrderDirection.SELL, null), bar, 80)
+        );
+    }
+
+    /** Without the split there is only the whole bar to measure against, as there always was. */
+    @Test
+    void fallsBackToTheWholeBarWhenTheFlowIsNotSplit() {
+        priceModel.setSlippageImpactRatio(0.01);
+
+        assertEquals(
+            Quotation.of(100.1),
+            priceModel.fillPrice(order(OrderType.MARKET, OrderDirection.BUY, null), bar(1000), 100)
+        );
+    }
+
+    private Candle splitBar(long buy, long sell) {
+        return new Candle(
+            "TEST",
+            new TimePoint(Instant.parse("2021-12-15T15:00:00Z")),
+            Quotation.of(100),
+            Quotation.of(100),
+            Quotation.of(100),
+            Quotation.of(100),
+            buy + sell,
+            buy,
+            sell
+        );
+    }
+
     private Candle bar(long volume) {
         return new Candle(
             "TEST",

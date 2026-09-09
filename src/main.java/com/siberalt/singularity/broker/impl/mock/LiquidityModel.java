@@ -105,7 +105,7 @@ public class LiquidityModel {
 
         return Math.max(
             0,
-            BigDecimal.valueOf(reachableVolume(candle, direction))
+            BigDecimal.valueOf(candle.reachableVolume(direction))
                 .multiply(BigDecimal.valueOf(participationRate))
                 .setScale(0, RoundingMode.DOWN)
                 .longValue()
@@ -162,20 +162,6 @@ public class LiquidityModel {
         }
 
         return budget;
-    }
-
-    /**
-     * How much of this bar an order of this direction could have reached: the side of the flow it
-     * trades against, or the whole bar where the feed does not say which side was which. Falling
-     * back to the whole bar is the generous reading, and it is the only one available for the
-     * instruments and stretches of history recorded before the split appeared.
-     */
-    protected long reachableVolume(Candle candle, OrderDirection direction) {
-        if (!candle.hasVolumeSplit() || direction == null || direction == OrderDirection.UNSPECIFIED) {
-            return candle.tradedVolume();
-        }
-
-        return direction == OrderDirection.BUY ? candle.volumeBuy() : candle.volumeSell();
     }
 
     private record BudgetKey(String instrumentUid, OrderDirection direction) {

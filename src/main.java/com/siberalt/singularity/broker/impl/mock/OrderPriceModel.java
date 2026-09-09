@@ -97,7 +97,7 @@ public class OrderPriceModel {
      * A best-price order is a real order type - the broker routes it to the top of the book, and
      * some instruments accept nothing else - but what makes it different from a market order is how
      * far down the book it is willing to go, not what part of the bar it catches. At bar resolution
-     * that difference is about size, which { LiquidityModel} already answers, and not about
+     * that difference is about size, which {@link LiquidityModel} already answers, and not about
      * price.
      */
     public Quotation currentPrice(Candle currentCandle) {
@@ -118,7 +118,7 @@ public class OrderPriceModel {
         return worsen(
             currentPrice(candle),
             order.getDirection(),
-            halfSpreadRatio + slippage(lots, candle)
+            halfSpreadRatio + slippage(lots, candle, order.getDirection())
         );
     }
 
@@ -155,12 +155,14 @@ public class OrderPriceModel {
      * bar that records no volume gets no impact - there is nothing to measure the fill against, and
      * guessing would be worse than admitting it.
      */
-    protected double slippage(long lots, Candle candle) {
-        if (slippageImpactRatio == 0 || candle.volume() <= 0) {
+    protected double slippage(long lots, Candle candle, OrderDirection direction) {
+        long reachable = candle.reachableVolume(direction);
+
+        if (slippageImpactRatio == 0 || reachable <= 0) {
             return 0;
         }
 
-        return slippageImpactRatio * Math.min(1d, (double) lots / candle.volume());
+        return slippageImpactRatio * Math.min(1d, (double) lots / reachable);
     }
 
     /**
