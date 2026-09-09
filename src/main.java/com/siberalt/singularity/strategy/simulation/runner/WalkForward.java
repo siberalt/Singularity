@@ -95,9 +95,12 @@ public class WalkForward {
         List<Window> windows = new ArrayList<>(folds);
 
         for (int fold = 0; fold < folds; fold++) {
-            Instant testFrom = start.plus(trainSpan).plus(testSpan.multipliedBy(fold));
+            // Each fold starts one test stretch after the one before, and the first starts at the
+            // beginning: what follows its training is the first stretch anything is earned on.
+            Instant trainFrom = start.plus(testSpan.multipliedBy(fold));
+            Instant testFrom = trainFrom.plus(trainSpan);
 
-            windows.add(new Window(testFrom.minus(trainSpan), testFrom, testFrom.plus(testSpan)));
+            windows.add(new Window(trainFrom, testFrom, testFrom.plus(testSpan)));
         }
 
         // Every training run of every fold at once: none of them depends on any other, and a fold
