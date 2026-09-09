@@ -29,12 +29,13 @@ class WalkForwardTest {
 
         // Eight days over two folds at twice the training: two-day tests, four-day training.
         assertEquals(2, report.folds().size());
+        assertEquals(START.plus(Duration.ofDays(4)), report.testedFrom());
+        assertEquals(START.plus(Duration.ofDays(8)), report.testedTo());
 
         WalkForwardReport.Fold<String> first = report.folds().getFirst();
         assertEquals(START, first.trainFrom());
         assertEquals(START.plus(Duration.ofDays(4)), first.testFrom());
         assertEquals(START.plus(Duration.ofDays(6)), first.testTo());
-        assertEquals(first.testFrom(), first.trainTo());
 
         WalkForwardReport.Fold<String> second = report.folds().getLast();
         assertEquals(first.testTo(), second.testFrom());

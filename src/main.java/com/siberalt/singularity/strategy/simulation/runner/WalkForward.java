@@ -92,35 +92,60 @@ public class WalkForward {
             throw new IllegalArgumentException("The period is too short to split into " + folds + " folds");
         }
 
-        List<WalkForwardReport.Fold<C>> results = new ArrayList<>();
+        List<Window> windows = new ArrayList<>(folds);
 
         for (int fold = 0; fold < folds; fold++) {
             Instant testFrom = start.plus(trainSpan).plus(testSpan.multipliedBy(fold));
-            Instant testTo = testFrom.plus(testSpan);
-            Instant trainFrom = testFrom.minus(trainSpan);
 
-            double[] trained = score(candidates, trainFrom, testFrom, evaluation);
+            windows.add(new Window(testFrom.minus(trainSpan), testFrom, testFrom.plus(testSpan)));
+        }
 
-            C chosen = candidates.getFirst();
-            double bestTrain = trained[0];
+        // Every training run of every fold at once: none of them depends on any other, and a fold
+        // whose slowest candidate holds up the rest would otherwise set the pace on its own.
+        List<CompletableFuture<Double>> training = new ArrayList<>(folds * candidates.size());
+
+        for (Window window : windows) {
+            for (C candidate : candidates) {
+                training.add(submit(evaluation, candidate, window.trainFrom(), window.testFrom()));
+            }
+        }
+
+        List<C> chosen = new ArrayList<>(folds);
+        List<Double> bestTrain = new ArrayList<>(folds);
+        List<CompletableFuture<Double>> testing = new ArrayList<>(folds);
+
+        for (int fold = 0; fold < folds; fold++) {
+            C best = candidates.getFirst();
+            double bestScore = await(training.get(fold * candidates.size()));
 
             // Strictly greater, so an equal score leaves the earlier candidate in place and the
             // choice does not depend on the order the scores happened to finish in.
             for (int candidate = 1; candidate < candidates.size(); candidate++) {
-                if (trained[candidate] > bestTrain) {
-                    bestTrain = trained[candidate];
-                    chosen = candidates.get(candidate);
+                double score = await(training.get(fold * candidates.size() + candidate));
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = candidates.get(candidate);
                 }
             }
 
+            chosen.add(best);
+            bestTrain.add(bestScore);
+            testing.add(submit(evaluation, best, windows.get(fold).testFrom(), windows.get(fold).testTo()));
+        }
+
+        List<WalkForwardReport.Fold<C>> results = new ArrayList<>(folds);
+
+        for (int fold = 0; fold < folds; fold++) {
+            Window window = windows.get(fold);
+
             results.add(new WalkForwardReport.Fold<>(
-                trainFrom,
-                testFrom,
-                testFrom,
-                testTo,
-                chosen,
-                bestTrain,
-                evaluation.profitPercent(chosen, testFrom, testTo)
+                window.trainFrom(),
+                window.testFrom(),
+                window.testTo(),
+                chosen.get(fold),
+                bestTrain.get(fold),
+                await(testing.get(fold))
             ));
         }
 
@@ -128,41 +153,30 @@ public class WalkForward {
     }
 
     /**
-     * Scores every candidate over one stretch, on {@link #setExecutor the executor} if one was
-     * given. The candidates of a fold do not depend on each other, and a backtest spends its time
-     * computing rather than waiting, so this is where the work parallelises.
-     * <p>
-     * The scores come back in the order the candidates were given whatever order they finished in,
-     * which is what keeps the choice - and so the whole report - the same run to run.
+     * Hands one evaluation to {@link #setExecutor the executor}, which by default is the calling
+     * thread. Nothing is read back here: everything is submitted first, so the runs overlap, and
+     * the results are collected afterwards in the order they were submitted.
      */
-    protected <C> double[] score(
-        List<C> candidates,
+    protected <C> CompletableFuture<Double> submit(
+        CandidateEvaluation<C> evaluation,
+        C candidate,
         Instant from,
-        Instant to,
-        CandidateEvaluation<C> evaluation
-    ) throws AbstractException {
-        List<CompletableFuture<Double>> pending = new ArrayList<>(candidates.size());
+        Instant to
+    ) {
+        return CompletableFuture.supplyAsync(
+            () -> {
+                try {
+                    return evaluation.profitPercent(candidate, from, to);
+                } catch (AbstractException failed) {
+                    throw new CompletionException(failed);
+                }
+            },
+            executor
+        );
+    }
 
-        for (C candidate : candidates) {
-            pending.add(CompletableFuture.supplyAsync(
-                () -> {
-                    try {
-                        return evaluation.profitPercent(candidate, from, to);
-                    } catch (AbstractException failed) {
-                        throw new CompletionException(failed);
-                    }
-                },
-                executor
-            ));
-        }
-
-        double[] scores = new double[candidates.size()];
-
-        for (int candidate = 0; candidate < scores.length; candidate++) {
-            scores[candidate] = await(pending.get(candidate));
-        }
-
-        return scores;
+    /** One fold's stretches. The training one runs up to where the test one starts. */
+    private record Window(Instant trainFrom, Instant testFrom, Instant testTo) {
     }
 
     /**

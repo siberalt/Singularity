@@ -14,20 +14,38 @@ import java.util.List;
  */
 public record WalkForwardReport<C>(List<Fold<C>> folds) {
     /**
-     * @param chosen            the candidate that did best over the training stretch, and the only
-     *                          thing carried forward into the test one
+     * One choice and what came of it. Three instants rather than four: training runs up to where
+     * testing begins, so the boundary between them is one moment and is named once.
+     *
+     * @param trainFrom          start of the stretch the candidate was chosen on
+     * @param testFrom           end of that stretch and start of the one it was judged on
+     * @param testTo             end of the stretch it was judged on
+     * @param chosen             the candidate that did best over the training stretch, and the only
+     *                           thing carried forward into the test one
      * @param trainProfitPercent what it earned where it was chosen - not a result, a diagnostic
      * @param testProfitPercent  what it earned next, which is the only honest number here
      */
     public record Fold<C>(
         Instant trainFrom,
-        Instant trainTo,
         Instant testFrom,
         Instant testTo,
         C chosen,
         double trainProfitPercent,
         double testProfitPercent
     ) {
+    }
+
+    /**
+     * The stretch the compounded result covers: the first fold's test window through the last
+     * fold's. Not the whole period the run was given - the history before the first test stretch
+     * went into choosing, and nothing was earned on it.
+     */
+    public Instant testedFrom() {
+        return folds.getFirst().testFrom();
+    }
+
+    public Instant testedTo() {
+        return folds.getLast().testTo();
     }
 
     /**
