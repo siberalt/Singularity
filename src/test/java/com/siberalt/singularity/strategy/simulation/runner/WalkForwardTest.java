@@ -144,19 +144,102 @@ class WalkForwardTest {
         }
     }
 
-    /** A failure inside a worker has to reach the caller as itself, not wrapped in a carrier. */
+    /**
+     * A candidate that cannot run is scored out of the way, but an Error is not a candidate doing
+     * badly - it is the machine in trouble, and it goes on through as itself.
+     */
     @Test
-    void reportsWhatAnEvaluationThrewOnAPool() {
+    void letsAnErrorThroughRatherThanScoringIt() {
         ExecutorService pool = Executors.newFixedThreadPool(2);
 
         try {
-            assertThrows(IllegalStateException.class, () -> new WalkForward().setFolds(1).setExecutor(pool)
+            assertThrows(StackOverflowError.class, () -> new WalkForward().setFolds(1).setExecutor(pool)
                 .run(List.of("a"), START, END, (candidate, from, to) -> {
-                    throw new IllegalStateException("nothing to trade");
+                    throw new StackOverflowError();
                 }));
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    @Test
+    void takesAFailureOnAPoolAsAFailedFoldRatherThanAStoppedRun() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+
+        try {
+            WalkForwardReport<String> report = new WalkForward().setFolds(1).setExecutor(pool)
+                .run(List.of("a"), START, END, (candidate, from, to) -> {
+                    throw new IllegalStateException("nothing to trade");
+                });
+
+            assertEquals(1, report.failedFolds());
+            assertTrue(report.folds().getFirst().failure().contains("nothing to trade"));
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /**
+     * A setting that cannot run is not a setting that lost money. It is passed over, and the folds
+     * where the others worked keep their results - which they used not to.
+     */
+    @Test
+    void passesOverACandidateThatCannotRun() throws Exception {
+        WalkForwardReport<String> report = new WalkForward()
+            .setFolds(1)
+            .setTrainRatio(1)
+            .run(List.of("broken", "sound"), START, END, (candidate, from, to) -> {
+                if (candidate.equals("broken")) {
+                    throw new IllegalStateException("cannot size an order");
+                }
+
+                return 7;
+            });
+
+        WalkForwardReport.Fold<String> fold = report.folds().getFirst();
+        assertEquals("sound", fold.chosen());
+        assertEquals(7, fold.testProfitPercent());
+        assertEquals(0, report.failedFolds());
+    }
+
+    @Test
+    void marksAFoldFailedWhenTheChosenCandidateCannotBeTested() throws Exception {
+        WalkForwardReport<String> report = new WalkForward()
+            .setFolds(1)
+            .setTrainRatio(1)
+            .run(List.of("a"), START, END, (candidate, from, to) -> {
+                if (from.equals(START)) {
+                    return 12;
+                }
+
+                throw new IllegalStateException("ran out of money");
+            });
+
+        WalkForwardReport.Fold<String> fold = report.folds().getFirst();
+        assertTrue(fold.hasFailed());
+        assertTrue(fold.failure().contains("ran out of money"), fold.failure());
+        // Neither a profit nor a loss: nothing happened, so the compounded result is untouched.
+        assertEquals(0, fold.testProfitPercent());
+        assertEquals(0, report.compoundedProfitPercent());
+        assertEquals(1, report.failedFolds());
+    }
+
+    /** Only the folds that ran count towards the result; the one that could not leaves it alone. */
+    @Test
+    void keepsTheFoldsThatRanWhenOneDoesNot() throws Exception {
+        WalkForwardReport<String> report = new WalkForward()
+            .setFolds(2)
+            .setTrainRatio(2)
+            .run(List.of("a"), START, END, (candidate, from, to) -> {
+                if (to.equals(END)) {
+                    throw new IllegalStateException("data ran out");
+                }
+
+                return Duration.between(from, to).toDays() == 2 ? 50 : 0;
+            });
+
+        assertEquals(1, report.failedFolds());
+        assertEquals(50, report.compoundedProfitPercent(), 1e-9);
     }
 
     @Test

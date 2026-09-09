@@ -43,6 +43,11 @@ public class WalkForward {
      * the evaluation can be called from several threads at once - and the usual reason it cannot is
      * a shared database connection, which is not thread-safe. Give each run its own repository, or
      * read the candles into memory once and share them read-only.
+     * <p>
+     * The pool stays the caller's to close, and closing it belongs in a {@code finally}. Its
+     * workers are not daemons, so a run that ends by throwing leaves them idle and the machine
+     * alive with nothing happening and nothing printed - which reads exactly like a deadlock and
+     * costs an afternoon to tell apart from one.
      */
     public WalkForward setExecutor(Executor executor) {
         if (executor == null) {
@@ -119,12 +124,12 @@ public class WalkForward {
 
         for (int fold = 0; fold < folds; fold++) {
             C best = candidates.getFirst();
-            double bestScore = await(training.get(fold * candidates.size()));
+            double bestScore = score(training.get(fold * candidates.size()));
 
             // Strictly greater, so an equal score leaves the earlier candidate in place and the
             // choice does not depend on the order the scores happened to finish in.
             for (int candidate = 1; candidate < candidates.size(); candidate++) {
-                double score = await(training.get(fold * candidates.size() + candidate));
+                double score = score(training.get(fold * candidates.size() + candidate));
 
                 if (score > bestScore) {
                     bestScore = score;
@@ -141,6 +146,7 @@ public class WalkForward {
 
         for (int fold = 0; fold < folds; fold++) {
             Window window = windows.get(fold);
+            String failure = failureOf(testing.get(fold));
 
             results.add(new WalkForwardReport.Fold<>(
                 window.trainFrom(),
@@ -148,7 +154,8 @@ public class WalkForward {
                 window.testTo(),
                 chosen.get(fold),
                 bestTrain.get(fold),
-                await(testing.get(fold))
+                failure == null ? testing.get(fold).join() : 0,
+                failure
             ));
         }
 
@@ -183,19 +190,35 @@ public class WalkForward {
     }
 
     /**
-     * Unwraps what the evaluation threw, so a failure inside a worker reaches the caller as the
-     * exception it was rather than wrapped in whatever carried it back.
+     * What a candidate scored over a training stretch, or the worst possible score if it could not
+     * run at all.
+     * <p>
+     * A setting that blows the account up mid-order or runs off the end of the data is not a
+     * setting that lost money - it is one that cannot be used, and the choice should pass it over
+     * rather than the whole run stopping on it. Nine folds' worth of honest work used to be thrown
+     * away because a tenth candidate on one stretch could not size an order.
      */
-    private double await(CompletableFuture<Double> pending) throws AbstractException {
+    protected double score(CompletableFuture<Double> pending) {
+        return failureOf(pending) == null ? pending.join() : Double.NEGATIVE_INFINITY;
+    }
+
+    /**
+     * Why this run could not finish, in a line, or null when it did. Errors are left to propagate:
+     * an evaluation out of memory is not a candidate scoring badly.
+     */
+    protected String failureOf(CompletableFuture<Double> pending) {
         try {
-            return pending.join();
+            pending.join();
+
+            return null;
         } catch (CompletionException wrapped) {
-            switch (wrapped.getCause()) {
-                case AbstractException failed -> throw failed;
-                case RuntimeException failed -> throw failed;
-                case Error failed -> throw failed;
-                case null, default -> throw wrapped;
+            Throwable cause = wrapped.getCause() == null ? wrapped : wrapped.getCause();
+
+            if (cause instanceof Error error) {
+                throw error;
             }
+
+            return cause.toString();
         }
     }
 }

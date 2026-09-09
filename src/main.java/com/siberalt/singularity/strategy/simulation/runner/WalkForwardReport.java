@@ -23,7 +23,12 @@ public record WalkForwardReport<C>(List<Fold<C>> folds) {
      * @param chosen             the candidate that did best over the training stretch, and the only
      *                           thing carried forward into the test one
      * @param trainProfitPercent what it earned where it was chosen - not a result, a diagnostic
-     * @param testProfitPercent  what it earned next, which is the only honest number here
+     * @param testProfitPercent  what it earned next, which is the only honest number here; zero
+     *                           where the fold failed, since nothing was earned or lost
+     * @param failure            why this fold has no result, or null when it has one. A fold fails
+     *                           when the run itself could not finish - the account ran out of money
+     *                           mid-order, the data ran out - which is not a loss and must not be
+     *                           read as one
      */
     public record Fold<C>(
         Instant trainFrom,
@@ -31,8 +36,23 @@ public record WalkForwardReport<C>(List<Fold<C>> folds) {
         Instant testTo,
         C chosen,
         double trainProfitPercent,
-        double testProfitPercent
+        double testProfitPercent,
+        String failure
     ) {
+        public Fold(
+            Instant trainFrom,
+            Instant testFrom,
+            Instant testTo,
+            C chosen,
+            double trainProfitPercent,
+            double testProfitPercent
+        ) {
+            this(trainFrom, testFrom, testTo, chosen, trainProfitPercent, testProfitPercent, null);
+        }
+
+        public boolean hasFailed() {
+            return failure != null;
+        }
     }
 
     /**
@@ -61,6 +81,11 @@ public record WalkForwardReport<C>(List<Fold<C>> folds) {
         }
 
         return (value - 1) * 100;
+    }
+
+    /** Folds with no result at all - the run could not finish, which is neither profit nor loss. */
+    public long failedFolds() {
+        return folds.stream().filter(Fold::hasFailed).count();
     }
 
     /** How often the choice made on the past worked on what followed. */
