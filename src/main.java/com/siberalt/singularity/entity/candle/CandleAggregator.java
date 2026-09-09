@@ -21,17 +21,14 @@ public class CandleAggregator {
      *                                  number of milliseconds, and bucketing by one would drift
      */
     public List<Candle> aggregate(List<Candle> candles, CandleInterval interval) {
-        if (interval == CandleInterval.UNSPECIFIED || interval == CandleInterval.MONTH) {
-            throw new IllegalArgumentException("Cannot bucket by " + interval + ": it has no fixed width");
-        }
+        requireFixedWidth(interval);
 
-        long bucketMillis = interval.getDuration().toMillis();
         List<Candle> result = new ArrayList<>();
         List<Candle> bucket = new ArrayList<>();
         long currentBucket = Long.MIN_VALUE;
 
         for (Candle candle : candles) {
-            long candleBucket = Math.floorDiv(candle.getTime().toEpochMilli(), bucketMillis);
+            long candleBucket = bucketOf(candle, interval);
 
             if (candleBucket != currentBucket) {
                 if (!bucket.isEmpty()) {
@@ -52,7 +49,18 @@ public class CandleAggregator {
         return result;
     }
 
-    protected Candle merge(List<Candle> bucket) {
+    /**
+     * Which bar of the wider interval this candle falls in. Two candles share a bucket exactly when
+     * they belong to the same wider bar.
+     */
+    public long bucketOf(Candle candle, CandleInterval interval) {
+        requireFixedWidth(interval);
+
+        return Math.floorDiv(candle.getTime().toEpochMilli(), interval.getDuration().toMillis());
+    }
+
+    /** Rolls a run of candles known to belong together into the single candle they make up. */
+    public Candle merge(List<Candle> bucket) {
         Candle first = bucket.getFirst();
         Candle last = bucket.getLast();
         Quotation high = first.high();
@@ -86,5 +94,11 @@ public class CandleAggregator {
             volumeBuy,
             volumeSell
         );
+    }
+
+    protected void requireFixedWidth(CandleInterval interval) {
+        if (interval == CandleInterval.UNSPECIFIED || interval == CandleInterval.MONTH) {
+            throw new IllegalArgumentException("Cannot bucket by " + interval + ": it has no fixed width");
+        }
     }
 }

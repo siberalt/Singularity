@@ -114,6 +114,45 @@ public record Candle (
         return this.low().toDouble();
     }
 
+    /**
+     * Whether this candle carries its volume split into buy- and sell-initiated trades. The feed
+     * only started reporting the split partway through, so anything reading it has to ask first -
+     * an absent split reads as no flow either way, which is not the same as balanced flow.
+     * <p>
+     * The test is the sum, not each side. A bar where every trade went one way has a zero on the
+     * other side and is the most informative bar there is; requiring both to be positive would
+     * throw away nearly half the history of an instrument, and precisely its one-sided half.
+     */
+    public boolean hasVolumeSplit() {
+        return volumeBuy + volumeSell > 0;
+    }
+
+    /**
+     * How much traded, taken from the split where there is one and from the plain total otherwise.
+     * The two agree wherever both are recorded.
+     */
+    public long tradedVolume() {
+        return hasVolumeSplit() ? volumeBuy + volumeSell : volume;
+    }
+
+    /**
+     * Buy-initiated volume less sell-initiated: which side was taking liquidity, and by how much.
+     * Zero when the candle has no split - unknown flow, reported as no imbalance, so a caller that
+     * skips {@link #hasVolumeSplit()} gets a signal that says nothing rather than a wrong one.
+     */
+    public long netVolume() {
+        return hasVolumeSplit() ? volumeBuy - volumeSell : 0;
+    }
+
+    /**
+     * The same imbalance as a share of what traded, in [-1, 1]: +1 is a bar where every trade was a
+     * buy, -1 one where every trade was a sell. Comparable across bars and across instruments,
+     * which the raw difference is not.
+     */
+    public double volumeImbalance() {
+        return hasVolumeSplit() ? (double) netVolume() / tradedVolume() : 0;
+    }
+
     @Override
     public Candle clone() {
         return new Candle(instrumentUid, timePoint, open, close, high, low, volume, volumeBuy, volumeSell);
