@@ -418,7 +418,7 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
      */
     protected BarFill claimFromBar(Order order, Candle bar) throws AbstractException {
         String instrumentUid = order.getInstrument().getUid();
-        long lots = liquidityModel.take(instrumentUid, bar, lotsLeft(order));
+        long lots = liquidityModel.take(instrumentUid, bar, order.getDirection(), lotsLeft(order));
 
         if (lots == 0) {
             return BarFill.barUsedUp();
@@ -429,7 +429,7 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
 
         // What the account cannot pay for goes back to the bar. Holding it would deny the orders
         // behind this one a share it was never going to trade.
-        liquidityModel.give(instrumentUid, bar, lots - affordable);
+        liquidityModel.give(instrumentUid, bar, order.getDirection(), lots - affordable);
 
         return affordable == 0 ? BarFill.unaffordable() : BarFill.trades(affordable, price);
     }

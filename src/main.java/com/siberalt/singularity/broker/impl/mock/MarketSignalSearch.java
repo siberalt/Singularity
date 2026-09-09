@@ -59,7 +59,7 @@ public class MarketSignalSearch {
                 return null;
             }
 
-            if (liquidityModel.barCapacity(candle) > 0) {
+            if (liquidityModel.barCapacity(candle, order.getDirection()) > 0) {
                 return candle;
             }
 

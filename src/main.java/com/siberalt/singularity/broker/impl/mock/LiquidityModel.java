@@ -1,5 +1,6 @@
 package com.siberalt.singularity.broker.impl.mock;
 
+import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.entity.candle.Candle;
 
 import java.math.BigDecimal;
@@ -19,9 +20,15 @@ import java.util.Map;
  * whatever is left over keeps working.
  * <p>
  * That cap is on the <em>bar</em>, not on each order. A bar is one stretch of tape, and every order
- * trading against it - buys and sells alike, whether posted now or waiting since yesterday - draws
- * from the same budget until it is used up. Handing each order its own share independently would
- * let the same volume be traded many times over, which is the very thing this class exists to stop.
+ * trading against it - whether posted now or waiting since yesterday - draws from the same budget
+ * until it is used up. Handing each order its own share independently would let the same volume be
+ * traded many times over, which is the very thing this class exists to stop.
+ * <p>
+ * Buys and sells keep separate budgets, because they are not competing for the same thing. An order
+ * to buy takes what the offers hold and a sell takes what the bids hold; where the feed reports
+ * which side each trade was initiated from, each direction is capped against its own side of the
+ * flow. A bar where everything traded was sell-initiated offers a buyer nothing, and used to look
+ * like a bar with room in it.
  * <p>
  * The cap is deliberately crude. A candle records what traded, not what was on offer, and one
  * account cannot expect to be the whole tape - the participation rate is the share of the bar this
@@ -43,7 +50,7 @@ public class LiquidityModel {
 
     private boolean infiniteLiquidity = true;
     private double participationRate = DEFAULT_PARTICIPATION_RATE;
-    private final Map<String, BarBudget> budgets = new HashMap<>();
+    private final Map<BudgetKey, BarBudget> budgets = new HashMap<>();
 
     public boolean isInfiniteLiquidity() {
         return infiniteLiquidity;
@@ -63,11 +70,11 @@ public class LiquidityModel {
      * between 0.05 and 0.20, and 0.10 is the usual starting point; lower makes the backtest more
      * pessimistic, which is the safe direction to be wrong in.
      * <p>
-     * Two reasons to stay at the low end of that range. A candle's volume counts both sides of
-     * every trade, while an order can only trade against the other side, so the volume actually
-     * reachable is a good deal less than the figure being multiplied here. And past roughly a
-     * quarter of the tape an order stops being a participant and starts being the market, at which
-     * point neither this cap nor any impact estimate laid on top of it means much.
+     * The rate is a share of the flow on the order's own side where the feed reports it, and of the
+     * whole bar where it does not - so on an instrument without the split the same number is the
+     * more generous of the two, by roughly double. Past roughly a quarter of the tape an order stops
+     * being a participant and starts being the market, at which point neither this cap nor any
+     * impact estimate laid on top of it means much.
      * <p>
      * What the rate costs in simulated time is worth a look before settling on it: at 0.10 against
      * TMOS in 2021, whose 1-minute bars averaged some 18 700 lots, an order takes about 1 900 lots
@@ -91,14 +98,14 @@ public class LiquidityModel {
      * waiting for from one too thin to trade against at all. What is left of it by the time an order
      * gets there is not asked here - only {@link #take} can answer that, and taking is the asking.
      */
-    public long barCapacity(Candle candle) {
+    public long barCapacity(Candle candle, OrderDirection direction) {
         if (infiniteLiquidity) {
             return Long.MAX_VALUE;
         }
 
         return Math.max(
             0,
-            BigDecimal.valueOf(candle.volume())
+            BigDecimal.valueOf(reachableVolume(candle, direction))
                 .multiply(BigDecimal.valueOf(participationRate))
                 .setScale(0, RoundingMode.DOWN)
                 .longValue()
@@ -114,12 +121,12 @@ public class LiquidityModel {
      * {@link #give} - a bar held by an order that never used it is a bar the orders behind it
      * were denied for nothing.
      */
-    public long take(String instrumentUid, Candle candle, long lotsWanted) {
+    public long take(String instrumentUid, Candle candle, OrderDirection direction, long lotsWanted) {
         if (infiniteLiquidity) {
             return lotsWanted;
         }
 
-        BarBudget budget = budgetOf(instrumentUid, candle);
+        BarBudget budget = budgetOf(instrumentUid, candle, direction);
         long granted = Math.min(lotsWanted, budget.remaining);
         budget.remaining -= granted;
 
@@ -131,13 +138,13 @@ public class LiquidityModel {
      * half of {@link #take}, and the same bargain the account makes with its money: hold back what
      * a fill might need, hand back what it turned out not to.
      */
-    public void give(String instrumentUid, Candle candle, long lots) {
+    public void give(String instrumentUid, Candle candle, OrderDirection direction, long lots) {
         if (infiniteLiquidity || lots <= 0) {
             return;
         }
 
-        BarBudget budget = budgetOf(instrumentUid, candle);
-        budget.remaining = Math.min(budget.remaining + lots, barCapacity(candle));
+        BarBudget budget = budgetOf(instrumentUid, candle, direction);
+        budget.remaining = Math.min(budget.remaining + lots, barCapacity(candle, direction));
     }
 
     /**
@@ -145,15 +152,33 @@ public class LiquidityModel {
      * Only one bar per instrument is ever live at once - the simulation trades the moment it is at -
      * so there is nothing to accumulate or evict.
      */
-    private BarBudget budgetOf(String instrumentUid, Candle candle) {
-        BarBudget budget = budgets.get(instrumentUid);
+    private BarBudget budgetOf(String instrumentUid, Candle candle, OrderDirection direction) {
+        BudgetKey key = new BudgetKey(instrumentUid, direction);
+        BarBudget budget = budgets.get(key);
 
         if (budget == null || !budget.barTime.equals(candle.getTime())) {
-            budget = new BarBudget(candle.getTime(), barCapacity(candle));
-            budgets.put(instrumentUid, budget);
+            budget = new BarBudget(candle.getTime(), barCapacity(candle, direction));
+            budgets.put(key, budget);
         }
 
         return budget;
+    }
+
+    /**
+     * How much of this bar an order of this direction could have reached: the side of the flow it
+     * trades against, or the whole bar where the feed does not say which side was which. Falling
+     * back to the whole bar is the generous reading, and it is the only one available for the
+     * instruments and stretches of history recorded before the split appeared.
+     */
+    protected long reachableVolume(Candle candle, OrderDirection direction) {
+        if (!candle.hasVolumeSplit() || direction == null || direction == OrderDirection.UNSPECIFIED) {
+            return candle.tradedVolume();
+        }
+
+        return direction == OrderDirection.BUY ? candle.volumeBuy() : candle.volumeSell();
+    }
+
+    private record BudgetKey(String instrumentUid, OrderDirection direction) {
     }
 
     private static final class BarBudget {

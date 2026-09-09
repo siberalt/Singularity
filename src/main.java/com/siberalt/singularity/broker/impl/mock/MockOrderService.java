@@ -333,6 +333,7 @@ public class MockOrderService implements OrderService {
         return liquidityModel.take(
             instrumentUid,
             requireCurrentCandle(instrumentUid),
+            order.getDirection(),
             order.getLotsRequested() - order.getLotsExecuted()
         );
     }
