@@ -8,7 +8,12 @@ import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.strategy.analysis.PredictivenessReport;
 import com.siberalt.singularity.strategy.analysis.SignalPredictiveness;
+import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
+import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetector;
+import com.siberalt.singularity.strategy.level.selector.StrongestLevelPairSelector;
 import com.siberalt.singularity.strategy.upside.InvertedUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.level.KeyLevelsUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.level.SimpleLevelBasedUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.MeanReversionUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.SlopeUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.VolumeImbalanceUpsideCalculator;
@@ -99,7 +104,8 @@ public class SignalPredictivenessAnalysis {
 
         // A minute series runs to hundreds of thousands of bars and every one of them costs the
         // calculator a pass over its whole window; a wider one is small enough to take whole.
-        int stride = interval == CandleInterval.MIN_1 ? 10 : 1;
+        int stride = Integer.parseInt(System.getProperty("stride",
+            interval == CandleInterval.MIN_1 ? "10" : "1"));
 
         System.out.printf("%n===== %s : %d bars, lookback %d, stride %d =====%n",
             interval, candles.size(), lookback, stride);
@@ -118,6 +124,15 @@ public class SignalPredictivenessAnalysis {
                 case "flow" -> new VolumeImbalanceUpsideCalculator(period);
                 case "reversion" -> new MeanReversionUpsideCalculator(period)
                     .setMinStraightness(Double.parseDouble(System.getProperty("straight", "0")));
+                // Where the price sits between the levels the recent history clustered around:
+                // near support reads as something to buy, near resistance as something to sell.
+                case "levels" -> new KeyLevelsUpsideCalculator(
+                    StatelessClusterLevelDetector.createDefault(1.4, PivotPointExtremeLocator.ofMinimums(period)),
+                    StatelessClusterLevelDetector.createDefault(1.4, PivotPointExtremeLocator.ofMaximums(period)),
+                    new SimpleLevelBasedUpsideCalculator(),
+                    new StrongestLevelPairSelector(2),
+                    window -> com.siberalt.singularity.strategy.upside.Upside.NEUTRAL
+                );
                 default -> new SlopeUpsideCalculator(period);
             };
 

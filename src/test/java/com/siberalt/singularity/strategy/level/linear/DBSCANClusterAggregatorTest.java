@@ -277,6 +277,37 @@ class DBSCANClusterAggregatorTest {
     @DisplayName("Локальная волатильность")
     class LocalVolatility {
 
+        /**
+         * Candles rolled up to a wider interval keep the index of the bar they opened on, so their
+         * neighbours are many indexes apart rather than one. Taking an index for a position then
+         * runs off the end of the window, which is what used to throw.
+         */
+        @Test
+        @DisplayName("Свечи с разреженными индексами не выводят окно за границы")
+        void handlesCandlesWhoseIndexesAreFarApart() {
+            List<Candle> candles = new ArrayList<>();
+
+            for (int hour = 0; hour < 10; hour++) {
+                // One candle per hour, indexes sixty apart as an hourly bar built of minutes is.
+                for (int minute = 0; minute < 60; minute++) {
+                    candleFactory.createCommon(100.0 + hour);
+                }
+
+                candles.add(candleFactory.createCommon(100.0 + hour));
+            }
+
+            when(extremeLocator.locate(candles)).thenReturn(List.of(candles.getFirst(), candles.getLast()));
+            when(volatilityCalculator.calculate(any())).thenReturn(1.0);
+
+            DBSCANClusterAggregator aggregator = createAggregatorBuilderWithMocks()
+                .multiplier(100)
+                .minPoints(2)
+                .localVolatilityWindow(2)
+                .build();
+
+            assertDoesNotThrow(() -> aggregator.aggregate(candles));
+        }
+
         @Test
         @DisplayName("Разные экстремумы получают разную локальную волатильность")
         void differentExtremesGetDifferentLocalVolatilities() {

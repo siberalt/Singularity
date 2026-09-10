@@ -39,6 +39,29 @@ public class DBSCANClusterAggregator implements ClusterAggregator {
         this.localVolatilityWindow = localVolatilityWindow;
     }
 
+    /**
+     * How far apart the indexes of neighbouring candles are, on average over the window.
+     * <p>
+     * Positions used to be taken as the index itself, less the first one, which assumes candles
+     * arrive one index apart. Raw candles do; candles rolled up to a wider interval do not - an
+     * hourly bar carries the index of the minute it opened on, so its neighbours are some sixty
+     * apart and the arithmetic overshot the window it was indexing into.
+     * <p>
+     * The step is an average because the spacing need not be even: an hour at the edge of a session
+     * holds fewer minutes than one in the middle. That makes a position approximate, which is all
+     * it needs to be - it picks the neighbourhood a local volatility is measured over, not a
+     * particular bar, and being a place or two out changes nothing about the neighbourhood.
+     */
+    private long indexStepOf(List<Candle> candles) {
+        if (candles.size() < 2) {
+            return 1;
+        }
+
+        long span = candles.getLast().getIndex() - candles.getFirst().getIndex();
+
+        return Math.max(1, span / (candles.size() - 1));
+    }
+
     @Override
     public List<Cluster> aggregate(List<Candle> lastCandles) {
         List<Candle> extremes = extremeLocator.locate(lastCandles);
@@ -57,11 +80,16 @@ public class DBSCANClusterAggregator implements ClusterAggregator {
         List<Set<Integer>> clustersIndices = new ArrayList<>();
         double[] localVolatilities = new double[prices.size()];
         long startIndex = lastCandles.getFirst().getIndex();
+        long indexStep = indexStepOf(lastCandles);
 
         for (int i = 0; i < localVolatilities.length; i++) {
-            long extremeIndex = extremes.get(i).getIndex() - startIndex;
-            int leftIndex = Math.toIntExact(Math.max(0, extremeIndex - localVolatilityWindow));
-            int rightIndex = Math.toIntExact(Math.min(lastCandles.size(), extremeIndex + localVolatilityWindow + 1));
+            long position = (extremes.get(i).getIndex() - startIndex) / indexStep;
+            // Both ends held inside the window and in order. The step is an average, so a position
+            // can land outside a window whose spacing is uneven, and an unclamped pair of bounds is
+            // what used to throw.
+            int leftIndex = (int) Math.clamp(position - localVolatilityWindow, 0, lastCandles.size());
+            int rightIndex = (int) Math.clamp(position + localVolatilityWindow + 1, leftIndex, lastCandles.size());
+
             localVolatilities[i] = volatiltyCalcualtor.calculate(lastCandles.subList(leftIndex, rightIndex));
         }
 
