@@ -1,12 +1,15 @@
 package com.siberalt.singularity.strategy.extreme.cache;
 
+import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.CandleFactory;
+import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
@@ -225,49 +228,6 @@ class CachingExtremeLocatorTest {
     }
 
     @Test
-    void locateHandlesRangeExceedingMaxLength() {
-        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
-        ExtremeRangeRepository rangeRepository = mock(ExtremeRangeRepository.class);
-        ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
-
-        CachingExtremeLocator locator = new CachingExtremeLocator(
-            baseLocator, rangeRepository, extremeRepository, "DEFAULT", 8
-        );
-
-        List<Candle> candles = List.of(
-            candleFactory.createCommon("2024-01-01T00:00:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:01:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:02:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:03:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:04:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:05:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:06:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:07:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:08:00Z", 110),
-            candleFactory.createCommon("2024-01-01T00:09:00Z", 110)
-        );
-        List<Candle> baseLocatorCandles = candles.subList(0, 9);
-
-        ExtremeRange newOuterRange = createOuterRange(0, 9);
-        ExtremeRange intersectedOuterRange = createOuterRange(4, 12);
-        ExtremeRange intersectedInnerRange = createInnerRange(9, 11);
-        ExtremeRange trimmedInnerRange = createInnerRange(2, 4);
-        ExtremeRange trimmedOuterRange = createOuterRange(0, 7);
-
-        when(rangeRepository.getIntersects(newOuterRange, RangeType.OUTER)).thenReturn(List.of(intersectedOuterRange));
-        when(rangeRepository.getIntersects(newOuterRange, RangeType.INNER)).thenReturn(List.of(intersectedInnerRange));
-        when(rangeRepository.getSubsets(trimmedOuterRange, RangeType.INNER)).thenReturn(List.of(intersectedInnerRange));
-        when(extremeRepository.getInnerRange(trimmedOuterRange)).thenReturn(trimmedInnerRange);
-
-        List<Candle> baseLocatorExtremes = List.of(candles.get(2), candles.get(4));
-        when(baseLocator.locate(baseLocatorCandles)).thenReturn(baseLocatorExtremes);
-        locator.locate(candles);
-
-        verify(extremeRepository, times(1)).deleteBatch(anyList());
-        verify(rangeRepository, times(1)).saveBatch(List.of(trimmedOuterRange, trimmedInnerRange));
-    }
-
-    @Test
     void locateCachesEmptyListWhenNoExtremesFoundWithIntersection() {
         ExtremeLocator baseLocator = mock(ExtremeLocator.class);
         ExtremeRangeRepository rangeRepository = mock(ExtremeRangeRepository.class);
@@ -362,6 +322,58 @@ class CachingExtremeLocatorTest {
         verify(rangeRepository, times(1)).saveBatch(List.of(unitedOuterRange, unitedInnerRange));
         verify(extremeRepository, times(1)).saveBatch(saveExtremesRange, newExtremes);
         verify(rangeRepository, times(1)).deleteBatch(anyList());
+    }
+
+    /**
+     * Candles rolled up to a wider interval keep the index of the raw bar they opened on, so an
+     * hourly window carries indexes some sixty apart. The missing stretch used to be cut out by
+     * counting off from the first index, which on such a window ran clean off the end of the list.
+     */
+    @Test
+    void locatesTheMissingStretchOfCandlesWhoseIndexesAreFarApart() {
+        ExtremeLocator baseLocator = mock(ExtremeLocator.class);
+        ExtremeRangeRepository rangeRepository = mock(ExtremeRangeRepository.class);
+        ExtremeRepository extremeRepository = mock(ExtremeRepository.class);
+
+        CachingExtremeLocator locator = new CachingExtremeLocator(baseLocator, rangeRepository, extremeRepository);
+
+        List<Candle> candles = hourlyCandles(10);
+
+        ExtremeRange outerRange = createOuterRange(0, 540);
+        ExtremeRange cachedOuterRange = createOuterRange(0, 300);
+        ExtremeRange cachedInnerRange = createInnerRange(0, 300);
+        ExtremeRange missingInnerRange = createInnerRange(301, 540);
+
+        List<Candle> cachedExtremes = List.of(candles.get(1));
+        List<Candle> newExtremes = List.of(candles.get(7));
+
+        when(rangeRepository.getIntersects(outerRange, RangeType.OUTER)).thenReturn(List.of(cachedOuterRange));
+        when(rangeRepository.getIntersects(outerRange, RangeType.INNER)).thenReturn(List.of(cachedInnerRange));
+        when(rangeRepository.getNeighbors(outerRange, RangeType.OUTER)).thenReturn(List.of());
+        when(rangeRepository.getSubsets(outerRange, RangeType.INNER)).thenReturn(List.of(cachedInnerRange));
+        when(extremeRepository.getByRange(cachedInnerRange)).thenReturn(cachedExtremes);
+        when(extremeRepository.getInnerRange(outerRange)).thenReturn(createInnerRange(60, 420));
+        when(baseLocator.locate(candles.subList(6, 10))).thenReturn(newExtremes);
+
+        List<Candle> result = locator.locate(candles);
+
+        assertEquals(List.of(candles.get(1), candles.get(7)), result);
+        verify(baseLocator, times(1)).locate(candles.subList(6, 10));
+        verify(extremeRepository, times(1)).saveBatch(missingInnerRange, newExtremes);
+    }
+
+    private List<Candle> hourlyCandles(int amount) {
+        return IntStream.range(0, amount)
+            .mapToObj(position -> new Candle(
+                "instrument1",
+                new TimePoint(position * 60L),
+                Quotation.of(100 + position),
+                Quotation.of(100 + position),
+                Quotation.of(100 + position),
+                Quotation.of(100 + position),
+                0
+            ))
+            .toList();
     }
 
     private ExtremeRange createOuterRange(int fromIndex, int toIndex) {

@@ -8,26 +8,45 @@ import com.siberalt.singularity.utils.ListUtils;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 
+/**
+ * Locates extremes once and remembers where it has already looked, so a window that has mostly been
+ * seen before costs only the part of it that is new.
+ * <p>
+ * Two kinds of range are kept. An OUTER range is a stretch of candles that has been scanned; an
+ * INNER range is the stretch the extremes found there actually span. What has to be scanned on a
+ * given call is the asked-for range less the INNER ranges already covering it.
+ * <p>
+ * Nothing here decides how much to keep. The cache grows as it is used, and it is the
+ * {@link ExtremeRangeRepository} that puts a bound on it - see
+ * {@link LimitedExtremeRangeRepository}, which this uses by default.
+ * <p>
+ * Not thread safe, and neither are the repositories it defaults to. Give each thread its own.
+ */
 public class CachingExtremeLocator implements ExtremeLocator {
     private record RangeExtremes(ExtremeRange extremeRange, List<Candle> extremes) {
     }
 
-    private record CacheResult(ExtremeRange updatedWindowRange, List<RangeExtremes> rangeExtremes) {
+    private record CacheResult(ExtremeRange windowRange, List<RangeExtremes> rangeExtremes) {
     }
 
-    public static long MAX_RANGE_LENGTH = 43200; // Maximum range size for one month (1 candle = 1 minute)
     public static String EXTREME_TYPE_DEFAULT = "DEFAULT";
 
     private final ExtremeLocator baseLocator;
-    private ExtremeRangeRepository rangeRepository = new RuntimeExtremeRangeRepository();
-    private ExtremeRepository extremeRepository = new RuntimeExtremeRepository();
-    private String extremeType = EXTREME_TYPE_DEFAULT;
-    private long maxRangeLength = MAX_RANGE_LENGTH;
+    private final ExtremeRangeRepository rangeRepository;
+    private final ExtremeRepository extremeRepository;
+    private final String extremeType;
 
     public CachingExtremeLocator(ExtremeLocator baseLocator) {
-        this.baseLocator = baseLocator;
+        this(baseLocator, new RuntimeExtremeRepository());
+    }
+
+    private CachingExtremeLocator(ExtremeLocator baseLocator, ExtremeRepository extremeRepository) {
+        this(
+            baseLocator,
+            new LimitedExtremeRangeRepository(new RuntimeExtremeRangeRepository(), extremeRepository),
+            extremeRepository
+        );
     }
 
     public CachingExtremeLocator(
@@ -35,23 +54,19 @@ public class CachingExtremeLocator implements ExtremeLocator {
         ExtremeRangeRepository rangeRepository,
         ExtremeRepository extremeRepository
     ) {
-        this.baseLocator = baseLocator;
-        this.rangeRepository = rangeRepository;
-        this.extremeRepository = extremeRepository;
+        this(baseLocator, rangeRepository, extremeRepository, EXTREME_TYPE_DEFAULT);
     }
 
     public CachingExtremeLocator(
         ExtremeLocator baseLocator,
         ExtremeRangeRepository rangeRepository,
         ExtremeRepository extremeRepository,
-        String extremeType,
-        long maxRangeLength
+        String extremeType
     ) {
         this.baseLocator = baseLocator;
         this.rangeRepository = rangeRepository;
         this.extremeRepository = extremeRepository;
         this.extremeType = extremeType;
-        this.maxRangeLength = maxRangeLength;
     }
 
     @Override
@@ -68,7 +83,7 @@ public class CachingExtremeLocator implements ExtremeLocator {
 
             ExtremeRange windowRange = ExtremeRange.unite(ListUtils.merge(outerNeighborsRanges, List.of(outerRange)));
             CacheResult cacheResult = cacheRanges(List.of(outerRange), windowRange, candles);
-            List<Candle> extremes = cacheResult.rangeExtremes().get(0).extremes();
+            List<Candle> extremes = cacheResult.rangeExtremes().getFirst().extremes();
 
             if (extremes.isEmpty()) {
                 return List.of();
@@ -77,12 +92,12 @@ public class CachingExtremeLocator implements ExtremeLocator {
             if (!outerNeighborsRanges.isEmpty()) {
                 List<ExtremeRange> oldInnerRanges = rangeRepository.getSubsets(windowRange, RangeType.INNER);
                 List<ExtremeRange> oldRanges = ListUtils.merge(outerNeighborsRanges, oldInnerRanges);
-                updateRange(cacheResult.updatedWindowRange(), oldRanges);
+                updateRange(cacheResult.windowRange(), oldRanges);
                 return extremes;
             }
 
             ExtremeRange innerRange = createRangeFromCandles(extremes, RangeType.INNER);
-            addRange(cacheResult.updatedWindowRange(), innerRange);
+            addRange(cacheResult.windowRange(), innerRange);
 
             return extremes;
         }
@@ -103,7 +118,7 @@ public class CachingExtremeLocator implements ExtremeLocator {
         CacheResult cacheResult = cacheRanges(missingInnerRanges, windowRange, candles);
 
         List<ExtremeRange> oldInnerRanges = rangeRepository.getSubsets(windowRange, RangeType.INNER);
-        updateRange(cacheResult.updatedWindowRange(), ListUtils.merge(oldOuterRanges, oldInnerRanges));
+        updateRange(cacheResult.windowRange(), ListUtils.merge(oldOuterRanges, oldInnerRanges));
 
         List<RangeExtremes> intersectedInnerExtremes = intersectedInnerRanges.stream()
             .map(range -> new RangeExtremes(range, extremeRepository.getByRange(range)))
@@ -124,25 +139,12 @@ public class CachingExtremeLocator implements ExtremeLocator {
             throw new IllegalArgumentException("Cannot create extremeRange from empty candle list");
         }
 
-        long fromIndex = candles.get(0).getIndex();
-        long toIndex = candles.get(candles.size() - 1).getIndex();
-        String instrumentId = candles.get(0).instrumentUid();
+        long fromIndex = candles.getFirst().getIndex();
+        long toIndex = candles.getLast().getIndex();
+        String instrumentId = candles.getFirst().instrumentUid();
         validateRange(fromIndex, toIndex);
 
         return new ExtremeRange(fromIndex, toIndex, instrumentId, extremeType, rangeType);
-    }
-
-    private List<ExtremeRange> detectOldRangesToDelete(List<ExtremeRange> rangesToDelete, List<ExtremeRange> missingRanges) {
-        List<ExtremeRange> oldRangesToDelete = new ArrayList<>();
-
-        for (ExtremeRange rangeToDelete : rangesToDelete) {
-            missingRanges.stream()
-                .map(range -> rangeToDelete.subtract(List.of(range)))
-                .filter(Objects::nonNull)
-                .forEach(oldRangesToDelete::addAll);
-        }
-
-        return oldRangesToDelete;
     }
 
     private CacheResult cacheRanges(
@@ -151,57 +153,58 @@ public class CachingExtremeLocator implements ExtremeLocator {
         List<Candle> candles
     ) {
         List<RangeExtremes> locatedExtremes = new ArrayList<>();
-        long startIndex = candles.get(0).getIndex();
 
         for (ExtremeRange rangeToCache : rangesToCache) {
-            RangeLong range = rangeToCache.range();
-            List<Candle> missingCandles = candles.subList(
-                (int) (range.fromIndex() - startIndex),
-                (int) (range.toIndex() - startIndex + 1)
-            );
+            List<Candle> missingCandles = candlesOf(candles, rangeToCache.range());
             List<Candle> extremes = baseLocator.locate(missingCandles);
 
             locatedExtremes.add(new RangeExtremes(rangeToCache, extremes));
-        }
-
-        windowRange = subtractEmptyEdgeRanges(locatedExtremes, windowRange);
-
-        ExtremeRange adjustToRange = ExtremeRange.average(rangesToCache);
-        ExtremeRange adjustedWindowRange = adjustRange(windowRange, adjustToRange, maxRangeLength);
-        List<ExtremeRange> rangesToDelete = windowRange.subtract(List.of(adjustedWindowRange));
-        List<ExtremeRange> oldRangesToDelete = detectOldRangesToDelete(rangesToDelete, rangesToCache);
-
-        if (!oldRangesToDelete.isEmpty()) {
-            extremeRepository.deleteBatch(oldRangesToDelete);
-        }
-
-        for (RangeExtremes rangeExtremes : locatedExtremes) {
-            List<Candle> extremes = rangeExtremes.extremes();
 
             if (!extremes.isEmpty()) {
-                processRangeExtremes(rangeExtremes, rangesToDelete, extremeRepository);
+                extremeRepository.saveBatch(rangeToCache, extremes);
             }
         }
 
-        return new CacheResult(adjustedWindowRange, locatedExtremes);
+        return new CacheResult(subtractEmptyEdgeRanges(locatedExtremes, windowRange), locatedExtremes);
     }
 
-    private void processRangeExtremes(RangeExtremes rangeExtremes, List<ExtremeRange> rangesToDelete, ExtremeRepository extremeRepository) {
-        ExtremeRange deleteRange = detectDeleteRange(rangeExtremes.extremeRange(), rangesToDelete);
+    /**
+     * The candles a range covers, found through their indexes rather than by counting off from the
+     * first one.
+     * <p>
+     * Counting off carried the same assumption that used to sit in the cluster aggregator: that
+     * candles arrive one index apart, so a candle sits at its index less the first one. Raw candles
+     * do arrive that way, the index being a row number. Candles rolled up to a wider interval do
+     * not - an hourly bar keeps the index of the minute it opened on, so neighbours are some sixty
+     * apart and the arithmetic ran off the end of the list.
+     * <p>
+     * A search over the indexes assumes nothing about the spacing. Unlike the average step the
+     * cluster aggregator settles for, it also has to be exact here: these bounds decide which
+     * candles the base locator is handed, not merely which neighbourhood something is measured over.
+     */
+    private List<Candle> candlesOf(List<Candle> candles, RangeLong range) {
+        return candles.subList(
+            lowerBound(candles, range.fromIndex()),
+            lowerBound(candles, range.toIndex() + 1)
+        );
+    }
 
-        if (deleteRange != null) {
-            ExtremeRange partialCacheRange = rangeExtremes.extremeRange().subtract(deleteRange);
+    /** Where the first candle whose index is not below {@code index} sits; the size if none is. */
+    private int lowerBound(List<Candle> candles, long index) {
+        int low = 0;
+        int high = candles.size();
 
-            if (partialCacheRange != null) {
-                List<Candle> candlesToCache = extractRangeCandles(partialCacheRange, rangeExtremes.extremes());
+        while (low < high) {
+            int middle = (low + high) >>> 1;
 
-                if (!candlesToCache.isEmpty()) {
-                    extremeRepository.saveBatch(partialCacheRange, candlesToCache);
-                }
+            if (candles.get(middle).getIndex() < index) {
+                low = middle + 1;
+            } else {
+                high = middle;
             }
-        } else {
-            extremeRepository.saveBatch(rangeExtremes.extremeRange(), rangeExtremes.extremes());
         }
+
+        return low;
     }
 
     private ExtremeRange subtractEmptyEdgeRanges(List<RangeExtremes> allExtremes, ExtremeRange windowRange) {
@@ -218,7 +221,7 @@ public class CachingExtremeLocator implements ExtremeLocator {
         }
 
         if (trimmedRanges.size() == 1) {
-            return trimmedRanges.get(0);
+            return trimmedRanges.getFirst();
         }
 
         throw new IllegalStateException("Invalid window extremeRange defragmentation: " + trimmedRanges);
@@ -226,45 +229,6 @@ public class CachingExtremeLocator implements ExtremeLocator {
 
     private boolean isEmptyEdgeRange(RangeExtremes rangeExtremes, ExtremeRange windowRange) {
         return rangeExtremes.extremes().isEmpty() && rangeExtremes.extremeRange().isEdgeSubsetOf(windowRange);
-    }
-
-    private List<Candle> extractRangeCandles(
-        ExtremeRange range,
-        List<Candle> candles
-    ) {
-        long startIndex = -1;
-        long endIndex = -1;
-
-        for (int i = 0; i < candles.size(); i++) {
-            long candleIndex = candles.get(i).getIndex();
-
-            if (startIndex == -1 && candleIndex >= range.fromIndex()) {
-                startIndex = i;
-            } else if (candleIndex >= range.toIndex()) {
-                endIndex = i - 1;
-                break;
-            }
-        }
-
-        endIndex = endIndex == -1 ? candles.size() - 1 : endIndex;
-
-        if (startIndex == -1 || endIndex == -1 || startIndex > endIndex) {
-            throw new IllegalArgumentException("Cannot extract candles for extremeRange: " + range);
-        }
-
-        return candles.subList((int) startIndex, (int) endIndex + 1);
-    }
-
-    private ExtremeRange detectDeleteRange(ExtremeRange sourceRange, List<ExtremeRange> rangesToDelete) {
-        for (ExtremeRange rangeToDelete : rangesToDelete) {
-            ExtremeRange intersectedRange = sourceRange.intersection(rangeToDelete);
-
-            if (intersectedRange != null) {
-                return intersectedRange;
-            }
-        }
-
-        return null;
     }
 
     private void addRange(ExtremeRange newOuterRange, ExtremeRange newInnerRange) {
@@ -283,40 +247,9 @@ public class CachingExtremeLocator implements ExtremeLocator {
         rangeRepository.deleteBatch(oldRanges);
     }
 
-    private ExtremeRange createOuterRange(long fromIndex, long toIndex, String instrumentId) {
-        validateRange(fromIndex, toIndex);
-
-        return new ExtremeRange(fromIndex, toIndex, instrumentId, extremeType, RangeType.OUTER);
-    }
-
     private void validateRange(long fromIndex, long toIndex) {
         if (fromIndex < 0 || toIndex < 0 || fromIndex > toIndex) {
             throw new IllegalArgumentException("Invalid extremeRange indexes: fromIndex=" + fromIndex + ", toIndex=" + toIndex);
         }
-    }
-
-    private ExtremeRange adjustRange(ExtremeRange unitedRange, ExtremeRange outerRange, long maxRangeLength) {
-        if (unitedRange.length() <= maxRangeLength) {
-            return unitedRange;
-        }
-
-        long distanceToNewFromIndex = Math.abs(outerRange.fromIndex() - unitedRange.fromIndex());
-        long distanceToNewToIndex = Math.abs(outerRange.toIndex() - unitedRange.toIndex());
-
-        if (distanceToNewFromIndex < distanceToNewToIndex) {
-            unitedRange = createOuterRange(
-                outerRange.fromIndex(),
-                outerRange.fromIndex() + maxRangeLength - 1,
-                unitedRange.instrumentId()
-            );
-        } else {
-            unitedRange = createOuterRange(
-                outerRange.toIndex() - maxRangeLength + 1,
-                outerRange.toIndex(),
-                unitedRange.instrumentId()
-            );
-        }
-
-        return unitedRange;
     }
 }
