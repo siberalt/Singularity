@@ -332,9 +332,13 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
 
         bucket.remove(range);
 
+        // What was last asked about stays: it is a fact about the caller, not about what is held.
+        // Forgetting it with the last range made the budget fall back to the flat figure for the
+        // save that follows - and a range is replaced by deleting it first, so that was every save.
+        // A window of daily bars wider than the flat figure was then cut down on arrival, and took
+        // the extremes the window itself was about to return.
         if (bucket.isEmpty()) {
             heldRanges.remove(key);
-            lastAsked.remove(key);
         }
     }
 

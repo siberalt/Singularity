@@ -184,23 +184,27 @@ public class SignalPredictivenessAnalysis {
     }
 
     /**
-     * Puts a locator behind the range cache unless {@code -Dcache=false} turns it off.
+     * Puts a locator behind the range cache, which {@code -Dcache=true} turns on.
      * <p>
-     * Worth it here because of how this measurement walks: the window advances a bar at a time over
-     * the same list, so all but the newest stretch of every window has been scanned already, and
-     * without the cache a level calculator re-reads its whole lookback on every one of thousands of
-     * bars. That is what put an hourly measurement out of reach.
+     * The walk here is made for a cache - the window advances a bar at a time over the same list,
+     * so every window but its newest stretch has been scanned before - and once the cache was
+     * actually caching it paid: on minute bars, from about three times faster than a plain scan on
+     * a window of five hundred to tens of times faster on wider ones. It first measured slower only
+     * because it was broken and rescanned every window whole.
      * <p>
-     * It is an approximation, not a free lunch, and the reason to keep the switch. A locator that
-     * needs bars either side of a candle to call it an extreme cannot see the ones at the edge of
-     * the short stretch it is handed, so a cached run and a plain one need not agree exactly -
-     * compare the two on a series small enough to run both before trusting the cached numbers.
+     * Off by default all the same, because it does not answer quite as a plain scan does. A plain
+     * scan cannot judge the first few bars of a window, having nothing to their left; the cache
+     * judged them earlier, when they sat further in, and remembers. Past those opening bars the two
+     * agree exactly - checked window by window over two years of one share - but a level signal
+     * read through the cache moves in the third decimal, so runs with it and without it should not
+     * be compared as if they were the same measurement.
      * <p>
      * Each locator gets its own cache. A cached locator carries state, and one repository shared
-     * between the minimum and the maximum locator would answer each with the other's extremes.
+     * between the minimum and the maximum locator would answer each with the other's extremes. That
+     * state is also why it cannot simply be switched on under a walk-forward, which runs threads.
      */
     private static ExtremeLocator cached(ExtremeLocator baseLocator) {
-        if (!Boolean.parseBoolean(System.getProperty("cache", "true"))) {
+        if (!Boolean.getBoolean("cache")) {
             return baseLocator;
         }
 

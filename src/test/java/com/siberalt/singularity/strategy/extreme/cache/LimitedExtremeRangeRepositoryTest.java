@@ -130,6 +130,26 @@ class LimitedExtremeRangeRepositoryTest {
         assertEquals(100, cachedExtremes().size());
     }
 
+    /**
+     * The locator replaces a range by deleting the old one before saving the new, so for a moment
+     * nothing is held at all. The window-sized budget has to survive that moment: it is sized by what
+     * the caller asks about, and the caller has not stopped asking.
+     */
+    @Test
+    void keepsTheWindowBudgetWhileARangeIsReplaced() {
+        LimitedExtremeRangeRepository repository =
+            new LimitedExtremeRangeRepository(delegate, extremes, 8, 2);
+
+        repository.getIntersects(outer(0, 99), RangeType.OUTER);
+        cache(repository, outer(0, 99), inner(0, 99));
+
+        repository.deleteBatch(List.of(outer(0, 99)));
+        repository.saveBatch(List.of(outer(0, 109)));
+
+        assertEquals(List.of(outer(0, 109)), heldOuterRanges(repository));
+        assertEquals(100, cachedExtremes().size());
+    }
+
     @Test
     void refusesToBeBuiltWithNothingToLimit() {
         assertThrows(IllegalArgumentException.class,

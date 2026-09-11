@@ -8,6 +8,7 @@ import com.siberalt.singularity.utils.ListUtils;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Locates extremes once and remembers where it has already looked, so a window that has mostly been
@@ -115,17 +116,27 @@ public class CachingExtremeLocator implements ExtremeLocator {
         List<ExtremeRange> oldOuterRanges = ListUtils.merge(outerIntersectedRanges, outerNeighborsRanges);
         ExtremeRange windowRange = ExtremeRange.unite(ListUtils.merge(List.of(outerRange), oldOuterRanges));
 
+        // Read before anything is saved. Saving can make a limited repository evict, and the answer to
+        // this window must not depend on what storing it happened to push out.
+        //
+        // Clipped to the window asked about. An INNER range reaches as far back as the extremes found
+        // under it, which on a slide is behind where this window starts, and handing all of it back
+        // returned extremes from before the window.
+        List<RangeExtremes> intersectedInnerExtremes = intersectedInnerRanges.stream()
+            .map(range -> new RangeExtremes(range, extremeRepository.getByRange(range.intersection(outerRange))))
+            .toList();
+
         CacheResult cacheResult = cacheRanges(missingInnerRanges, windowRange, candles);
 
         List<ExtremeRange> oldInnerRanges = rangeRepository.getSubsets(windowRange, RangeType.INNER);
         updateRange(cacheResult.windowRange(), ListUtils.merge(oldOuterRanges, oldInnerRanges));
 
-        List<RangeExtremes> intersectedInnerExtremes = intersectedInnerRanges.stream()
-            .map(range -> new RangeExtremes(range, extremeRepository.getByRange(range)))
-            .toList();
-
-        return ListUtils.merge(cacheResult.rangeExtremes(), intersectedInnerExtremes)
-            .stream()
+        // Concatenated, not merged. The stretches just scanned are what was asked for less what was
+        // cached, so no stretch is ever on both lists and there is nothing to deduplicate - and
+        // deduplicating was not free: it hashed every stretch, which hashed every candle in it, and a
+        // candle hashes by formatting its time and prices into strings. On a wide window that was
+        // half of what a cached call cost.
+        return Stream.concat(cacheResult.rangeExtremes().stream(), intersectedInnerExtremes.stream())
             .sorted(Comparator.comparingLong(re -> re.extremeRange().range().fromIndex()))
             .flatMap(re -> re.extremes().stream())
             .toList();
@@ -155,8 +166,7 @@ public class CachingExtremeLocator implements ExtremeLocator {
         List<RangeExtremes> locatedExtremes = new ArrayList<>();
 
         for (ExtremeRange rangeToCache : rangesToCache) {
-            List<Candle> missingCandles = candlesOf(candles, rangeToCache.range());
-            List<Candle> extremes = baseLocator.locate(missingCandles);
+            List<Candle> extremes = baseLocator.locate(candlesOf(candles, rangeToCache.range()));
 
             locatedExtremes.add(new RangeExtremes(rangeToCache, extremes));
 
@@ -237,14 +247,28 @@ public class CachingExtremeLocator implements ExtremeLocator {
 
     private void updateRange(ExtremeRange newOuterRange, List<ExtremeRange> oldRanges) {
         ExtremeRange newInnerRange = extremeRepository.getInnerRange(newOuterRange);
+        List<ExtremeRange> newRanges = null == newInnerRange
+            ? List.of(newOuterRange)
+            : List.of(newOuterRange, newInnerRange);
 
-        if (null == newInnerRange) {
-            rangeRepository.saveBatch(List.of(newOuterRange));
-        } else {
-            rangeRepository.saveBatch(List.of(newOuterRange, newInnerRange));
+        // Only what actually changed. A range that survives a call unchanged - most INNER ranges on a
+        // slide, where no new extreme turned up - used to be saved as new and then deleted as old in
+        // the same breath, and the delete took the copy just saved. The next window found no INNER
+        // range, counted itself missing from end to end and was scanned whole: every other window.
+        List<ExtremeRange> added = newRanges.stream().filter(range -> !oldRanges.contains(range)).toList();
+        List<ExtremeRange> replaced = oldRanges.stream().filter(range -> !newRanges.contains(range)).toList();
+
+        // The old go before the new arrive, never after. A repository that limits what it holds
+        // would otherwise see both at once - the new window and the one it grew from, covering the
+        // same bars twice - count them as twice the size, and evict the old one as cold, purging the
+        // extremes underneath it that the new one still covers. On a slide that is most of them.
+        if (!replaced.isEmpty()) {
+            rangeRepository.deleteBatch(replaced);
         }
 
-        rangeRepository.deleteBatch(oldRanges);
+        if (!added.isEmpty()) {
+            rangeRepository.saveBatch(added);
+        }
     }
 
     private void validateRange(long fromIndex, long toIndex) {

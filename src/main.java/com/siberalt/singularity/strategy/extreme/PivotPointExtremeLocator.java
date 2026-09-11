@@ -95,15 +95,36 @@ public class PivotPointExtremeLocator implements ExtremeLocator {
         return groups;
     }
 
-    // Проверка локального максимума по значению (например, по high)
+    /**
+     * Whether a candle is the extreme of its vicinity. A plateau - neighbours closing at the same
+     * price - yields its first candle only: a neighbour on the left has to be strictly worse, one on
+     * the right merely no better.
+     * <p>
+     * Both candles of a plateau used to count, which reported one turn of the market twice. Grouping
+     * hid that on minute bars, but only because the group reaches {@code extremeArea} index units
+     * and minute bars sit one unit apart; hourly ones sit dozens apart and the duplicates stood -
+     * about a tenth of all minimums on one share.
+     * <p>
+     * It also made the locator impossible to cache as designed. A cache rescans only past the last
+     * extreme it holds, trusting that nothing within that extreme's vicinity can be another one - a
+     * neighbour at least as good sits right there. Only a tie broke that, and every extreme a cache
+     * lost on real bars was the second candle of such a pair.
+     */
     private boolean isLocalExtreme(List<Candle> candles, int index, int left, int right) {
         Candle current = candles.get(index);
 
-        for (int i = index - left; i <= index + right; i++) {
-            if (i != index && comparator.compare(candles.get(i), current) < 0) {
+        for (int i = index - left; i < index; i++) {
+            if (comparator.compare(candles.get(i), current) <= 0) {
                 return false;
             }
         }
+
+        for (int i = index + 1; i <= index + right; i++) {
+            if (comparator.compare(candles.get(i), current) < 0) {
+                return false;
+            }
+        }
+
         return true;
     }
 

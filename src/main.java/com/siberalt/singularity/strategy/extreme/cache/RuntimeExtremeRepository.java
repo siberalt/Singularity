@@ -37,7 +37,11 @@ public class RuntimeExtremeRepository implements ExtremeRepository {
             return null;
         }
 
-        return new ExtremeRange(firstKey, lastKey, instrumentId, outerRange.extremeType());
+        // INNER by name and by contract. The constructor without a type makes an OUTER one, and an
+        // inner range saved as OUTER leaves the cache with no record of where its extremes are: every
+        // window after the first was then rescanned whole, so the cache paid for a full scan and for
+        // its own bookkeeping on top, and came out slower than no cache at all.
+        return new ExtremeRange(firstKey, lastKey, instrumentId, outerRange.extremeType(), RangeType.INNER);
     }
 
     @Override

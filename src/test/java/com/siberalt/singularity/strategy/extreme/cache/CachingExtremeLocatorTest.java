@@ -5,6 +5,8 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.CandleFactory;
 import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -12,6 +14,7 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 class CachingExtremeLocatorTest {
@@ -155,8 +158,8 @@ class CachingExtremeLocatorTest {
         ExtremeRange unitedInnerRange = createInnerRange(2, 7);
 
         List<Candle> newExtremes = List.of(
-            Candle.of(Instant.parse("2024-01-01T00:02:00Z"),  120),
-            Candle.of(Instant.parse("2024-01-01T00:04:00Z"),  130)
+            candleFactory.createCommon("2024-01-01T00:02:00Z", 120),
+            candleFactory.createCommon("2024-01-01T00:04:00Z", 130)
         );
 
         when(rangeRepository.getIntersects(newOuterRange, RangeType.OUTER)).thenReturn(List.of());
@@ -312,15 +315,21 @@ class CachingExtremeLocatorTest {
             List.of(leftIntersectingInnerRange, rightNeighborInnerRange)
         );
 
+        // The extreme at 2 comes out of the cache, from the stretch the window overlaps on its left;
+        // only the one at 4 lies in the stretch the base locator is asked about.
+        List<Candle> cachedExtremes = newExtremes.subList(0, 1);
+        List<Candle> locatedExtremes = newExtremes.subList(1, 2);
+
         when(extremeRepository.getInnerRange(unitedOuterRange)).thenReturn(unitedInnerRange);
-        when(baseLocator.locate(missingRangeCandles)).thenReturn(newExtremes);
+        when(extremeRepository.getByRange(createInnerRange(2, 2))).thenReturn(cachedExtremes);
+        when(baseLocator.locate(missingRangeCandles)).thenReturn(locatedExtremes);
 
         List<Candle> result = locator.locate(newCandles);
 
         assertEquals(newExtremes, result);
 
         verify(rangeRepository, times(1)).saveBatch(List.of(unitedOuterRange, unitedInnerRange));
-        verify(extremeRepository, times(1)).saveBatch(saveExtremesRange, newExtremes);
+        verify(extremeRepository, times(1)).saveBatch(saveExtremesRange, locatedExtremes);
         verify(rangeRepository, times(1)).deleteBatch(anyList());
     }
 
@@ -382,5 +391,105 @@ class CachingExtremeLocatorTest {
 
     private ExtremeRange createInnerRange(int fromIndex, int toIndex) {
         return new ExtremeRange(fromIndex, toIndex, "instrument1", "DEFAULT", RangeType.INNER);
+    }
+
+    /**
+     * The cache on its real repositories, walked the way every caller walks it: a window sliding
+     * forward a bar at a time.
+     * <p>
+     * The tests above mock the repositories, and that is how a broken one went unseen - the mock
+     * handed back a proper INNER range where the real repository handed back an OUTER one, and the
+     * cache rescanned every window whole. Its answers stayed right, so nothing checking answers
+     * alone could tell; only its cost gave it away. So these check both.
+     */
+    @Nested
+    class SlidingWindow {
+        private static final int WINDOW = 200;
+        private static final int SLIDES = 50;
+
+        /**
+         * How far into a window the cache may know more than a plain scan: the pivot's vicinity,
+         * plus the reach of the grouping that follows it.
+         */
+        private static final int OPENING_BARS = PivotPointExtremeLocator.DEFAULT_LEFT_VICINITY
+            + PivotPointExtremeLocator.DEFAULT_EXTREME_AREA;
+
+        private final List<Candle> wave = IntStream.range(0, 4 * WINDOW + SLIDES)
+            .mapToObj(this::waveCandle)
+            .toList();
+
+        /**
+         * The two agree on every window except in its opening bars, and there for a reason. A plain
+         * scan cannot judge the first few bars of a window, having nothing to their left; the cache
+         * judged them earlier, when they sat further in, and remembers. Nothing it returns comes
+         * from past the window's last bar, so this is memory rather than look-ahead.
+         */
+        @Test
+        void agreesWithAPlainScanPastTheWindowsOpeningBars() {
+            PivotPointExtremeLocator pivot = PivotPointExtremeLocator.ofMinimums(5);
+            CachingExtremeLocator cached = new CachingExtremeLocator(PivotPointExtremeLocator.ofMinimums(5));
+
+            for (int bar = WINDOW; bar < WINDOW + SLIDES; bar++) {
+                List<Candle> window = wave.subList(bar - WINDOW, bar);
+                List<Candle> expected = pivot.locate(window);
+                List<Candle> actual = cached.locate(window);
+                long openingEnd = window.get(OPENING_BARS).getIndex();
+
+                for (Candle extreme : expected) {
+                    assertTrue(actual.contains(extreme) || extreme.getIndex() < openingEnd,
+                        "window ending at " + bar + " lost " + extreme.getIndex());
+                }
+
+                for (Candle extreme : actual) {
+                    assertTrue(expected.contains(extreme) || extreme.getIndex() < openingEnd,
+                        "window ending at " + bar + " added " + extreme.getIndex());
+                }
+            }
+        }
+
+        /**
+         * What a slide costs has to depend on what it adds, not on how wide the window is - that is
+         * the whole point of the cache. So the same bars are slid over with a narrow window and with
+         * one four times wider, and the wider may not cost meaningfully more.
+         */
+        @Test
+        void scansWhatEachSlideAddsWhateverTheWindow() {
+            long narrow = scannedOverSlides(WINDOW);
+            long wide = scannedOverSlides(4 * WINDOW);
+
+            assertTrue(wide < 1.5 * narrow, "narrow window scanned " + narrow + " bars, four times wider " + wide);
+            assertTrue(narrow < (SLIDES - 1L) * WINDOW, "narrow window scanned " + narrow + " bars, as much as rescanning");
+        }
+
+        /** Bars handed to the base locator while a window of this width slides over the last bars. */
+        private long scannedOverSlides(int window) {
+            PivotPointExtremeLocator pivot = PivotPointExtremeLocator.ofMinimums(5);
+            long[] scanned = {0};
+            CachingExtremeLocator cached = new CachingExtremeLocator(stretch -> {
+                scanned[0] += stretch.size();
+
+                return pivot.locate(stretch);
+            });
+
+            // Both widths end on the same bars, so what is new on each slide is the same for both.
+            int end = wave.size();
+
+            cached.locate(wave.subList(end - SLIDES - window, end - SLIDES));
+            scanned[0] = 0;
+
+            for (int bar = end - SLIDES + 1; bar <= end; bar++) {
+                cached.locate(wave.subList(bar - window, bar));
+            }
+
+            return scanned[0];
+        }
+
+        /** A wave, so a window of it holds a handful of minimums rather than none or one per bar. */
+        private Candle waveCandle(int index) {
+            Quotation price = Quotation.of(100 + 10 * Math.sin(index / 7.0));
+
+            return new Candle("instrument1", new TimePoint(index, Instant.EPOCH.plusSeconds(60L * index)),
+                price, price, price, price, 0);
+        }
     }
 }
