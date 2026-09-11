@@ -21,6 +21,7 @@ public class Quotation {
 
     public Quotation setUnits(long units) {
         this.units = units;
+        this.value = null;
         return this;
     }
 
@@ -34,6 +35,7 @@ public class Quotation {
 
     public Quotation setNano(int nano) {
         this.nano = nano;
+        this.value = null;
         return this;
     }
 
@@ -141,6 +143,18 @@ public class Quotation {
         }
 
         return this.isEqual((Quotation) obj);
+    }
+
+    /**
+     * Hashes the numeric value, as {@link #equals} compares it: 1.5 is equal whether it was built as
+     * (1, 500_000_000), (2, -500_000_000) or (0, 1_500_000_000), so the fields themselves can't be
+     * hashed. The value in nanos, units * 10^9 + nano, is the same for all of them. It wraps for
+     * |units| above ~9.2 * 10^9, but wrapping is arithmetic mod 2^64, so equal values still wrap to
+     * the same long - it only costs collisions, never consistency.
+     */
+    @Override
+    public int hashCode() {
+        return Long.hashCode(toLong());
     }
 
     @Override

@@ -61,17 +61,16 @@ public record Candle (
 
     @Override
     public int hashCode() {
-        return Objects.hash(
-            instrumentUid,
-            timePoint.toString(),
-            open.toString(),
-            close.toString(),
-            high.toString(),
-            low.toString(),
-            volume,
-            volumeBuy,
-            volumeSell
-        );
+        int result = Objects.hashCode(instrumentUid);
+        result = 31 * result + Objects.hashCode(timePoint);
+        result = 31 * result + Objects.hashCode(open);
+        result = 31 * result + Objects.hashCode(close);
+        result = 31 * result + Objects.hashCode(high);
+        result = 31 * result + Objects.hashCode(low);
+        result = 31 * result + Long.hashCode(volume);
+        result = 31 * result + Long.hashCode(volumeBuy);
+        result = 31 * result + Long.hashCode(volumeSell);
+        return result;
     }
 
     public long getIndex() {
