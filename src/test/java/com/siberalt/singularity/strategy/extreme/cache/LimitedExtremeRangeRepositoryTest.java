@@ -113,6 +113,23 @@ class LimitedExtremeRangeRepositoryTest {
         assertEquals(List.of(outer(0, 9), outer(100, 109)), heldOuterRanges(repository));
     }
 
+    /**
+     * A budget counted in index units is a count of bars only for raw candles. Rolled-up ones carry
+     * the index of the raw bar they opened on, so a window of them spans many times its own length
+     * in units - and a flat budget then evicts the window the caller is working in, every call.
+     */
+    @Test
+    void sizesTheBudgetByTheWindowWhenBarsSitFarApart() {
+        LimitedExtremeRangeRepository repository =
+            new LimitedExtremeRangeRepository(delegate, extremes, 8, 2);
+
+        repository.getIntersects(outer(0, 99), RangeType.OUTER);
+        cache(repository, outer(0, 99), inner(0, 99));
+
+        assertEquals(List.of(outer(0, 99)), heldOuterRanges(repository));
+        assertEquals(100, cachedExtremes().size());
+    }
+
     @Test
     void refusesToBeBuiltWithNothingToLimit() {
         assertThrows(IllegalArgumentException.class,
@@ -121,10 +138,13 @@ class LimitedExtremeRangeRepositoryTest {
             () -> new LimitedExtremeRangeRepository(delegate, null));
         assertThrows(IllegalArgumentException.class,
             () -> new LimitedExtremeRangeRepository(delegate, extremes, 0));
+        assertThrows(IllegalArgumentException.class,
+            () -> new LimitedExtremeRangeRepository(delegate, extremes, 8, 0));
     }
 
+    /** A flat budget, with the window-sized one turned down to where it cannot raise it. */
     private LimitedExtremeRangeRepository limitedTo(long maxCachedLength) {
-        return new LimitedExtremeRangeRepository(delegate, extremes, maxCachedLength);
+        return new LimitedExtremeRangeRepository(delegate, extremes, maxCachedLength, 1);
     }
 
     /** Saves a scanned stretch the way the locator does: the ranges, and the extremes under them. */

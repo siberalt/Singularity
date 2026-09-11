@@ -39,9 +39,13 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
     /** A month of minute candles, the size the locator used to cap a single window at. */
     public static final long DEFAULT_MAX_CACHED_LENGTH = 43200;
 
+    /** How many of the window last asked about the cache holds when that is the larger budget. */
+    public static final int DEFAULT_CACHED_WINDOWS = 4;
+
     private final ExtremeRangeRepository rangeRepository;
     private final ExtremeRepository extremeRepository;
     private final long maxCachedLength;
+    private final int cachedWindows;
 
     /** OUTER ranges held per instrument and extreme type, each against when it was last used. */
     private final Map<String, Map<ExtremeRange, Long>> heldRanges = new HashMap<>();
@@ -63,6 +67,15 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
         ExtremeRepository extremeRepository,
         long maxCachedLength
     ) {
+        this(rangeRepository, extremeRepository, maxCachedLength, DEFAULT_CACHED_WINDOWS);
+    }
+
+    public LimitedExtremeRangeRepository(
+        ExtremeRangeRepository rangeRepository,
+        ExtremeRepository extremeRepository,
+        long maxCachedLength,
+        int cachedWindows
+    ) {
         if (rangeRepository == null || extremeRepository == null) {
             throw new IllegalArgumentException("Nothing to limit");
         }
@@ -71,13 +84,48 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
             throw new IllegalArgumentException("A cache has to hold something, got " + maxCachedLength);
         }
 
+        if (cachedWindows < 1) {
+            throw new IllegalArgumentException("A cache has to hold the window it is asked about, got " + cachedWindows);
+        }
+
         this.rangeRepository = rangeRepository;
         this.extremeRepository = extremeRepository;
         this.maxCachedLength = maxCachedLength;
+        this.cachedWindows = cachedWindows;
     }
 
     public long getMaxCachedLength() {
         return maxCachedLength;
+    }
+
+    public int getCachedWindows() {
+        return cachedWindows;
+    }
+
+    /**
+     * What one instrument is allowed to hold, in index units: the flat figure, or room for a few of
+     * the window last asked about, whichever is larger.
+     * <p>
+     * The flat figure alone is a trap, and it sprang. An index is a row number over the raw candles,
+     * so for minute bars one unit is one bar and the figure reads as a count. Roll the bars up and
+     * it stops: a daily bar of one share carries indexes some five hundred and sixty apart, so a
+     * window of two hundred and fifty of them spans a hundred and forty thousand units - three times
+     * the flat budget. The cache spent every call throwing away what it had just computed, and a
+     * level signal measured over it came out different from the same signal measured without a
+     * cache: a tenth of the extremes gone, a third of the windows changed.
+     * <p>
+     * Measuring the budget in windows instead of units is what stops that happening again, because
+     * a window is the unit the caller actually thinks in. The flat figure stays as the floor for a
+     * caller that never asks anything, and because holding a month of minutes is cheap.
+     */
+    private long budgetOf(String key) {
+        ExtremeRange asked = lastAsked.get(key);
+
+        if (asked == null) {
+            return maxCachedLength;
+        }
+
+        return Math.max(maxCachedLength, cachedWindows * asked.length());
     }
 
     @Override
@@ -159,9 +207,10 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
             return;
         }
 
+        long budget = budgetOf(key);
         long cached = cachedLength(bucket);
 
-        if (cached <= maxCachedLength) {
+        if (cached <= budget) {
             return;
         }
 
@@ -172,7 +221,7 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
 
         List<ExtremeRange> dropped = new ArrayList<>();
 
-        for (int index = 0; cached > maxCachedLength && index < coldestFirst.size(); index++) {
+        for (int index = 0; cached > budget && index < coldestFirst.size(); index++) {
             ExtremeRange cold = coldestFirst.get(index);
 
             purge(cold);
@@ -188,8 +237,8 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
         // Reachable, and the case that matters: with every cold range gone the bucket holds only
         // what this very batch saved, and one window grown past the budget on its own is exactly
         // what whole-range eviction cannot touch.
-        if (cached > maxCachedLength) {
-            trim(key, bucket, cached);
+        if (cached > budget) {
+            trim(key, bucket, cached, budget);
         }
     }
 
@@ -199,7 +248,7 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
      * end is kept: a window walking forward through history is the reason a range grows this far in
      * the first place.
      */
-    private void trim(String key, Map<ExtremeRange, Long> bucket, long cached) {
+    private void trim(String key, Map<ExtremeRange, Long> bucket, long cached, long budget) {
         ExtremeRange longest = bucket.keySet().stream()
             .max(Comparator.comparingLong(ExtremeRange::length))
             .orElse(null);
@@ -208,7 +257,7 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
             return;
         }
 
-        long keepLength = longest.length() - (cached - maxCachedLength);
+        long keepLength = longest.length() - (cached - budget);
 
         if (keepLength < 1) {
             purge(longest);

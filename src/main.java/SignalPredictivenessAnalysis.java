@@ -8,7 +8,9 @@ import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.strategy.analysis.PredictivenessReport;
 import com.siberalt.singularity.strategy.analysis.SignalPredictiveness;
+import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.cache.CachingExtremeLocator;
 import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetector;
 import com.siberalt.singularity.strategy.level.selector.StrongestLevelPairSelector;
 import com.siberalt.singularity.strategy.upside.InvertedUpsideCalculator;
@@ -17,6 +19,7 @@ import com.siberalt.singularity.strategy.upside.level.SimpleLevelBasedUpsideCalc
 import com.siberalt.singularity.strategy.upside.MeanReversionUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.SlopeUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.VolumeImbalanceUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.Upside;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 
 import java.io.IOException;
@@ -127,11 +130,11 @@ public class SignalPredictivenessAnalysis {
                 // Where the price sits between the levels the recent history clustered around:
                 // near support reads as something to buy, near resistance as something to sell.
                 case "levels" -> new KeyLevelsUpsideCalculator(
-                    StatelessClusterLevelDetector.createDefault(1.4, PivotPointExtremeLocator.ofMinimums(period)),
-                    StatelessClusterLevelDetector.createDefault(1.4, PivotPointExtremeLocator.ofMaximums(period)),
+                    StatelessClusterLevelDetector.createDefault(1.4, cached(PivotPointExtremeLocator.ofMinimums(period))),
+                    StatelessClusterLevelDetector.createDefault(1.4, cached(PivotPointExtremeLocator.ofMaximums(period))),
                     new SimpleLevelBasedUpsideCalculator(),
                     new StrongestLevelPairSelector(2),
-                    window -> com.siberalt.singularity.strategy.upside.Upside.NEUTRAL
+                    window -> Upside.NEUTRAL
                 );
                 default -> new SlopeUpsideCalculator(period);
             };
@@ -139,10 +142,12 @@ public class SignalPredictivenessAnalysis {
             if (Boolean.getBoolean("invert")) {
                 calculator = new InvertedUpsideCalculator(calculator);
             }
+            long startedAt = System.currentTimeMillis();
             PredictivenessReport report = new SignalPredictiveness()
                 .setLookbackCandles(lookback)
                 .setStride(stride)
                 .measure(candles, calculator);
+            long elapsed = System.currentTimeMillis() - startedAt;
 
             StringBuilder line = new StringBuilder();
 
@@ -160,17 +165,46 @@ public class SignalPredictivenessAnalysis {
             }
 
             System.out.printf(
-                "%-4s%-4d %5.1f%% %+.3f |%s%n",
-                (Boolean.getBoolean("invert") ? "-" : "") + switch (System.getProperty("signal", "slope")) {
-                    case "flow" -> "flow"; case "reversion" -> "rev"; default -> "slp"; },
+                "%-4s%-4d %5.1f%% %+.3f |%s  [%ds]%n",
+                (Boolean.getBoolean("invert") ? "-" : "") + switch (family) {
+                    case "flow" -> "flow";
+                    case "reversion" -> "rev";
+                    case "levels" -> "lvl";
+                    default -> "slp";
+                },
                 period,
                 100.0 * report.firedBars() / Math.max(1, report.bars()),
                 report.lag1Autocorrelation(),
-                line
+                line,
+                elapsed / 1000
             );
         }
 
         System.out.println("  * = outside the noise floor; overlapping horizons make even that optimistic");
+    }
+
+    /**
+     * Puts a locator behind the range cache unless {@code -Dcache=false} turns it off.
+     * <p>
+     * Worth it here because of how this measurement walks: the window advances a bar at a time over
+     * the same list, so all but the newest stretch of every window has been scanned already, and
+     * without the cache a level calculator re-reads its whole lookback on every one of thousands of
+     * bars. That is what put an hourly measurement out of reach.
+     * <p>
+     * It is an approximation, not a free lunch, and the reason to keep the switch. A locator that
+     * needs bars either side of a candle to call it an extreme cannot see the ones at the edge of
+     * the short stretch it is handed, so a cached run and a plain one need not agree exactly -
+     * compare the two on a series small enough to run both before trusting the cached numbers.
+     * <p>
+     * Each locator gets its own cache. A cached locator carries state, and one repository shared
+     * between the minimum and the maximum locator would answer each with the other's extremes.
+     */
+    private static ExtremeLocator cached(ExtremeLocator baseLocator) {
+        if (!Boolean.parseBoolean(System.getProperty("cache", "true"))) {
+            return baseLocator;
+        }
+
+        return new CachingExtremeLocator(baseLocator);
     }
 
     private static int[] calculatorPeriods() {
