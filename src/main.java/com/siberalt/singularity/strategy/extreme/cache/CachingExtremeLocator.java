@@ -22,6 +22,11 @@ import java.util.stream.Stream;
  * {@link ExtremeRangeRepository} that puts a bound on it - see
  * {@link LimitedExtremeRangeRepository}, which this uses by default.
  * <p>
+ * It scans in pieces, so the locator it wraps has to answer the same in pieces as whole: a candle
+ * is an extreme or not by its own neighbourhood. A step that looks across the whole list - grouping
+ * nearby extremes into one - does not, and has to be laid over the cache rather than cached; see
+ * {@link com.siberalt.singularity.strategy.extreme.ProximityGroupingExtremeLocator}.
+ * <p>
  * Not thread safe, and neither are the repositories it defaults to. Give each thread its own.
  */
 public class CachingExtremeLocator implements ExtremeLocator {

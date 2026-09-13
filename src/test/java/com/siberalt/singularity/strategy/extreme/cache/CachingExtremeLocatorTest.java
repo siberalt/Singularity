@@ -461,6 +461,56 @@ class CachingExtremeLocatorTest {
             assertTrue(narrow < (SLIDES - 1L) * WINDOW, "narrow window scanned " + narrow + " bars, as much as rescanning");
         }
 
+        /**
+         * Grouping laid over the cache, as it has to be: the pivots are cached, the grouping sees
+         * each window whole. Together they answer as the grouping locator does on its own - bar the
+         * opening bars, as above, and the one run those can reach into: a pivot remembered there can
+         * join the window's first run and win it, which costs the plain scan's winner of that run.
+         * <p>
+         * On a series whose dips come in pairs, so pivots do fall close enough together to be grouped.
+         */
+        @Test
+        void groupsOverTheCacheAsAPlainGroupingScanWould() {
+            PivotPointExtremeLocator pivot = PivotPointExtremeLocator.ofMinimums(5);
+            ExtremeLocator cached = pivot.groupingOf(new CachingExtremeLocator(pivot.withoutGrouping()));
+            List<Candle> paired = IntStream.range(0, WINDOW + SLIDES).mapToObj(this::pairedDipCandle).toList();
+            long groupedAway = 0;
+
+            for (int bar = WINDOW; bar < WINDOW + SLIDES; bar++) {
+                List<Candle> window = paired.subList(bar - WINDOW, bar);
+                List<Candle> expected = pivot.locate(window);
+                List<Candle> actual = cached.locate(window);
+                long openingEnd = window.get(OPENING_BARS).getIndex();
+
+                groupedAway += pivot.withoutGrouping().locate(window).size() - expected.size();
+
+                for (Candle extreme : expected.subList(Math.min(1, expected.size()), expected.size())) {
+                    assertTrue(actual.contains(extreme), "window ending at " + bar + " lost " + extreme.getIndex());
+                }
+
+                for (Candle extreme : actual) {
+                    assertTrue(expected.contains(extreme) || extreme.getIndex() < openingEnd,
+                        "window ending at " + bar + " added " + extreme.getIndex());
+                }
+            }
+
+            assertTrue(groupedAway > 0, "no pivots fell close enough together to test the grouping");
+        }
+
+        /**
+         * Every thirty bars, a dip to 90 and seven bars later one to 91. Seven is past the pivot's
+         * vicinity of five, so both are pivots, and within the grouping's reach of ten, so they are
+         * one run - whose winner is the deeper, first dip.
+         */
+        private Candle pairedDipCandle(int index) {
+            int offset = index % 30;
+            double depth = Math.max(0, 10 - 2 * Math.abs(offset - 10)) + Math.max(0, 9 - 2 * Math.abs(offset - 17));
+            Quotation price = Quotation.of(100 - depth);
+
+            return new Candle("instrument1", new TimePoint(index, Instant.EPOCH.plusSeconds(60L * index)),
+                price, price, price, price, 0);
+        }
+
         /** Bars handed to the base locator while a window of this width slides over the last bars. */
         private long scannedOverSlides(int window) {
             PivotPointExtremeLocator pivot = PivotPointExtremeLocator.ofMinimums(5);

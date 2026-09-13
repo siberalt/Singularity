@@ -203,12 +203,14 @@ public class SignalPredictivenessAnalysis {
      * between the minimum and the maximum locator would answer each with the other's extremes. That
      * state is also why it cannot simply be switched on under a walk-forward, which runs threads.
      */
-    private static ExtremeLocator cached(ExtremeLocator baseLocator) {
+    private static ExtremeLocator cached(PivotPointExtremeLocator pivots) {
         if (!Boolean.getBoolean("cache")) {
-            return baseLocator;
+            return pivots;
         }
 
-        return new CachingExtremeLocator(baseLocator);
+        // Only the pivots go behind the cache. Grouping looks across the whole window and cannot be
+        // cached in pieces, so it is laid over what comes out - see ProximityGroupingExtremeLocator.
+        return pivots.groupingOf(new CachingExtremeLocator(pivots.withoutGrouping()));
     }
 
     private static int[] calculatorPeriods() {

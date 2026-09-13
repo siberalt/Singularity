@@ -2,15 +2,15 @@ package com.siberalt.singularity.strategy.extreme;
 
 import com.siberalt.singularity.entity.candle.Candle;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class PivotPointExtremeLocator implements ExtremeLocator {
     public static final int DEFAULT_LEFT_VICINITY = 5;
     public static final int DEFAULT_RIGHT_VICINITY = 5;
+
+    /** How many bars apart pivots may sit and still be one turn of the market - see {@link ProximityGroupingExtremeLocator}. */
     public static final int DEFAULT_EXTREME_AREA = 10;
 
     private final int leftVicinity;
@@ -27,6 +27,11 @@ public class PivotPointExtremeLocator implements ExtremeLocator {
         if (leftVicinity < 1 || rightVicinity < 1) {
             throw new IllegalArgumentException("Buffer values must be at least 1");
         }
+
+        if (extremeArea < 0) {
+            throw new IllegalArgumentException("A reach cannot be negative, got " + extremeArea);
+        }
+
         this.leftVicinity = leftVicinity;
         this.rightVicinity = rightVicinity;
         this.comparator = comparator;
@@ -50,49 +55,31 @@ public class PivotPointExtremeLocator implements ExtremeLocator {
 
         IntStream stream = IntStream.range(leftVicinity, candles.size() - rightVicinity);
 
-        List<Candle> rawExtremes = (candles.size() > 10000 ? stream.parallel() : stream)
+        // In order even when parallel: a ranged stream keeps its encounter order through a filter.
+        int[] positions = (candles.size() > 10000 ? stream.parallel() : stream)
             .filter(i -> isLocalExtreme(candles, i, leftVicinity, rightVicinity))
-            .mapToObj(candles::get)
-            .sorted(Comparator.comparingLong(Candle::getIndex)) // гарантируем порядок
-            .toList();
+            .toArray();
 
-        if (rawExtremes.isEmpty()) {
-            return List.of();
-        }
+        List<Candle> pivots = IntStream.of(positions).mapToObj(candles::get).toList();
 
-        List<List<Candle>> groups = groupByProximity(rawExtremes);
-
-        return groups.stream()
-            .map(group -> group.stream().max(comparator).orElseThrow())
-            .collect(Collectors.toList());
+        return ProximityGroupingExtremeLocator.group(pivots, candles, comparator, extremeArea);
     }
 
-    private List<List<Candle>> groupByProximity(List<Candle> extremes) {
-        // Группируем близкие экстремумы
-        List<List<Candle>> groups = new ArrayList<>();
-        List<Candle> currentGroup = new ArrayList<>();
-        currentGroup.add(extremes.get(0));
+    /**
+     * The same pivots, reported one by one - this locator less its grouping, which is the part of it
+     * a cache can hold. Grouping looks across the whole list and cannot be cached in pieces; see
+     * {@link ProximityGroupingExtremeLocator}.
+     */
+    public PivotPointExtremeLocator withoutGrouping() {
+        return new PivotPointExtremeLocator(comparator, leftVicinity, rightVicinity, 0);
+    }
 
-        for (int i = 1; i < extremes.size(); i++) {
-            Candle current = extremes.get(i);
-            Candle lastInCurrentGroup = currentGroup.get(currentGroup.size() - 1);
-
-            if (current.getIndex() - lastInCurrentGroup.getIndex() <= extremeArea) {
-                // В пределах одной зоны — добавляем в текущую группу
-                currentGroup.add(current);
-            } else {
-                // Начинаем новую группу
-                groups.add(new ArrayList<>(currentGroup));
-                currentGroup.clear();
-                currentGroup.add(current);
-            }
-        }
-
-        if (!currentGroup.isEmpty()) {
-            groups.add(currentGroup);
-        }
-
-        return groups;
+    /**
+     * This locator's grouping, laid over pivots found some other way - a cache of
+     * {@link #withoutGrouping()}, typically - so that together they answer as this locator does.
+     */
+    public ProximityGroupingExtremeLocator groupingOf(ExtremeLocator pivots) {
+        return new ProximityGroupingExtremeLocator(pivots, comparator, extremeArea);
     }
 
     /**
@@ -101,9 +88,9 @@ public class PivotPointExtremeLocator implements ExtremeLocator {
      * the right merely no better.
      * <p>
      * Both candles of a plateau used to count, which reported one turn of the market twice. Grouping
-     * hid that on minute bars, but only because the group reaches {@code extremeArea} index units
-     * and minute bars sit one unit apart; hourly ones sit dozens apart and the duplicates stood -
-     * about a tenth of all minimums on one share.
+     * hid that on minute bars, but only because its reach was counted in index units and minute bars
+     * sit one unit apart; hourly ones sit dozens apart and the duplicates stood - about a tenth of
+     * all minimums on one share.
      * <p>
      * It also made the locator impossible to cache as designed. A cache rescans only past the last
      * extreme it holds, trusting that nothing within that extreme's vicinity can be another one - a
