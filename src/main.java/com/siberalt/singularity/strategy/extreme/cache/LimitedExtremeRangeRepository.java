@@ -5,6 +5,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Keeps a cache of located extremes from growing without end: it passes every range through to the
@@ -32,8 +34,11 @@ import java.util.Map;
  * <p>
  * Budgets are per instrument and extreme type, so a busy instrument cannot evict a quiet one.
  * <p>
- * Not thread safe, like the repositories it wraps. It also assumes it is the only writer to its
- * delegate, since it counts what it holds rather than asking.
+ * Its bookkeeping stands up to readers running in parallel, because reading is not read-only here -
+ * a lookup records what was asked about and marks what came back as used. Everything that evicts
+ * assumes one writer at a time, and its caller takes care of that: see the locking in
+ * {@link CachingExtremeLocator}. It also assumes it is the only writer to its delegate, since it
+ * counts what it holds rather than asking.
  */
 public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
     /** A month of minute candles, the size the locator used to cap a single window at. */
@@ -48,12 +53,12 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
     private final int cachedWindows;
 
     /** OUTER ranges held per instrument and extreme type, each against when it was last used. */
-    private final Map<String, Map<ExtremeRange, Long>> heldRanges = new HashMap<>();
+    private final Map<String, Map<ExtremeRange, Long>> heldRanges = new ConcurrentHashMap<>();
 
     /** The last stretch asked about per instrument and extreme type - where the cache is warm. */
-    private final Map<String, ExtremeRange> lastAsked = new HashMap<>();
+    private final Map<String, ExtremeRange> lastAsked = new ConcurrentHashMap<>();
 
-    private long clock;
+    private final AtomicLong clock = new AtomicLong();
 
     public LimitedExtremeRangeRepository(
         ExtremeRangeRepository rangeRepository,
@@ -153,7 +158,7 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
 
         for (ExtremeRange range : rangesToSave) {
             if (range.rangeType() == RangeType.OUTER) {
-                bucketOf(keyOf(range)).put(range, ++clock);
+                bucketOf(keyOf(range)).put(range, clock.incrementAndGet());
             }
         }
 
@@ -187,8 +192,8 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
 
             Map<ExtremeRange, Long> bucket = heldRanges.get(keyOf(range));
 
-            if (bucket != null && bucket.containsKey(range)) {
-                bucket.put(range, ++clock);
+            if (bucket != null) {
+                bucket.replace(range, clock.incrementAndGet());
             }
         }
 
@@ -214,9 +219,12 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
             return;
         }
 
-        List<ExtremeRange> coldestFirst = bucket.keySet().stream()
+        // Over a copy of the marks. Readers keep marking ranges as used while this runs, and a
+        // comparator reading marks that change under it is one a sort is entitled to reject.
+        Map<ExtremeRange, Long> marks = new HashMap<>(bucket);
+        List<ExtremeRange> coldestFirst = marks.keySet().stream()
             .filter(range -> !justSaved.contains(range))
-            .sorted(Comparator.comparingLong(bucket::get))
+            .sorted(Comparator.comparingLong(marks::get))
             .toList();
 
         List<ExtremeRange> dropped = new ArrayList<>();
@@ -276,7 +284,7 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
         rangeRepository.deleteBatch(List.of(longest));
         rangeRepository.saveBatch(List.of(kept));
         bucket.remove(longest);
-        bucket.put(kept, ++clock);
+        bucket.put(kept, clock.incrementAndGet());
     }
 
     private ExtremeRange keptEndOf(ExtremeRange range, long keepLength, ExtremeRange asked) {
@@ -319,7 +327,7 @@ public class LimitedExtremeRangeRepository implements ExtremeRangeRepository {
     }
 
     private Map<ExtremeRange, Long> bucketOf(String key) {
-        return heldRanges.computeIfAbsent(key, ignored -> new HashMap<>());
+        return heldRanges.computeIfAbsent(key, ignored -> new ConcurrentHashMap<>());
     }
 
     private void forget(ExtremeRange range) {

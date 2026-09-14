@@ -66,6 +66,15 @@ public class PivotPointExtremeLocator implements ExtremeLocator {
     }
 
     /**
+     * Another locator's pivots - a cache of {@link #withoutGrouping()}, typically - with the tail
+     * this locator would have left unsettled cut off it. A pivot is only a pivot once the bars to
+     * its right are in, and a cache remembers ones settled by bars a later window has not reached.
+     */
+    public TrailingMarginExtremeLocator confirmedOf(ExtremeLocator pivots) {
+        return new TrailingMarginExtremeLocator(pivots, rightVicinity);
+    }
+
+    /**
      * The same pivots, reported one by one - this locator less its grouping, which is the part of it
      * a cache can hold. Grouping looks across the whole list and cannot be cached in pieces; see
      * {@link ProximityGroupingExtremeLocator}.

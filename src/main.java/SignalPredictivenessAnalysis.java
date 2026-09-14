@@ -209,8 +209,9 @@ public class SignalPredictivenessAnalysis {
         }
 
         // Only the pivots go behind the cache. Grouping looks across the whole window and cannot be
-        // cached in pieces, so it is laid over what comes out - see ProximityGroupingExtremeLocator.
-        return pivots.groupingOf(new CachingExtremeLocator(pivots.withoutGrouping()));
+        // cached in pieces, so it is laid over what comes out - see ProximityGroupingExtremeLocator -
+        // and the unsettled tail is cut between the two, where a plain scan leaves it off.
+        return pivots.groupingOf(pivots.confirmedOf(new CachingExtremeLocator(pivots.withoutGrouping())));
     }
 
     private static int[] calculatorPeriods() {

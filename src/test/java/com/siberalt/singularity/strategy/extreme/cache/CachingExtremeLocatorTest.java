@@ -10,7 +10,13 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -406,6 +412,7 @@ class CachingExtremeLocatorTest {
     class SlidingWindow {
         private static final int WINDOW = 200;
         private static final int SLIDES = 50;
+        private static final int THREADS = 4;
 
         /**
          * How far into a window the cache may know more than a plain scan: the pivot's vicinity,
@@ -509,6 +516,93 @@ class CachingExtremeLocatorTest {
 
             return new Candle("instrument1", new TimePoint(index, Instant.EPOCH.plusSeconds(60L * index)),
                 price, price, price, price, 0);
+        }
+
+        /**
+         * One cache, several threads over the same windows - the candidates of one fold, which differ
+         * in what they make of the extremes rather than in which bars they ask about.
+         */
+        @Test
+        void answersThreadsSharingItAsAPlainScanWould() throws Exception {
+            PivotPointExtremeLocator pivot = PivotPointExtremeLocator.ofMinimums(5);
+            CachingExtremeLocator cache = new CachingExtremeLocator(pivot.withoutGrouping())
+                .setMultithreaded(true);
+            // The margin between cache and grouping is what keeps a thread still short of some bar
+            // from being handed an extreme that only the bars beyond it could settle.
+            ExtremeLocator shared = pivot.groupingOf(pivot.confirmedOf(cache));
+
+            walkInParallel(THREADS, () -> {
+                for (int bar = WINDOW; bar < WINDOW + SLIDES; bar++) {
+                    List<Candle> window = wave.subList(bar - WINDOW, bar);
+                    List<Candle> expected = pivot.locate(window);
+                    List<Candle> actual = shared.locate(window);
+                    long openingEnd = window.get(OPENING_BARS).getIndex();
+
+                    for (Candle extreme : expected) {
+                        assertTrue(actual.contains(extreme) || extreme.getIndex() < openingEnd,
+                            "window ending at " + bar + " lost " + extreme.getIndex());
+                    }
+
+                    for (Candle extreme : actual) {
+                        assertTrue(expected.contains(extreme) || extreme.getIndex() < openingEnd,
+                            "window ending at " + bar + " added " + extreme.getIndex());
+                    }
+                }
+            });
+        }
+
+        /**
+         * The whole reason to share one: the threads between them scan less than they would each
+         * holding their own, because what one has scanned the rest find waiting.
+         */
+        @Test
+        void scansLessThanTheThreadsWouldOnTheirOwn() throws Exception {
+            long alone = scannedWalkingWith(1);
+            long together = scannedWalkingWith(THREADS);
+
+            assertTrue(together < THREADS * alone,
+                THREADS + " threads scanned " + together + " bars, as much as " + alone + " each");
+        }
+
+        /** Bars handed to the base locator while one cache is walked by this many threads. */
+        private long scannedWalkingWith(int threads) throws Exception {
+            PivotPointExtremeLocator pivot = PivotPointExtremeLocator.ofMinimums(5);
+            AtomicLong scanned = new AtomicLong();
+            ExtremeLocator shared = new CachingExtremeLocator(stretch -> {
+                scanned.addAndGet(stretch.size());
+
+                return pivot.withoutGrouping().locate(stretch);
+            }).setMultithreaded(true);
+
+            walkInParallel(threads, () -> {
+                for (int bar = WINDOW; bar < WINDOW + SLIDES; bar++) {
+                    shared.locate(wave.subList(bar - WINDOW, bar));
+                }
+            });
+
+            return scanned.get();
+        }
+
+        private void walkInParallel(int threads, Runnable walk) throws Exception {
+            ExecutorService pool = Executors.newFixedThreadPool(threads);
+
+            try {
+                List<Callable<Void>> walkers = new ArrayList<>();
+
+                for (int thread = 0; thread < threads; thread++) {
+                    walkers.add(() -> {
+                        walk.run();
+
+                        return null;
+                    });
+                }
+
+                for (Future<Void> result : pool.invokeAll(walkers)) {
+                    result.get();
+                }
+            } finally {
+                pool.shutdownNow();
+            }
         }
 
         /** Bars handed to the base locator while a window of this width slides over the last bars. */

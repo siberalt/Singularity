@@ -8,6 +8,8 @@ import com.siberalt.singularity.utils.ListUtils;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Stream;
 
 /**
@@ -27,7 +29,35 @@ import java.util.stream.Stream;
  * nearby extremes into one - does not, and has to be laid over the cache rather than cached; see
  * {@link com.siberalt.singularity.strategy.extreme.ProximityGroupingExtremeLocator}.
  * <p>
- * Not thread safe, and neither are the repositories it defaults to. Give each thread its own.
+ * One caller at a time unless {@link #setMultithreaded(boolean)} says otherwise, and a caller who
+ * keeps it to itself pays nothing for the possibility.
+ * <p>
+ * Shared, it is worth less than it looks. Measured on eight threads walking one stretch of history,
+ * sharing always cut the scanning - by two to seven times - and only sometimes cut the time. On
+ * hourly windows of five hundred bars it came out ahead; on minute windows of twenty thousand it
+ * took three times longer than the same threads each holding their own cache, because the answer to
+ * a wide window is tens of thousands of extremes and it is assembled while the lock is held. Threads
+ * also drift apart as they walk, and a window that is not wholly inside a cached stretch takes the
+ * write lock like any other. A cache each is the better trade unless windows are narrow.
+ * <p>
+ * Told it will be shared, it answers a window already covered end to end under a read lock, so those
+ * callers never wait for each other, and takes the write lock for anything it has to scan - checking
+ * again once it holds it, because the thread it waited for may have just scanned the very window it
+ * came for.
+ * <p>
+ * The lock sits here rather than inside the repositories because what has to be atomic is the
+ * sequence, not the calls: read which stretches are cached, work out what is missing, write both the
+ * extremes and the ranges that claim them. Two threads each holding a safe repository would still
+ * read one state, compute against it, and write over each other - leaving overlapping OUTER ranges,
+ * or an INNER range claiming stretches whose extremes the other deleted, which is how extremes go
+ * missing quietly.
+ * <p>
+ * Shared, it also needs {@link com.siberalt.singularity.strategy.extreme.TrailingMarginExtremeLocator}
+ * over it: it remembers extremes settled by bars a thread further back has not reached, and handing
+ * those out is look-ahead.
+ * <p>
+ * Its repositories are its own. Sharing them with another locator, or two locators with different
+ * settings sharing one extreme type, puts one locator's extremes where the other expects its own.
  */
 public class CachingExtremeLocator implements ExtremeLocator {
     private record RangeExtremes(ExtremeRange extremeRange, List<Candle> extremes) {
@@ -42,6 +72,15 @@ public class CachingExtremeLocator implements ExtremeLocator {
     private final ExtremeRangeRepository rangeRepository;
     private final ExtremeRepository extremeRepository;
     private final String extremeType;
+
+    /**
+     * Readers of an already-cached window pass together; a scan shuts them out. The scan itself is a
+     * handful of bars - what a window has added since the last call - so holding a write lock across
+     * it costs little, and far less than two threads scanning it twice.
+     */
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+
+    private volatile boolean multithreaded;
 
     public CachingExtremeLocator(ExtremeLocator baseLocator) {
         this(baseLocator, new RuntimeExtremeRepository());
@@ -82,6 +121,72 @@ public class CachingExtremeLocator implements ExtremeLocator {
         }
 
         ExtremeRange outerRange = createRangeFromCandles(candles, RangeType.OUTER);
+        List<Candle> cached = readCached(outerRange);
+
+        return cached != null ? cached : scanAndCache(outerRange, candles);
+    }
+
+    /**
+     * Whether this cache will be reached from more than one thread at a time. Off by default: a
+     * caller with the cache to itself would otherwise pay for locks nobody contends, and sharing one
+     * is rarely the better trade anyway - see the note on the class.
+     */
+    public CachingExtremeLocator setMultithreaded(boolean multithreaded) {
+        this.multithreaded = multithreaded;
+        return this;
+    }
+
+    public boolean isMultithreaded() {
+        return multithreaded;
+    }
+
+    private List<Candle> readCached(ExtremeRange outerRange) {
+        if (!multithreaded) {
+            return cachedAnswer(outerRange);
+        }
+
+        lock.readLock().lock();
+
+        try {
+            return cachedAnswer(outerRange);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    private List<Candle> scanAndCache(ExtremeRange outerRange, List<Candle> candles) {
+        if (!multithreaded) {
+            return locateAndCache(outerRange, candles);
+        }
+
+        lock.writeLock().lock();
+
+        try {
+            // Asked again now the lock is held: whoever this thread waited for may have scanned the
+            // very window it came for, and then there is nothing left to do but take the answer.
+            List<Candle> cached = cachedAnswer(outerRange);
+
+            return cached != null ? cached : locateAndCache(outerRange, candles);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * What the cache can answer without scanning a bar: a window some scanned stretch already covers
+     * end to end. Null when there is work to do.
+     */
+    private List<Candle> cachedAnswer(ExtremeRange outerRange) {
+        for (ExtremeRange outerIntersectedRange : rangeRepository.getIntersects(outerRange, RangeType.OUTER)) {
+            if (outerRange.isSubsetOf(outerIntersectedRange)) {
+                return extremeRepository.getByRange(outerRange);
+            }
+        }
+
+        return null;
+    }
+
+    private List<Candle> locateAndCache(ExtremeRange outerRange, List<Candle> candles) {
         List<ExtremeRange> outerIntersectedRanges = rangeRepository.getIntersects(outerRange, RangeType.OUTER);
 
         if (outerIntersectedRanges.isEmpty()) {
@@ -106,12 +211,6 @@ public class CachingExtremeLocator implements ExtremeLocator {
             addRange(cacheResult.windowRange(), innerRange);
 
             return extremes;
-        }
-
-        for (ExtremeRange outerIntersectedRange : outerIntersectedRanges) {
-            if (outerRange.isSubsetOf(outerIntersectedRange)) {
-                return extremeRepository.getByRange(outerRange);
-            }
         }
 
         List<ExtremeRange> intersectedInnerRanges = rangeRepository.getIntersects(outerRange, RangeType.INNER);
