@@ -108,6 +108,17 @@ public class SignalPredictivenessAnalysis {
 
     private static void report(CandleInterval interval, List<Candle> candles) {
         int lookback = LOOKBACK.getOrDefault(interval, 250);
+        boolean[] breaks = breaksIn(candles);
+        long broken = 0;
+
+        for (boolean isBreak : breaks) {
+            broken += isBreak ? 1 : 0;
+        }
+
+        if (broken > 0) {
+            System.out.printf("%n  %d break(s) where the price jumps more than %.0f%% in one bar; samples whose%n"
+                + "  window or holding period spans one are left out%n", broken, 100 * maxGap());
+        }
 
         // A minute series runs to hundreds of thousands of bars and every one of them costs the
         // calculator a pass over its whole window; a wider one is small enough to take whole.
@@ -177,6 +188,7 @@ public class SignalPredictivenessAnalysis {
                 .setLookbackCandles(lookback)
                 .setStride(stride)
                 .setSignalThreshold(signalThreshold())
+                .setBreaks(breaks)
                 .measure(candles, calculator);
             long elapsed = System.currentTimeMillis() - startedAt;
 
@@ -218,6 +230,35 @@ public class SignalPredictivenessAnalysis {
 
         System.out.println("  * after a correlation = outside the noise floor, over samples that do not overlap");
         System.out.println("  * after an edge = more than twice its own standard error");
+    }
+
+    /**
+     * The longest stretch with no break in it, a break being a jump no market made: a share that
+     * closes at 1828 and opens at 945 has not fallen by half, it has split or paid a dividend the
+     * feed did not adjust for. One such bar in sixteen thousand is enough to matter - it lands in a
+     * sample as a return twenty times the usual size, and the selection that follows picks whichever
+     * setting the artefact happened to miss. Prices are not patched, because the ratio of the event
+     * is not known here; the series is simply cut and the longer side kept.
+     */
+    private static boolean[] breaksIn(List<Candle> candles) {
+        boolean[] breaks = new boolean[candles.size()];
+
+        for (int bar = 1; bar < candles.size(); bar++) {
+            breaks[bar] = isBreak(candles.get(bar - 1), candles.get(bar));
+        }
+
+        return breaks;
+    }
+
+    private static boolean isBreak(Candle before, Candle after) {
+        double close = before.getCloseAsDouble();
+        double open = after.getOpenAsDouble();
+
+        return close > 0 && open > 0 && Math.abs(open / close - 1) > maxGap();
+    }
+
+    private static double maxGap() {
+        return Double.parseDouble(System.getProperty("gap", "0.2"));
     }
 
     /** What the market is doing, measured over the same window the calculators read. */

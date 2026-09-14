@@ -116,7 +116,28 @@ public class PositionRiskManagerUpsideCalculatorTest {
             Upside result = calculator.calculate(candles);
 
             assertEquals(-1, result.signal());
-            assertTrue(-1 > result.strength());
+            assertEquals(1, result.strength());
+        }
+
+        @Test
+        @DisplayName("Отклонение меряется в волатильностях, а не в долях цены")
+        void measuresTheDeviationInVolatilities() {
+            PositionRiskManagerUpsideCalculator calculator = createCalculator();
+            // Цена 99.5 против средней 100 - это половина волатильности, когда та равна 1.0.
+            // Пока отклонение делилось ещё и на цену, тот же случай давал -0.005.
+            List<Candle> candles = createCandlesWithPrices(100.0, 100.0, 99.5);
+
+            TimePointRange entryPriceRange = new TimePointRange(Instant.parse("2024-01-01T00:00:00Z"));
+            EntryPrice longPosition = new EntryPrice(10, Quotation.of(100.0), entryPriceRange);
+
+            when(entryPriceCalculatorMock.calculate(any(), any())).thenReturn(longPosition);
+            when(maxLocatorMock.locate(anyList())).thenReturn(List.of());
+            when(volatilityCalculatorMock.calculate(any())).thenReturn(1.0);
+
+            Upside result = calculator.calculate(candles);
+
+            assertEquals(-0.5, result.signal(), 1e-9);
+            assertEquals(0.5, result.strength(), 1e-9);
         }
 
         @Test
@@ -245,7 +266,7 @@ public class PositionRiskManagerUpsideCalculatorTest {
             Upside result = calculator.calculate(candles);
 
             assertEquals(1, result.signal());
-            assertTrue(1 <= result.strength());
+            assertEquals(1, result.strength());
         }
 
         @Test

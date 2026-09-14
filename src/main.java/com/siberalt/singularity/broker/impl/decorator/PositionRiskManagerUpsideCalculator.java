@@ -16,20 +16,24 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Калькулятор Upside для риск-менеджмента на основе отклонения цены от средней цены позиции.
+ * How far a position has moved from the best price it has seen, counted in volatilities: a trailing
+ * stop written as a signal.
  * <p>
- * Проверяет отклонение текущей цены от средней цены открытой позиции (или последнего экстремума)
- * с учётом волатильности.
- * </p>
+ * It answers about a position rather than about the market, which makes it unlike everything else
+ * that produces an {@link Upside}. With nothing open it says nothing. Holding something, the
+ * reference is the better of the average entry price and the furthest the price has run in the
+ * position's favour since - the high water mark for a long, the low for a short - and the answer is
+ * how far the price now sits from it, divided by the volatility, and kept within a single
+ * volatility either way.
  * <p>
- * Для long-позиции:
- * - Если цена отклоняется на < multiplier * volatility от средней цены, возвращается сигнал -1
- * - Если цена отклоняется на < multiplier * volatility от последнего максимума (когда максимум > средней цены), возвращается -1
+ * So a long reads negative as the price falls back from its peak, reaching a full close signal one
+ * volatility below it, and a short the other way round. What that is worth is not a question of
+ * prediction and cannot be settled the way a signal's is: the thing to measure is what it does to
+ * the drawdown of a strategy it is bolted onto.
  * <p>
- * Для short-позиции (отрицательная позиция):
- * - Если цена отклоняется на < multiplier * volatility от средней цены, возвращается сигнал 1
- * - Если цена отклоняется на < multiplier * volatility от последнего минимума (когда минимум < средней цены), возвращается 1
- * </p>
+ * The volatility is asked for in the price's own units - {@link ATRVolatilityCalculator} by default,
+ * which is what the rest of the package means by volatility too. Handing it one measured as a share
+ * of price would make the reading smaller by a factor of the price.
  */
 public class PositionRiskManagerUpsideCalculator implements UpsideCalculator {
     private final String accountId;
@@ -143,8 +147,12 @@ public class PositionRiskManagerUpsideCalculator implements UpsideCalculator {
         }
 
         double signal = calculateNormalizedDeviation(currentPrice, basePrice, volatility);
+        double clamped = Math.min(1, Math.max(-1, signal));
 
-        return new Upside(Math.min(1, Math.max(-1, signal)), signal);
+        // Strength is a confidence, and every other calculator in the package reports it between zero
+        // and one. This used to hand out the raw deviation, so a position a long way under water
+        // reported a confidence of minus eight, and anything averaging strengths took that literally.
+        return new Upside(clamped, Math.abs(clamped));
     }
 
     private Optional<Double> getSuitableLastExtremePrice(List<Candle> extremes, Instant fromTime) {
@@ -155,8 +163,18 @@ public class PositionRiskManagerUpsideCalculator implements UpsideCalculator {
         return Optional.of(priceExtractor.extract(extremes.getLast()).toDouble());
     }
 
+    /**
+     * How far the price has moved from its reference, counted in volatilities.
+     * <p>
+     * Both halves are in the price's own units, which they were not: the deviation used to be divided
+     * by the reference price and the volatility not at all, so a relative move was being divided by an
+     * absolute one. The answer then carried the units of one over a price and shrank with the size of
+     * the price. On a share around 1187 with an hourly ATR of 10, a move of two percent against the
+     * position came out as 0.002 where it should be 2.3, and the signal reached one only if the price
+     * moved by a thousand percent. On a share around 50 the same move came out twenty times larger,
+     * for no reason but the price tag. The calculator was silent on everything.
+     */
     private double calculateNormalizedDeviation(double currentPrice, double referencePrice, double volatility) {
-        double deviation = (currentPrice - referencePrice) / referencePrice;
-        return deviation / (volatility == 0 ? Double.MIN_VALUE : volatility);
+        return (currentPrice - referencePrice) / (volatility == 0 ? Double.MIN_VALUE : volatility);
     }
 }

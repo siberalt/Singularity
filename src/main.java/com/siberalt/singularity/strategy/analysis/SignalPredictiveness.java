@@ -39,6 +39,31 @@ public class SignalPredictiveness {
 
     private int[] horizons = DEFAULT_HORIZONS;
 
+    /** Running count of breaks, so whether a stretch contains one is a subtraction. */
+    private int[] breaksUpTo;
+
+    /**
+     * Where the price series stops being a price series: an unadjusted split or dividend, which
+     * leaves a jump no market made and no position could have taken.
+     * <p>
+     * One such bar is enough to matter. A share that closed at 1828 and opened at 945 put a return
+     * twenty times the usual size into one sample, and everything downstream ate it: a correlation
+     * shifted, a per-trade edge doubled, and a selection between settings picked whichever one the
+     * artefact happened to miss. Bars are not patched here - the ratio of the event is not known -
+     * so any sample whose window or holding period spans one is left out instead.
+     *
+     * @param breaks one per bar, true where the price between it and the bar before it is a break
+     */
+    public SignalPredictiveness setBreaks(boolean[] breaks) {
+        breaksUpTo = new int[breaks.length + 1];
+
+        for (int bar = 0; bar < breaks.length; bar++) {
+            breaksUpTo[bar + 1] = breaksUpTo[bar] + (breaks[bar] ? 1 : 0);
+        }
+
+        return this;
+    }
+
     public SignalPredictiveness setLookbackCandles(int lookbackCandles) {
         this.lookbackCandles = lookbackCandles;
         return this;
@@ -80,6 +105,10 @@ public class SignalPredictiveness {
         long evaluated = 0;
 
         for (int bar = lookbackCandles; bar + 1 + maxHorizon < size; bar += stride) {
+            if (spansBreak(bar - lookbackCandles + 1, bar)) {
+                continue;
+            }
+
             Upside upside = calculator.calculate(candles.subList(bar - lookbackCandles + 1, bar + 1));
             signal[bar] = upside.signal();
             evaluated++;
@@ -98,6 +127,10 @@ public class SignalPredictiveness {
             long baselineCount = 0;
 
             for (int bar = lookbackCandles; bar + 1 + horizon < size; bar += strideFor(horizon)) {
+                if (spansBreak(bar - lookbackCandles + 1, bar) || spansBreak(bar + 1, bar + 1 + horizon)) {
+                    continue;
+                }
+
                 // Every bar counts towards the baseline, including the ones the signal said
                 // nothing about: the question it answers is what holding paid over this stretch.
                 baselineSum += ratio(candles, bar + 1, bar + 1 + horizon);
@@ -143,6 +176,10 @@ public class SignalPredictiveness {
      */
     protected int strideFor(int horizon) {
         return stride * Math.max(1, (horizon + stride - 1) / stride);
+    }
+
+    private boolean spansBreak(int from, int to) {
+        return breaksUpTo != null && breaksUpTo[Math.min(to + 1, breaksUpTo.length - 1)] > breaksUpTo[from];
     }
 
     /** The return of holding from one bar's open to another's. */
