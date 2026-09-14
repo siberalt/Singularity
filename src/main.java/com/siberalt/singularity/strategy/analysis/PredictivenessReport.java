@@ -34,6 +34,9 @@ public record PredictivenessReport(
      *                              has to beat commission and spread for the signal to be worth
      *                              trading at all
      * @param edgeSamples           how many signals passed the threshold
+     * @param edgeStandardErrorBasisPoints how far the edge could be from the truth by luck alone.
+     *                              Read it before the edge: a large edge over a handful of trades
+     *                              is a number the next handful will not repeat
      * @param baselineBasisPoints   mean return over the same horizon across every bar, signal or
      *                              not - what simply holding the instrument paid. An edge below it
      *                              is not a signal, it is the drift of a market that went one way,
@@ -46,6 +49,7 @@ public record PredictivenessReport(
         double sameBarCorrelation,
         double edgeBasisPoints,
         long edgeSamples,
+        double edgeStandardErrorBasisPoints,
         double baselineBasisPoints
     ) {
         /**
@@ -63,6 +67,27 @@ public record PredictivenessReport(
 
         public boolean isAboveNoise() {
             return Math.abs(executableCorrelation) > noiseFloor();
+        }
+
+        /**
+         * Below this many trades an edge is not judged at all. A standard error worked out from a
+         * handful of them is itself a guess - the first run to print one starred four hundred basis
+         * points a trade that had come from two trades, which happened to agree.
+         */
+        private static final long TRADES_BEFORE_AN_ERROR_MEANS_ANYTHING = 30;
+
+        /**
+         * Whether the edge stands clear of its own scatter - twice its standard error, the same
+         * two-sigma rule {@link #noiseFloor()} applies to the correlation.
+         * <p>
+         * A correlation past the floor and an edge inside its own error are not a contradiction:
+         * the correlation is measured over every sampled bar, the edge only over the few whose
+         * signal was strong enough to trade. A signal can know something about the market in
+         * general and still have said nothing worth acting on often enough to prove it.
+         */
+        public boolean isEdgeAboveNoise() {
+            return edgeSamples >= TRADES_BEFORE_AN_ERROR_MEANS_ANYTHING
+                && Math.abs(edgeBasisPoints) > 2 * edgeStandardErrorBasisPoints;
         }
 
         /** What the signal added over holding, per trade. The only figure a cost can be set against. */

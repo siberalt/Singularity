@@ -123,7 +123,7 @@ public class SignalPredictivenessAnalysis {
         }
 
         System.out.printf("%-8s %6s %6s | %s%n", "period", "fired", "lag1",
-            "horizon: corr(exec) / edge bp on trades vs hold bp / n   (same-bar corr)");
+            "horizon: corr(exec) / edge bp ± error on trades vs hold bp / n   (same-bar corr)");
 
         for (int period : calculatorPeriods()) {
             String family = System.getProperty("signal", "slope");
@@ -184,11 +184,13 @@ public class SignalPredictivenessAnalysis {
 
             for (PredictivenessReport.HorizonStat stat : report.horizons()) {
                 line.append(String.format(
-                    "  h=%-3d %+.3f%s/%+7.1f on %-5d vs %+7.1f/%-6d (%+.3f)",
+                    "  h=%-3d %+.3f%s/%+7.1f±%-5.0f%s on %-5d vs %+7.1f/%-6d (%+.3f)",
                     stat.horizon(),
                     stat.executableCorrelation(),
                     stat.isAboveNoise() ? "*" : " ",
                     stat.edgeBasisPoints(),
+                    stat.edgeStandardErrorBasisPoints(),
+                    stat.isEdgeAboveNoise() ? "*" : " ",
                     stat.edgeSamples(),
                     stat.baselineBasisPoints(),
                     stat.samples(),
@@ -214,7 +216,8 @@ public class SignalPredictivenessAnalysis {
             );
         }
 
-        System.out.println("  * = outside the noise floor, counted over samples that do not overlap");
+        System.out.println("  * after a correlation = outside the noise floor, over samples that do not overlap");
+        System.out.println("  * after an edge = more than twice its own standard error");
     }
 
     /** What the market is doing, measured over the same window the calculators read. */

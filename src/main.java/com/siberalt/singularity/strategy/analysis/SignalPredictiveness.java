@@ -118,6 +118,7 @@ public class SignalPredictiveness {
                 sameBar.correlation(),
                 executable.edgeBasisPoints(),
                 executable.edgeCount(),
+                executable.edgeStandardErrorBasisPoints(),
                 baselineCount == 0 ? 0 : 10_000 * baselineSum / baselineCount
             ));
         }
@@ -182,6 +183,7 @@ public class SignalPredictiveness {
         private double sumYY;
         private double sumXY;
         private double edgeSum;
+        private double edgeSumSquares;
 
         public void add(double x, double y) {
             count++;
@@ -194,6 +196,8 @@ public class SignalPredictiveness {
             if (Math.abs(x) >= signalThreshold) {
                 edgeCount++;
                 edgeSum += Math.signum(x) * y;
+                // The direction squares away, so this is the scatter of the returns themselves.
+                edgeSumSquares += y * y;
             }
         }
 
@@ -203,6 +207,24 @@ public class SignalPredictiveness {
 
         public long edgeCount() {
             return edgeCount;
+        }
+
+        /**
+         * How far the average trade could be from the truth by luck alone, in the same units as the
+         * edge: the scatter of the trades divided by the root of how many there were.
+         * <p>
+         * Worth as much as the edge itself. Four hundred basis points a trade said nothing when it
+         * turned out to be two trades, and nothing in the output said so until this did.
+         */
+        public double edgeStandardErrorBasisPoints() {
+            if (edgeCount < 2) {
+                return 0;
+            }
+
+            double mean = edgeSum / edgeCount;
+            double variance = (edgeSumSquares - edgeCount * mean * mean) / (edgeCount - 1);
+
+            return variance <= 0 ? 0 : 10_000 * Math.sqrt(variance / edgeCount);
         }
 
         public double correlation() {
