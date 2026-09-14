@@ -97,7 +97,7 @@ public class SignalPredictiveness {
             double baselineSum = 0;
             long baselineCount = 0;
 
-            for (int bar = lookbackCandles; bar + 1 + horizon < size; bar += stride) {
+            for (int bar = lookbackCandles; bar + 1 + horizon < size; bar += strideFor(horizon)) {
                 // Every bar counts towards the baseline, including the ones the signal said
                 // nothing about: the question it answers is what holding paid over this stretch.
                 baselineSum += ratio(candles, bar + 1, bar + 1 + horizon);
@@ -123,6 +123,25 @@ public class SignalPredictiveness {
         }
 
         return new PredictivenessReport(evaluated, firedBars, lag1Autocorrelation(candles), stats);
+    }
+
+    /**
+     * How far apart the bars counted towards one horizon sit: far enough that what each of them
+     * measures does not overlap what the next one measures, and still on the grid of bars the signal
+     * was evaluated on.
+     * <p>
+     * Overlapping stretches are not independent readings, and a noise floor worked out from how many
+     * of them there are calls a signal real long before it is. At a horizon of sixty bars stepped one
+     * at a time, sixty readings cover the same sixty bars of future and say about as much as one -
+     * which is why everything this used to mark as standing outside the floor at the longer horizons
+     * was inside it once counted honestly.
+     * <p>
+     * The price is precision: a horizon of sixty leaves a sixtieth of the samples, and the floor
+     * widens to match. That is the floor that was always true; it was only ever the count that
+     * flattered it.
+     */
+    protected int strideFor(int horizon) {
+        return stride * Math.max(1, (horizon + stride - 1) / stride);
     }
 
     /** The return of holding from one bar's open to another's. */

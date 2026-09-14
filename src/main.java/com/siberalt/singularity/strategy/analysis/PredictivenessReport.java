@@ -50,8 +50,12 @@ public record PredictivenessReport(
     ) {
         /**
          * The correlation two standard errors away from zero at this sample size. A correlation
-         * inside it says nothing, however suggestive it looks - and with overlapping holding
-         * periods even this is optimistic, since the samples are not independent.
+         * inside it says nothing, however suggestive it looks.
+         * <p>
+         * It means what it says only because the samples behind it no longer overlap - see
+         * {@link com.siberalt.singularity.strategy.analysis.SignalPredictiveness#strideFor(int)}. A
+         * horizon measured every bar would count each stretch of future sixty times over and put the
+         * floor eight times lower than it belongs.
          */
         public double noiseFloor() {
             return samples > 3 ? 2 / Math.sqrt(samples - 3) : 1;

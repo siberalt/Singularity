@@ -1,6 +1,8 @@
 package com.siberalt.singularity.strategy.analysis;
 
+import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.strategy.market.PriceExtractor;
 
 import java.util.List;
 
@@ -20,6 +22,33 @@ import java.util.List;
  * 1.34 against 0.70.
  */
 public class VarianceRatio {
+    private PriceExtractor priceExtractor = Candle::getTypical;
+
+    public PriceExtractor getPriceExtractor() {
+        return priceExtractor;
+    }
+
+    /**
+     * Which price of a bar to measure. The typical one by default, and that is not a detail: read
+     * off closes, this measures the bid-ask bounce before it measures the market.
+     * <p>
+     * Consecutive closes land alternately on the bid and the ask, which is a move that always comes
+     * back, so the ratio is dragged under one whatever the price is doing. On hourly bars of one
+     * share it read 0.671 off closes against 0.992 off typical prices; on another, 1.024 against
+     * 1.283. Window by window it was worse: the second share looked like a market that comes back in
+     * seven windows out of ten off closes, and like one that carries on in seven out of ten off
+     * typical prices - and a switch keyed on the first reading inverted a trend signal that worked,
+     * turning a correlation of +0.16 into -0.10.
+     */
+    public VarianceRatio setPriceExtractor(PriceExtractor priceExtractor) {
+        if (priceExtractor == null) {
+            throw new IllegalArgumentException("A price has to come from somewhere");
+        }
+
+        this.priceExtractor = priceExtractor;
+        return this;
+    }
+
     /**
      * @param candles ordered oldest first, one instrument, one interval
      * @param horizon bars in the longer move, at least two
@@ -47,12 +76,18 @@ public class VarianceRatio {
         double[] returns = new double[Math.max(0, candles.size() - step)];
 
         for (int bar = 0; bar + step < candles.size(); bar++) {
-            double from = candles.get(bar).getCloseAsDouble();
-            double to = candles.get(bar + step).getCloseAsDouble();
+            double from = priceOf(candles.get(bar));
+            double to = priceOf(candles.get(bar + step));
             returns[bar] = from > 0 && to > 0 ? Math.log(to / from) : 0;
         }
 
         return returns;
+    }
+
+    protected double priceOf(Candle candle) {
+        Quotation price = priceExtractor.extract(candle);
+
+        return price == null ? 0 : price.toDouble();
     }
 
     protected double variance(double[] values) {

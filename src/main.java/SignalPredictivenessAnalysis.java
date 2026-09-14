@@ -8,6 +8,9 @@ import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.strategy.analysis.PredictivenessReport;
 import com.siberalt.singularity.strategy.analysis.SignalPredictiveness;
+import com.siberalt.singularity.strategy.analysis.VarianceRatio;
+import com.siberalt.singularity.strategy.upside.RangeSwitchUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.SmoothSwitchUpsideCalculator;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.cache.CachingExtremeLocator;
@@ -136,6 +139,32 @@ public class SignalPredictivenessAnalysis {
                     new StrongestLevelPairSelector(2),
                     window -> Upside.NEUTRAL
                 );
+                // Which way a trend read should be taken is a property of the market rather than of
+                // the signal: above one the moves carry on, below it they come back. Measured, not
+                // guessed - see VarianceRatio - and here it picks one branch outright.
+                case "switch" -> new RangeSwitchUpsideCalculator(
+                    varianceRatio(),
+                    List.of(
+                        RangeSwitchUpsideCalculator.Branch.below(1, inverted(new SlopeUpsideCalculator(period))),
+                        RangeSwitchUpsideCalculator.Branch.from(1, new SlopeUpsideCalculator(period))
+                    )
+                );
+                // The same question answered by degrees: near a ratio of one the two readings cancel
+                // and the signal fades, instead of flipping between bars on a coefficient's jitter.
+                // {-Dwidth=0} makes it the switch again.
+                case "blend" -> new SmoothSwitchUpsideCalculator(
+                    varianceRatio(),
+                    List.of(
+                        SmoothSwitchUpsideCalculator.weighted(
+                            new SlopeUpsideCalculator(period),
+                            SmoothSwitchUpsideCalculator.rising(1, blendWidth())
+                        ),
+                        SmoothSwitchUpsideCalculator.weighted(
+                            inverted(new SlopeUpsideCalculator(period)),
+                            SmoothSwitchUpsideCalculator.falling(1, blendWidth())
+                        )
+                    )
+                );
                 default -> new SlopeUpsideCalculator(period);
             };
 
@@ -170,6 +199,8 @@ public class SignalPredictivenessAnalysis {
                     case "flow" -> "flow";
                     case "reversion" -> "rev";
                     case "levels" -> "lvl";
+                    case "switch" -> "swt";
+                    case "blend" -> "bln";
                     default -> "slp";
                 },
                 period,
@@ -180,7 +211,23 @@ public class SignalPredictivenessAnalysis {
             );
         }
 
-        System.out.println("  * = outside the noise floor; overlapping horizons make even that optimistic");
+        System.out.println("  * = outside the noise floor, counted over samples that do not overlap");
+    }
+
+    /** What the market is doing, measured over the same window the calculators read. */
+    private static RangeSwitchUpsideCalculator.Coefficient varianceRatio() {
+        int horizon = Integer.getInteger("vr", 10);
+
+        return candles -> new VarianceRatio().measure(candles, horizon);
+    }
+
+    /** How much of a coefficient either side of one the two readings share the answer over. */
+    private static double blendWidth() {
+        return Double.parseDouble(System.getProperty("width", "0.15"));
+    }
+
+    private static UpsideCalculator inverted(UpsideCalculator calculator) {
+        return new InvertedUpsideCalculator(calculator);
     }
 
     /**
