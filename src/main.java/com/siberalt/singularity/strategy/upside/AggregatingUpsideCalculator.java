@@ -4,6 +4,7 @@ import com.siberalt.singularity.broker.contract.service.market.request.CandleInt
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.CandleAggregator;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,6 +28,7 @@ public class AggregatingUpsideCalculator implements UpsideCalculator {
     private final CandleAggregator aggregator = new CandleAggregator();
     private final List<Candle> openBar = new ArrayList<>();
     private long openBucket = Long.MIN_VALUE;
+    private Instant lastSeen;
 
     /**
      * @param interval the width to roll up to
@@ -44,6 +46,15 @@ public class AggregatingUpsideCalculator implements UpsideCalculator {
         Upside upside = Upside.NEUTRAL;
 
         for (Candle candle : lastCandles) {
+            // Only what has not been seen. A caller may hand over a window rather than a feed - the
+            // strategies here pass the last day of candles on every candle - and counting those
+            // minutes again would build each wide bar several times over and fill the window behind
+            // this one with copies of the same hour.
+            if (lastSeen != null && !candle.getTime().isAfter(lastSeen)) {
+                continue;
+            }
+
+            lastSeen = candle.getTime();
             long bucket = aggregator.bucketOf(candle, interval);
 
             if (bucket != openBucket) {

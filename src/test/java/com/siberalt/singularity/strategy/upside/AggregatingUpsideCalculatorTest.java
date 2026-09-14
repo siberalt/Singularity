@@ -90,6 +90,28 @@ class AggregatingUpsideCalculatorTest {
         assertEquals(Quotation.of(20), seenByDelegate.getFirst().getFirst().close());
     }
 
+    /**
+     * A strategy hands over a window, not a feed: the last day of candles on every candle. Counting
+     * the minutes it has already seen would build each hour again and again, and a window kept
+     * behind this one would fill with copies of the same bar.
+     */
+    @Test
+    void countsEachCandleOnceHoweverOftenItIsShown() {
+        List<Candle> minutes = new ArrayList<>();
+
+        for (int minute = 0; minute < 180; minute += 30) {
+            minutes.add(minute(minute, 10 + minute, 10 + minute));
+        }
+
+        for (int sent = 1; sent <= minutes.size(); sent++) {
+            calculator.calculate(minutes.subList(0, sent));
+        }
+
+        assertEquals(2, seenByDelegate.size());
+        assertEquals(HOUR_START, seenByDelegate.getFirst().getFirst().getTime());
+        assertEquals(HOUR_START.plusSeconds(3600), seenByDelegate.getLast().getFirst().getTime());
+    }
+
     private Candle minute(int offset, double open, double close) {
         return new Candle(
             "TEST",

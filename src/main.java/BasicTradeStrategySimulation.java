@@ -1,7 +1,6 @@
 import com.siberalt.singularity.broker.contract.execution.EventSubscriptionBroker;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.instrument.common.InstrumentType;
-import com.siberalt.singularity.broker.contract.service.user.Account;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.impl.decorator.PositionRiskManagerUpsideCalculator;
 import com.siberalt.singularity.broker.impl.mock.EventMockBroker;
@@ -33,9 +32,6 @@ import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.LastExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
-import com.siberalt.singularity.strategy.impl.quantity.BarVolumeCappedQuantity;
-import com.siberalt.singularity.strategy.impl.quantity.SignalScaledQuantity;
-import com.siberalt.singularity.strategy.impl.quantity.TargetPositionQuantity;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetector;
@@ -256,13 +252,13 @@ public class BasicTradeStrategySimulation {
         PositionRiskManagerUpsideCalculator riskManagerUpsideCalculator = new PositionRiskManagerUpsideCalculator(
             accountId,
             new BaseEntryPriceCalculator(readOperationRepository),
-            ATRVolatilityCalculator.ofMultiplier(2)
+            ATRVolatilityCalculator.ofMultiplier(4)
         );
-        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(3);
+        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(5);
 
         ThresholdSwitchUpsideCalculator switcherUpsideCalculator = new ThresholdSwitchUpsideCalculator(
-            new UpsideSignalAmplifier(slopeUpsideCalculator, 0.9, 0.9),
             riskManagerUpsideCalculator,
+            new UpsideSignalAmplifier(slopeUpsideCalculator, 0.9, 0.9),
             0.8,
             -0.8
         );
@@ -306,7 +302,7 @@ public class BasicTradeStrategySimulation {
 
 //        broker.getOrderService().getPriceModel().setHalfSpreadRatio(0.00015).setSlippageImpactRatio(0.0006);
 //        broker.getOrderService().getLiquidityModel().setInfiniteLiquidity(true).setParticipationRate(0.1);
-//        broker.getOrderService().setExecutionLatency(Duration.ofMinutes(0));
+        broker.getOrderService().setExecutionLatency(Duration.ofMinutes(0));
 
         return broker;
     }
