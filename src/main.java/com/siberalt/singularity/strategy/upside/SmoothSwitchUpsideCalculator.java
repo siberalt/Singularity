@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.upside;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.strategy.market.MarketCoefficient;
 
 import java.util.List;
 
@@ -44,11 +45,11 @@ public class SmoothSwitchUpsideCalculator implements UpsideCalculator {
         }
     }
 
-    private final RangeSwitchUpsideCalculator.Coefficient coefficient;
+    private final MarketCoefficient coefficient;
     private final List<WeightedCalculator> calculators;
 
     public SmoothSwitchUpsideCalculator(
-        RangeSwitchUpsideCalculator.Coefficient coefficient,
+        MarketCoefficient coefficient,
         List<WeightedCalculator> calculators
     ) {
         if (coefficient == null) {

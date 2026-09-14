@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.upside;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.strategy.market.MarketCoefficient;
 
 import java.util.List;
 
@@ -27,16 +28,6 @@ import java.util.List;
  * written for, and saying nothing is the honest response.
  */
 public class RangeSwitchUpsideCalculator implements UpsideCalculator {
-    /**
-     * Whatever the choice is made on, measured from the same candles the calculators see. It has to
-     * be something the market is doing rather than something a signal thinks, or this is only a
-     * more roundabout way of picking by signal strength.
-     */
-    @FunctionalInterface
-    public interface Coefficient {
-        double of(List<Candle> lastCandles);
-    }
-
     /**
      * @param from inclusive
      * @param to   exclusive
@@ -65,10 +56,10 @@ public class RangeSwitchUpsideCalculator implements UpsideCalculator {
         }
     }
 
-    private final Coefficient coefficient;
+    private final MarketCoefficient coefficient;
     private final List<Branch> branches;
 
-    public RangeSwitchUpsideCalculator(Coefficient coefficient, List<Branch> branches) {
+    public RangeSwitchUpsideCalculator(MarketCoefficient coefficient, List<Branch> branches) {
         if (coefficient == null) {
             throw new IllegalArgumentException("Nothing to switch on");
         }

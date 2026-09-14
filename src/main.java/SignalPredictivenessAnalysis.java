@@ -15,6 +15,7 @@ import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.cache.CachingExtremeLocator;
 import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetector;
+import com.siberalt.singularity.strategy.market.MarketCoefficient;
 import com.siberalt.singularity.strategy.level.selector.StrongestLevelPairSelector;
 import com.siberalt.singularity.strategy.upside.InvertedUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.level.KeyLevelsUpsideCalculator;
@@ -113,8 +114,8 @@ public class SignalPredictivenessAnalysis {
         int stride = Integer.parseInt(System.getProperty("stride",
             interval == CandleInterval.MIN_1 ? "10" : "1"));
 
-        System.out.printf("%n===== %s : %d bars, lookback %d, stride %d =====%n",
-            interval, candles.size(), lookback, stride);
+        System.out.printf("%n===== %s : %d bars, lookback %d, stride %d, entry %.2f =====%n",
+            interval, candles.size(), lookback, stride, signalThreshold());
 
         if (candles.size() < lookback + 100) {
             System.out.println("  not enough bars to say anything");
@@ -122,7 +123,7 @@ public class SignalPredictivenessAnalysis {
         }
 
         System.out.printf("%-8s %6s %6s | %s%n", "period", "fired", "lag1",
-            "horizon: corr(exec) / edge bp vs hold bp / n   (same-bar corr)");
+            "horizon: corr(exec) / edge bp on trades vs hold bp / n   (same-bar corr)");
 
         for (int period : calculatorPeriods()) {
             String family = System.getProperty("signal", "slope");
@@ -175,6 +176,7 @@ public class SignalPredictivenessAnalysis {
             PredictivenessReport report = new SignalPredictiveness()
                 .setLookbackCandles(lookback)
                 .setStride(stride)
+                .setSignalThreshold(signalThreshold())
                 .measure(candles, calculator);
             long elapsed = System.currentTimeMillis() - startedAt;
 
@@ -182,11 +184,12 @@ public class SignalPredictivenessAnalysis {
 
             for (PredictivenessReport.HorizonStat stat : report.horizons()) {
                 line.append(String.format(
-                    "  h=%-3d %+.3f%s/%+7.1f vs %+7.1f/%-6d (%+.3f)",
+                    "  h=%-3d %+.3f%s/%+7.1f on %-5d vs %+7.1f/%-6d (%+.3f)",
                     stat.horizon(),
                     stat.executableCorrelation(),
                     stat.isAboveNoise() ? "*" : " ",
                     stat.edgeBasisPoints(),
+                    stat.edgeSamples(),
                     stat.baselineBasisPoints(),
                     stat.samples(),
                     stat.sameBarCorrelation()
@@ -215,10 +218,19 @@ public class SignalPredictivenessAnalysis {
     }
 
     /** What the market is doing, measured over the same window the calculators read. */
-    private static RangeSwitchUpsideCalculator.Coefficient varianceRatio() {
+    private static MarketCoefficient varianceRatio() {
         int horizon = Integer.getInteger("vr", 10);
 
         return candles -> new VarianceRatio().measure(candles, horizon);
+    }
+
+    /**
+     * How strong a reading has to be before it counts towards the edge - what a strategy would take
+     * as its entry. A blended signal is scaled down by construction and rarely reaches the 0.9 a
+     * switch reaches, so measuring the two at one threshold is the only way to compare them.
+     */
+    private static double signalThreshold() {
+        return Double.parseDouble(System.getProperty("threshold", "0.9"));
     }
 
     /** How much of a coefficient either side of one the two readings share the answer over. */
