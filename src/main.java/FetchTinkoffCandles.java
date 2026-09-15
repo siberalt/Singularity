@@ -37,8 +37,8 @@ public class FetchTinkoffCandles {
     // Сколько чанков одного инструмента запрашивать параллельно (сеть - узкое место,
     // не сам Tinkoff API; консервативное значение, чтобы не упереться в rate limit)
     private static final int CHUNK_PARALLELISM = 5;
-    private static final Instant FROM = Instant.parse("2026-01-01T00:00:00Z");
-    private static final Instant TO = Instant.parse("2027-01-01T00:00:00Z");
+    private static final Instant FROM = Instant.parse("2021-01-01T00:00:00Z");
+    private static final Instant TO = Instant.parse("2025-01-01T00:00:00Z");
 
     public static void main(String[] args) throws IOException, AbstractException, SQLException {
         ConfigInterface tinkoffConfig = new YamlConfig(

@@ -63,7 +63,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class BasicTradeStrategySimulation {
-    private final static String INSTRUMENT_ID = "TMOS";
+    private final static String INSTRUMENT_ID = "55371b1f-8f7c-4c12-9d93-386fae5ec12a";
 
     public static void main(String[] args) throws AbstractException, IOException {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
@@ -254,11 +254,11 @@ public class BasicTradeStrategySimulation {
             new BaseEntryPriceCalculator(readOperationRepository),
             ATRVolatilityCalculator.ofMultiplier(4)
         );
-        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(5);
+        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(4);
 
         ThresholdSwitchUpsideCalculator switcherUpsideCalculator = new ThresholdSwitchUpsideCalculator(
-            riskManagerUpsideCalculator,
             new UpsideSignalAmplifier(slopeUpsideCalculator, 0.9, 0.9),
+            riskManagerUpsideCalculator,
             0.8,
             -0.8
         );
@@ -300,9 +300,9 @@ public class BasicTradeStrategySimulation {
             .setCommissionRatio(commission)
             .build();
 
-//        broker.getOrderService().getPriceModel().setHalfSpreadRatio(0.00015).setSlippageImpactRatio(0.0006);
-//        broker.getOrderService().getLiquidityModel().setInfiniteLiquidity(true).setParticipationRate(0.1);
-        broker.getOrderService().setExecutionLatency(Duration.ofMinutes(0));
+        broker.getOrderService().getPriceModel().setHalfSpreadRatio(0.00015).setSlippageImpactRatio(0.0006);
+        broker.getOrderService().getLiquidityModel().setInfiniteLiquidity(true).setParticipationRate(0.1);
+//        broker.getOrderService().setExecutionLatency(Duration.ofMinutes(0));
 
         return broker;
     }

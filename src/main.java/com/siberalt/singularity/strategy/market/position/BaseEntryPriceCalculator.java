@@ -83,11 +83,13 @@ public class BaseEntryPriceCalculator implements EntryPriceCalculator {
         long operationLots = operation.quantityDone();
         boolean isBuy = operation.direction().isBuy();
 
+        TimePointRange timePointRange = new TimePointRange(new TimePoint(operation.executedDate()));
+
         if (previousQuantity == 0) {
             return new EntryPrice(
                 isBuy ? operationLots : -operationLots,
                 Quotation.of(operationPrice),
-                new TimePointRange(new TimePoint(operation.executedDate()))
+                timePointRange
             );
         }
 
@@ -101,7 +103,7 @@ public class BaseEntryPriceCalculator implements EntryPriceCalculator {
                 Quotation.of(newAvg),
                 TimePointRange.unionByInstants(
                     previous.timePointRange(),
-                    new TimePointRange(new TimePoint(operation.executedDate()))
+                    timePointRange
                 )
             );
         } else {
@@ -112,7 +114,7 @@ public class BaseEntryPriceCalculator implements EntryPriceCalculator {
                 return new EntryPrice(
                     isBuy ? remaining : -remaining,
                     Quotation.of(operationPrice),
-                    new TimePointRange(new TimePoint(operation.executedDate()))
+                    timePointRange
                 );
             } else if (operationLots < oppositeVolume) {
                 long newQty = previousQuantity + (isBuy ? operationLots : -operationLots);
