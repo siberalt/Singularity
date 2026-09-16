@@ -1,6 +1,8 @@
 package com.siberalt.singularity.utils.entity;
 
 import com.siberalt.singularity.db.initialize.FlywayDatabaseInitializer;
+import com.siberalt.singularity.entity.instrument.Instrument;
+import com.siberalt.singularity.entity.instrument.SqliteInstrumentRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,7 +15,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 class SqliteCandleMigrationCheckpointRepositoryTest {
+    private static final String BROKER = "tinkoff";
     private static final String INSTRUMENT_UID = "TEST_INSTRUMENT";
+    private static final String OTHER_INSTRUMENT_UID = "OTHER_INSTRUMENT";
 
     private Connection connection;
     private SqliteCandleMigrationCheckpointRepository repository;
@@ -30,7 +34,15 @@ class SqliteCandleMigrationCheckpointRepositoryTest {
         connection = DriverManager.getConnection(jdbcUrl);
         new FlywayDatabaseInitializer().migrate(jdbcUrl);
 
-        repository = new SqliteCandleMigrationCheckpointRepository(connection);
+        SqliteInstrumentRepository instruments = new SqliteInstrumentRepository(connection);
+        // Прогресс хранится против нашего инструмента, так что он должен быть заведён заранее.
+        instruments.save(BROKER,
+            new Instrument().setUid(INSTRUMENT_UID).setName(INSTRUMENT_UID).setLot(1).setCurrency("RUB"));
+
+        instruments.save(BROKER,
+            new Instrument().setUid(OTHER_INSTRUMENT_UID).setName(OTHER_INSTRUMENT_UID).setLot(1).setCurrency("RUB"));
+
+        repository = new SqliteCandleMigrationCheckpointRepository(connection, instruments);
     }
 
     @AfterEach
@@ -101,7 +113,7 @@ class SqliteCandleMigrationCheckpointRepositoryTest {
     void differentInstrumentsAreTrackedIndependently() {
         repository.markDone(INSTRUMENT_UID, chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z"));
 
-        Assertions.assertFalse(repository.isDone("OTHER_INSTRUMENT", chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z")));
+        Assertions.assertFalse(repository.isDone(OTHER_INSTRUMENT_UID, chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z")));
     }
 
     private static MigrationChunk chunk(String from, String to) {

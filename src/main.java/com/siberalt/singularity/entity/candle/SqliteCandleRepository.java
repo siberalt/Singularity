@@ -1,6 +1,8 @@
 package com.siberalt.singularity.entity.candle;
 
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
+import com.siberalt.singularity.entity.instrument.InstrumentIdResolver;
+import com.siberalt.singularity.entity.instrument.SqliteInstrumentRepository;
 import com.siberalt.singularity.shared.TimePointRange;
 
 import java.sql.Connection;
@@ -12,29 +14,64 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 public class SqliteCandleRepository implements CandleRepository, CandleIndexNormalizer, AutoCloseable {
     private final Connection connection;
+    private final InstrumentIdResolver instruments;
 
     public SqliteCandleRepository(Connection connection) {
+        this(connection, new SqliteInstrumentRepository(connection));
+    }
+
+    /**
+     * @param instruments what turns the uid a caller speaks into the id rows are keyed by. Candles
+     *                    are stored against our own instrument, not against what one broker calls it,
+     *                    so a uid no broker listing mentions has no history here - saving that listing
+     *                    through {@link com.siberalt.singularity.entity.instrument.InstrumentRepository}
+     *                    is what gives it one.
+     */
+    public SqliteCandleRepository(Connection connection, InstrumentIdResolver instruments) {
         this.connection = connection;
+        this.instruments = instruments;
+    }
+
+    /** The id rows are keyed by, or nothing - a read of an unknown instrument is simply empty. */
+    private OptionalLong idOf(String instrumentUid) {
+        return instruments.idOf(instrumentUid);
+    }
+
+    /**
+     * The same, for writing, where nothing is not an answer: a candle has to belong to an instrument
+     * we know, and inventing one here would put a nameless row in the table that only the uid it came
+     * from could ever find again.
+     */
+    private long idForWriting(String instrumentUid) {
+        return instruments.idOf(instrumentUid).orElseThrow(() -> new IllegalStateException(
+            "Инструмент " + instrumentUid + " неизвестен: сохраните его листинг через InstrumentRepository перед загрузкой свечей"));
     }
 
     @Override
     public Optional<Candle> getAt(String instrumentUid, Instant at) {
         String sql = """
-            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
+            SELECT time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
             FROM candle
-            WHERE instrument_uid = ? AND time = ?
+            WHERE instrument_id = ? AND time = ?
             """;
 
+        OptionalLong id = idOf(instrumentUid);
+
+        if (id.isEmpty()) {
+            return Optional.empty();
+        }
+
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, instrumentUid);
+            statement.setLong(1, id.getAsLong());
             statement.setLong(2, at.toEpochMilli());
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
-                    return Optional.of(mapResultSetToCandle(resultSet));
+                    return Optional.of(mapResultSetToCandle(resultSet, instrumentUid));
                 }
             }
         } catch (SQLException e) {
@@ -47,22 +84,28 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
     @Override
     public List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore) {
         String sql = """
-            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
+            SELECT time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
             FROM candle
-            WHERE instrument_uid = ? AND time <= ?
+            WHERE instrument_id = ? AND time <= ?
             ORDER BY time DESC
             LIMIT ?
             """;
 
+        OptionalLong id = idOf(instrumentUid);
+
+        if (id.isEmpty()) {
+            return List.of();
+        }
+
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, instrumentUid);
+            statement.setLong(1, id.getAsLong());
             statement.setLong(2, at.toEpochMilli());
             statement.setLong(3, amountBefore + 1);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 List<Candle> candles = new ArrayList<>();
                 while (resultSet.next()) {
-                    candles.add(mapResultSetToCandle(resultSet));
+                    candles.add(mapResultSetToCandle(resultSet, instrumentUid));
                 }
                 // Реверсируем, чтобы получить порядок от старых к новым
                 Collections.reverse(candles);
@@ -87,22 +130,28 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
     @Override
     public List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter) {
         String sql = """
-            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
+            SELECT time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
             FROM candle
-            WHERE instrument_uid = ? AND time >= ?
+            WHERE instrument_id = ? AND time >= ?
             ORDER BY time ASC
             LIMIT ?
             """;
 
+        OptionalLong id = idOf(instrumentUid);
+
+        if (id.isEmpty()) {
+            return List.of();
+        }
+
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, instrumentUid);
+            statement.setLong(1, id.getAsLong());
             statement.setLong(2, at.toEpochMilli());
             statement.setLong(3, amountAfter);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 List<Candle> candles = new ArrayList<>();
                 while (resultSet.next()) {
-                    candles.add(mapResultSetToCandle(resultSet));
+                    candles.add(mapResultSetToCandle(resultSet, instrumentUid));
                 }
                 return candles;
             }
@@ -114,21 +163,27 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
     @Override
     public List<Candle> getPeriod(String instrumentUid, Instant from, Instant to) {
         String sql = """
-            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
+            SELECT time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
             FROM candle
-            WHERE instrument_uid = ? AND time >= ? AND time <= ?
+            WHERE instrument_id = ? AND time >= ? AND time <= ?
             ORDER BY time ASC
             """;
 
+        OptionalLong id = idOf(instrumentUid);
+
+        if (id.isEmpty()) {
+            return List.of();
+        }
+
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, instrumentUid);
+            statement.setLong(1, id.getAsLong());
             statement.setLong(2, from.toEpochMilli());
             statement.setLong(3, to.toEpochMilli());
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 List<Candle> candles = new ArrayList<>();
                 while (resultSet.next()) {
-                    candles.add(mapResultSetToCandle(resultSet));
+                    candles.add(mapResultSetToCandle(resultSet, instrumentUid));
                 }
                 return candles;
             }
@@ -140,9 +195,9 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
     @Override
     public List<Candle> findByPrice(FindPriceParams params) {
         String sql = """
-            SELECT instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
+            SELECT time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell
             FROM candle
-            WHERE instrument_uid = ? AND time >= ? AND time <= ?
+            WHERE instrument_id = ? AND time >= ? AND time <= ?
             """;
 
         String column = priceColumn(params.priceField());
@@ -157,9 +212,15 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
 
         sql += " AND " + column + " " + comparison + " ? ORDER BY time ASC LIMIT ?";
 
+        OptionalLong id = idOf(params.instrumentUid());
+
+        if (id.isEmpty()) {
+            return List.of();
+        }
+
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             int paramIndex = 1;
-            statement.setString(paramIndex++, params.instrumentUid());
+            statement.setLong(paramIndex++, id.getAsLong());
             statement.setLong(paramIndex++, params.from().toEpochMilli());
             statement.setLong(paramIndex++, params.to().toEpochMilli());
             statement.setLong(paramIndex++, params.price().toLong());
@@ -168,7 +229,7 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
             try (ResultSet resultSet = statement.executeQuery()) {
                 List<Candle> candles = new ArrayList<>();
                 while (resultSet.next()) {
-                    candles.add(mapResultSetToCandle(resultSet));
+                    candles.add(mapResultSetToCandle(resultSet, params.instrumentUid()));
                 }
                 return candles;
             }
@@ -195,11 +256,17 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
         String sql = """
             SELECT COUNT(*) as count, MAX(time) as last_time
             FROM candle
-            WHERE instrument_uid = ? AND time >= ? AND time <= ?
+            WHERE instrument_id = ? AND time >= ? AND time <= ?
             """;
 
+        OptionalLong id = idOf(instrumentUid);
+
+        if (id.isEmpty()) {
+            return CandleRangeMetadata.EMPTY;
+        }
+
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, instrumentUid);
+            statement.setLong(1, id.getAsLong());
             statement.setLong(2, from.toEpochMilli());
             statement.setLong(3, to.toEpochMilli());
 
@@ -227,9 +294,9 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
     @Override
     public void save(Candle candle) {
         String sql = """
-            INSERT INTO candle (instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell)
+            INSERT INTO candle (instrument_id, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(instrument_uid, time) DO UPDATE SET
+            ON CONFLICT(instrument_id, time) DO UPDATE SET
                 open_price = excluded.open_price,
                 close_price = excluded.close_price,
                 high_price = excluded.high_price,
@@ -240,7 +307,7 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
             """;
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, candle.instrumentUid());
+            statement.setLong(1, idForWriting(candle.instrumentUid()));
             statement.setLong(2, candle.getIndex());
             statement.setLong(3, candle.getTime().toEpochMilli());
             statement.setLong(4, candle.open().toLong());
@@ -264,9 +331,9 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
         }
 
         String sql = """
-            INSERT INTO candle (instrument_uid, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell)
+            INSERT INTO candle (instrument_id, time_index, time, open_price, close_price, high_price, low_price, volume, volume_buy, volume_sell)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(instrument_uid, time) DO UPDATE SET
+            ON CONFLICT(instrument_id, time) DO UPDATE SET
                 open_price = excluded.open_price,
                 close_price = excluded.close_price,
                 high_price = excluded.high_price,
@@ -282,7 +349,7 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
                 for (Candle candle : candles) {
                     if (candle == null) continue;
 
-                    statement.setString(1, candle.instrumentUid());
+                    statement.setLong(1, idForWriting(candle.instrumentUid()));
                     statement.setLong(2, candle.getIndex());
                     statement.setLong(3, candle.getTime().toEpochMilli());
                     statement.setLong(4, candle.open().toLong());
@@ -317,10 +384,10 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
 
     @Override
     public void delete(Candle candle) {
-        String sql = "DELETE FROM candle WHERE instrument_uid = ? AND time = ?";
+        String sql = "DELETE FROM candle WHERE instrument_id = ? AND time = ?";
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, candle.instrumentUid());
+            statement.setLong(1, idForWriting(candle.instrumentUid()));
             statement.setLong(2, candle.getTime().toEpochMilli());
 
             statement.executeUpdate();
@@ -331,21 +398,22 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
 
     @Override
     public void normalizeIndex(String instrumentUid, Instant from) {
+        long instrumentId = idForWriting(instrumentUid);
         long fromMillis = from.toEpochMilli();
 
         // Индекс последней свечи перед from + 1 - быстрый seek по существующему
-        // индексу (instrument_uid, time), независимо от размера всей истории.
+        // индексу (instrument_id, time), независимо от размера всей истории.
         // COUNT(*) по тому же условию дал бы то же значение, но потребовал бы
         // пересчитать все строки до from.
         String lastIndexSql = """
             SELECT time_index FROM candle
-            WHERE instrument_uid = ? AND time < ?
+            WHERE instrument_id = ? AND time < ?
             ORDER BY time DESC
             LIMIT 1
             """;
         long baseIndex;
         try (PreparedStatement statement = connection.prepareStatement(lastIndexSql)) {
-            statement.setString(1, instrumentUid);
+            statement.setLong(1, instrumentId);
             statement.setLong(2, fromMillis);
             try (ResultSet resultSet = statement.executeQuery()) {
                 baseIndex = resultSet.next() ? resultSet.getLong(1) + 1 : 0;
@@ -358,18 +426,18 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
             WITH ranked AS (
                 SELECT id, ROW_NUMBER() OVER (ORDER BY time ASC) - 1 AS rn
                 FROM candle
-                WHERE instrument_uid = ? AND time >= ?
+                WHERE instrument_id = ? AND time >= ?
             )
             UPDATE candle
             SET time_index = ? + (SELECT rn FROM ranked WHERE ranked.id = candle.id)
-            WHERE instrument_uid = ? AND time >= ?
+            WHERE instrument_id = ? AND time >= ?
             """;
 
         try (PreparedStatement statement = connection.prepareStatement(updateSql)) {
-            statement.setString(1, instrumentUid);
+            statement.setLong(1, instrumentId);
             statement.setLong(2, fromMillis);
             statement.setLong(3, baseIndex);
-            statement.setString(4, instrumentUid);
+            statement.setLong(4, instrumentId);
             statement.setLong(5, fromMillis);
             statement.executeUpdate();
         } catch (SQLException e) {
@@ -377,8 +445,11 @@ public class SqliteCandleRepository implements CandleRepository, CandleIndexNorm
         }
     }
 
-    private Candle mapResultSetToCandle(ResultSet resultSet) throws SQLException {
-        String instrumentUid = resultSet.getString("instrument_uid");
+    /**
+     * Rows no longer carry the uid - they are keyed by our instrument - so the uid a candle comes
+     * back with is the one it was asked for, which is the one its caller can hand to its broker.
+     */
+    private Candle mapResultSetToCandle(ResultSet resultSet, String instrumentUid) throws SQLException {
         long timeIndex = resultSet.getLong("time_index");
         long time = resultSet.getLong("time");
         long openPrice = resultSet.getLong("open_price");

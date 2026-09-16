@@ -18,6 +18,12 @@ import java.io.Closeable;
  * out through the {@link EventSubscriptionBroker} getters.
  */
 public abstract class AbstractTinkoffBroker implements EventSubscriptionBroker, Closeable {
+    /**
+     * Под каким ключом листинги этого брокера лежат в instrument_broker_listing - тот же ключ
+     * проставила миграция V6 уже загруженным инструментам.
+     */
+    public static final String ID = "tinkoff";
+
     protected final ServiceStubFactory serviceStubFactory;
     protected final OrderService orderService;
     protected final MarketDataService marketDataService;

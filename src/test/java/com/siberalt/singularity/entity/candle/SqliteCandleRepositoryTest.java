@@ -2,6 +2,8 @@ package com.siberalt.singularity.entity.candle;
 
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.db.initialize.FlywayDatabaseInitializer;
+import com.siberalt.singularity.entity.instrument.Instrument;
+import com.siberalt.singularity.entity.instrument.SqliteInstrumentRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,7 +20,9 @@ import java.util.List;
 import java.util.UUID;
 
 class SqliteCandleRepositoryTest {
+    private static final String BROKER = "tinkoff";
     private static final String INSTRUMENT_UID = "TEST_INSTRUMENT";
+    private static final String OTHER_INSTRUMENT_UID = "OTHER_INSTRUMENT";
 
     private Connection connection;
     private SqliteCandleRepository repository;
@@ -35,7 +39,13 @@ class SqliteCandleRepositoryTest {
         connection = DriverManager.getConnection(jdbcUrl);
         new FlywayDatabaseInitializer().migrate(jdbcUrl);
 
-        repository = new SqliteCandleRepository(connection);
+        SqliteInstrumentRepository instruments = new SqliteInstrumentRepository(connection);
+        // Свечи хранятся против нашего инструмента, поэтому он должен существовать до записи -
+        // в рабочем коде это делает загрузчик перед миграцией.
+        instruments.save(BROKER, new Instrument().setUid(INSTRUMENT_UID).setName(INSTRUMENT_UID).setLot(1).setCurrency("RUB"));
+        instruments.save(BROKER, new Instrument().setUid(OTHER_INSTRUMENT_UID).setName(OTHER_INSTRUMENT_UID).setLot(1).setCurrency("RUB"));
+
+        repository = new SqliteCandleRepository(connection, instruments);
     }
 
     @AfterEach
@@ -103,13 +113,13 @@ class SqliteCandleRepositoryTest {
         @Test
         void differentInstrumentsAreNormalizedIndependently() {
             insertPlaceholder(INSTRUMENT_UID, Instant.parse("2025-01-01T00:01:00Z"), 0);
-            insertPlaceholder("OTHER_INSTRUMENT", Instant.parse("2025-01-01T00:01:00Z"), 0);
+            insertPlaceholder(OTHER_INSTRUMENT_UID, Instant.parse("2025-01-01T00:01:00Z"), 0);
 
             repository.normalizeIndex(INSTRUMENT_UID, Instant.parse("2025-01-01T00:00:00Z"));
 
             Assertions.assertEquals(0, indexAt(INSTRUMENT_UID, "2025-01-01T00:01:00Z"));
             // Другой инструмент не нормализовался - остался с placeholder-индексом
-            Assertions.assertEquals(0, indexAt("OTHER_INSTRUMENT", "2025-01-01T00:01:00Z"));
+            Assertions.assertEquals(0, indexAt(OTHER_INSTRUMENT_UID, "2025-01-01T00:01:00Z"));
         }
     }
 
@@ -213,7 +223,11 @@ class SqliteCandleRepositoryTest {
     }
 
     private long indexAt(String instrumentUid, String time) {
-        String sql = "SELECT time_index FROM candle WHERE instrument_uid = ? AND time = ?";
+        String sql = """
+            SELECT c.time_index FROM candle c
+            JOIN instrument_broker_listing l ON l.instrument_id = c.instrument_id
+            WHERE l.broker_instrument_id = ? AND c.time = ?
+            """;
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, instrumentUid);
             statement.setLong(2, Instant.parse(time).toEpochMilli());
