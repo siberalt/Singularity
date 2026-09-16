@@ -23,7 +23,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class BarVolumeCappedQuantityTest {
-    private static final String INSTRUMENT = "TMOS";
+    private static final long INSTRUMENT = 1;
     private static final Instant NOW = Instant.parse("2021-06-03T10:00:00Z");
 
     private ReadCandleRepository candleRepository;

@@ -13,6 +13,7 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.FindPriceParams;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.entity.instrument.InstrumentIdResolver;
 import com.siberalt.singularity.strategy.context.Clock;
 
 import java.time.Duration;
@@ -20,23 +21,33 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 
+/**
+ * Market data served from recorded candles, as a broker would serve it.
+ * <p>
+ * A broker is asked by its own instrument uid and the candles are stored by our instrument id, so
+ * every question is translated at the door. An instrument the translation does not know is treated
+ * as one the market has no data for - the same answer a broker gives for an instrument it does not
+ * list - rather than an error, because an empty market is a state a simulation already handles.
+ */
 public class MockMarketDataService implements MarketDataService, SimulationMarketData {
     protected Clock clock;
     protected ReadCandleRepository candleRepository;
+    protected InstrumentIdResolver instrumentIds;
 
-    public MockMarketDataService(Clock clock, ReadCandleRepository candleStorage) {
+    public MockMarketDataService(Clock clock, ReadCandleRepository candleStorage, InstrumentIdResolver instrumentIds) {
         this.clock = clock;
         this.candleRepository = candleStorage;
+        this.instrumentIds = instrumentIds;
     }
 
     @Override
     public GetCandlesResponse getCandles(GetCandlesRequest request) {
-        Iterable<Candle> iterableCandles = candleRepository.getPeriod(
-                request.getInstrumentUid(),
-                request.getFrom(),
-                request.getTo()
-        );
+        OptionalLong instrumentId = instrumentIds.idOf(request.getInstrumentUid());
+        Iterable<Candle> iterableCandles = instrumentId.isEmpty()
+            ? List.of()
+            : candleRepository.getPeriod(instrumentId.getAsLong(), request.getFrom(), request.getTo());
 
         List<HistoricCandle> candles = adaptCandlesForInterval(iterableCandles, request.getInterval())
                 .stream()
@@ -58,8 +69,14 @@ public class MockMarketDataService implements MarketDataService, SimulationMarke
         }
 
         for (String instrumentUid : request.getInstrumentsUid()) {
+            OptionalLong instrumentId = instrumentIds.idOf(instrumentUid);
+
+            if (instrumentId.isEmpty()) {
+                continue;
+            }
+
             List<Candle> candles = candleRepository.getPeriod(
-                    instrumentUid,
+                    instrumentId.getAsLong(),
                     currentTime.minus(request.getPeriod()),
                     currentTime
             );
@@ -74,15 +91,12 @@ public class MockMarketDataService implements MarketDataService, SimulationMarke
     @Override
     public GetCurrentPriceResponse getCurrentPrice(GetCurrentPriceRequest request) throws AbstractException {
         String instrumentUid = request.getInstrumentUid();
-        Instant at = clock.currentTime();
+        Candle candle = currentCandle(instrumentUid);
 
-        List<Candle> candleList = candleRepository.findBeforeOrEqual(instrumentUid, at, 1);
-
-        if (candleList.isEmpty()) {
+        if (candle == null) {
             throw ExceptionBuilder.create(ErrorCode.INSTRUMENT_NOT_FOUND);
         }
 
-        Candle candle = candleList.getLast();
         Quotation price = candle.open();
 
         return new GetCurrentPriceResponse()
@@ -92,19 +106,37 @@ public class MockMarketDataService implements MarketDataService, SimulationMarke
 
     @Override
     public Optional<Candle> lastCandleAtOrBefore(String instrumentUid, Instant at) {
-        List<Candle> candles = candleRepository.findBeforeOrEqual(instrumentUid, at, 1);
+        OptionalLong instrumentId = instrumentIds.idOf(instrumentUid);
+
+        if (instrumentId.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<Candle> candles = candleRepository.findBeforeOrEqual(instrumentId.getAsLong(), at, 1);
         return candles.isEmpty() ? Optional.empty() : Optional.ofNullable(candles.getLast());
     }
 
     @Override
     public Optional<Candle> nextCandleAtOrAfter(String instrumentUid, Instant at) {
-        List<Candle> candles = candleRepository.findAfterOrEqual(instrumentUid, at, 1);
+        OptionalLong instrumentId = instrumentIds.idOf(instrumentUid);
+
+        if (instrumentId.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<Candle> candles = candleRepository.findAfterOrEqual(instrumentId.getAsLong(), at, 1);
         return candles.isEmpty() ? Optional.empty() : Optional.ofNullable(candles.getFirst());
     }
 
     @Override
-    public List<Candle> findByPrice(CandleInterval interval, FindPriceParams findParams) {
-        return adaptCandlesForInterval(this.candleRepository.findByPrice(findParams), interval);
+    public List<Candle> findByPrice(CandleInterval interval, String instrumentUid, FindPriceParams findParams) {
+        OptionalLong instrumentId = instrumentIds.idOf(instrumentUid);
+
+        if (instrumentId.isEmpty()) {
+            return List.of();
+        }
+
+        return adaptCandlesForInterval(this.candleRepository.findByPrice(instrumentId.getAsLong(), findParams), interval);
     }
 
     protected List<Candle> adaptCandlesForInterval(Iterable<Candle> candles, CandleInterval candleInterval) {
@@ -168,7 +200,7 @@ public class MockMarketDataService implements MarketDataService, SimulationMarke
         }
 
         return new Candle(
-            firstCandle.instrumentUid(),
+            firstCandle.instrumentId(),
             firstCandle.timePoint(),
             firstCandle.open(),
             lastCandle.close(),
@@ -182,11 +214,6 @@ public class MockMarketDataService implements MarketDataService, SimulationMarke
 
     @Override
     public Candle currentCandle(String instrumentUid) {
-        List<Candle> candles = candleRepository.findBeforeOrEqual(
-            instrumentUid,
-            clock.currentTime(),
-            1
-        );
-        return candles.isEmpty() ? null : candles.getLast();
+        return lastCandleAtOrBefore(instrumentUid, clock.currentTime()).orElse(null);
     }
 }

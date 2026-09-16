@@ -15,8 +15,8 @@ public interface CandleIndexNormalizer {
      * {@code >= from} по возрастанию времени, продолжая нумерацию от
      * уже существующих (не затронутых) свечей до этой точки.
      *
-     * @param instrumentUid идентификатор инструмента
+     * @param instrumentId идентификатор инструмента
      * @param from          начиная с какого момента времени пересчитывать индексы
      */
-    void normalizeIndex(String instrumentUid, Instant from);
+    void normalizeIndex(long instrumentId, Instant from);
 }

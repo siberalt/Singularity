@@ -68,16 +68,16 @@ class CandleMigrationServiceTest {
         @Test
         void instrumentWithNoCandles() {
             // given
-            String instrumentUid = "TEST_INSTRUMENT";
+            long instrumentId = 1;
 
-            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
                 .thenReturn(CandleRangeMetadata.EMPTY);
 
             // when
-            service.migrateInstruments(List.of(instrumentUid), FIXED_FROM, FIXED_TO);
+            service.migrateInstruments(List.of(instrumentId), FIXED_FROM, FIXED_TO);
 
             // then
-            verify(source).getRangeMetadata(eq(instrumentUid), any(), any());
+            verify(source).getRangeMetadata(eq(instrumentId), any(), any());
             verifyNoMoreInteractions(source);
             verifyNoInteractions(target);
         }
@@ -89,7 +89,7 @@ class CandleMigrationServiceTest {
         @Test
         void withCandles() {
             // given
-            String instrumentUid = "TEST_INSTRUMENT";
+            long instrumentId = 1;
             Instant from = FIXED_FROM;
             Instant to = FIXED_TO;
 
@@ -97,16 +97,16 @@ class CandleMigrationServiceTest {
             Candle candle2 = Candle.of(CANDLE_TIME_2, 200, 101.0);
             List<Candle> candles = List.of(candle1, candle2);
 
-            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
                 .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), candles.size()));
-            when(source.getPeriod(eq(instrumentUid), any(), any())).thenReturn(candles);
+            when(source.getPeriod(eq(instrumentId), any(), any())).thenReturn(candles);
 
             // when
-            service.migrateInstruments(List.of(instrumentUid), from, to);
+            service.migrateInstruments(List.of(instrumentId), from, to);
 
             // then
-            verify(source).getRangeMetadata(eq(instrumentUid), any(), any());
-            verify(source).getPeriod(eq(instrumentUid), any(), any());
+            verify(source).getRangeMetadata(eq(instrumentId), any(), any());
+            verify(source).getPeriod(eq(instrumentId), any(), any());
             verify(target).saveBatch(candles);
             verifyNoMoreInteractions(source);
             verifyNoMoreInteractions(target);
@@ -115,22 +115,22 @@ class CandleMigrationServiceTest {
         @Test
         void singleChunkSmallRange() {
             // given
-            String instrumentUid = "TEST_INSTRUMENT";
+            long instrumentId = 1;
             Instant from = FIXED_FROM;
             Instant to = FIXED_TO;
 
             Candle candle = Candle.of(CANDLE_TIME_1, 100, 100.0);
 
-            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
                 .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), 1));
-            when(source.getPeriod(eq(instrumentUid), any(), any())).thenReturn(List.of(candle));
+            when(source.getPeriod(eq(instrumentId), any(), any())).thenReturn(List.of(candle));
 
             // when
-            service.migrateInstruments(List.of(instrumentUid), from, to);
+            service.migrateInstruments(List.of(instrumentId), from, to);
 
             // then
-            verify(source).getRangeMetadata(eq(instrumentUid), any(), any());
-            verify(source).getPeriod(eq(instrumentUid), any(), any());
+            verify(source).getRangeMetadata(eq(instrumentId), any(), any());
+            verify(source).getPeriod(eq(instrumentId), any(), any());
             verify(target).saveBatch(List.of(candle));
             verifyNoMoreInteractions(source);
             verifyNoMoreInteractions(target);
@@ -143,8 +143,8 @@ class CandleMigrationServiceTest {
         @Test
         void twoInstruments() {
             // given
-            String instrumentUid1 = "TEST_INSTRUMENT_1";
-            String instrumentUid2 = "TEST_INSTRUMENT_2";
+            long instrumentUid1 = 1;
+            long instrumentUid2 = 2;
             Instant from = FIXED_FROM;
             Instant to = FIXED_TO;
 
@@ -175,9 +175,9 @@ class CandleMigrationServiceTest {
         @Test
         void parallelProcessing() {
             // given
-            String inst1 = "INST_1";
-            String inst2 = "INST_2";
-            String inst3 = "INST_3";
+            long inst1 = 1;
+            long inst2 = 2;
+            long inst3 = 3;
             Instant from = FIXED_FROM;
             Instant to = FIXED_TO;
 
@@ -215,8 +215,8 @@ class CandleMigrationServiceTest {
         @Test
         void mixedSuccessAndFailure() {
             // given
-            String okInstrument = "OK";
-            String failInstrument = "FAIL";
+            long okInstrument = 1;
+            long failInstrument = 2;
             Instant from = FIXED_FROM;
             Instant to = FIXED_TO;
 
@@ -251,24 +251,24 @@ class CandleMigrationServiceTest {
         @Test
         void chunkProcessingError() {
             // given
-            String instrumentUid = "TEST_INSTRUMENT";
+            long instrumentId = 1;
             Instant from = FIXED_FROM;
             Instant to = FIXED_TO;
 
             Candle firstCandle = Candle.of(CANDLE_TIME_1, 100, 100.0);
 
-            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
                 .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), 2));
-            when(source.getPeriod(eq(instrumentUid), any(), any()))
+            when(source.getPeriod(eq(instrumentId), any(), any()))
                 .thenReturn(List.of(firstCandle))
                 .thenThrow(new RuntimeException("Test error"));
 
             // when
-            service.migrateInstruments(List.of(instrumentUid), from, to);
+            service.migrateInstruments(List.of(instrumentId), from, to);
 
             // then
-            verify(source).getRangeMetadata(eq(instrumentUid), any(), any());
-            verify(source).getPeriod(eq(instrumentUid), any(), any());
+            verify(source).getRangeMetadata(eq(instrumentId), any(), any());
+            verify(source).getPeriod(eq(instrumentId), any(), any());
             verify(target).saveBatch(List.of(firstCandle));
         }
     }
@@ -279,22 +279,22 @@ class CandleMigrationServiceTest {
         @Test
         void singleChunk() {
             // given
-            String instrumentUid = "TEST_INSTRUMENT";
+            long instrumentId = 1;
             Instant from = FIXED_FROM;
             Instant to = FIXED_TO;
 
             Candle candle = Candle.of(CANDLE_TIME_1, 100, 100.0);
 
-            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
                 .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), 1));
-            when(source.getPeriod(eq(instrumentUid), any(), any())).thenReturn(List.of(candle));
+            when(source.getPeriod(eq(instrumentId), any(), any())).thenReturn(List.of(candle));
 
             // when
-            service.migrateInstrument(instrumentUid, from, to);
+            service.migrateInstrument(instrumentId, from, to);
 
             // then
-            verify(source).getRangeMetadata(eq(instrumentUid), any(), any());
-            verify(source).getPeriod(eq(instrumentUid), any(), any());
+            verify(source).getRangeMetadata(eq(instrumentId), any(), any());
+            verify(source).getPeriod(eq(instrumentId), any(), any());
             verify(target).saveBatch(List.of(candle));
             verifyNoMoreInteractions(source);
             verifyNoMoreInteractions(target);
@@ -303,25 +303,25 @@ class CandleMigrationServiceTest {
         @Test
         void multipleChunks() {
             // given
-            String instrumentUid = "TEST_INSTRUMENT";
+            long instrumentId = 1;
             Instant from = LONG_AGO;
             Instant to = LONG_AGO_PLUS_8_DAYS;
 
             Candle candle1 = Candle.of(LONG_AGO, 100, 100.0);
             Candle candle2 = Candle.of(LONG_AGO_PLUS_8_DAYS, 200, 101.0);
 
-            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
                 .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), 2));
-            when(source.getPeriod(eq(instrumentUid), any(), any()))
+            when(source.getPeriod(eq(instrumentId), any(), any()))
                 .thenReturn(List.of(candle1))
                 .thenReturn(List.of(candle2));
 
             // when
-            service.migrateInstrument(instrumentUid, from, to);
+            service.migrateInstrument(instrumentId, from, to);
 
             // then
-            verify(source).getRangeMetadata(eq(instrumentUid), any(), any());
-            verify(source, times(2)).getPeriod(eq(instrumentUid), any(), any());
+            verify(source).getRangeMetadata(eq(instrumentId), any(), any());
+            verify(source, times(2)).getPeriod(eq(instrumentId), any(), any());
             verify(target).saveBatch(List.of(candle1));
             verify(target).saveBatch(List.of(candle2));
             verifyNoMoreInteractions(source);
@@ -331,24 +331,24 @@ class CandleMigrationServiceTest {
         @Test
         void errorOnSpecificChunk() {
             // given
-            String instrumentUid = "TEST_INSTRUMENT";
+            long instrumentId = 1;
             Instant from = LONG_AGO;
             Instant to = LONG_AGO_PLUS_8_DAYS;
 
             Candle candle1 = Candle.of(LONG_AGO_PLUS_8_DAYS, 100, 100.0);
 
-            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
                 .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), 2));
-            when(source.getPeriod(eq(instrumentUid), any(), any()))
+            when(source.getPeriod(eq(instrumentId), any(), any()))
                 .thenReturn(List.of(candle1))
                 .thenThrow(new RuntimeException("Error chunk"));
 
             // when
-            service.migrateInstrument(instrumentUid, from, to);
+            service.migrateInstrument(instrumentId, from, to);
 
             // then
-            verify(source).getRangeMetadata(eq(instrumentUid), any(), any());
-            verify(source, times(2)).getPeriod(eq(instrumentUid), any(), any());
+            verify(source).getRangeMetadata(eq(instrumentId), any(), any());
+            verify(source, times(2)).getPeriod(eq(instrumentId), any(), any());
             verify(target).saveBatch(List.of(candle1));
         }
     }
@@ -358,13 +358,13 @@ class CandleMigrationServiceTest {
 
         @Test
         void skipsChunksAlreadyMarkedDone() {
-            String instrumentUid = "TEST_INSTRUMENT";
+            long instrumentId = 1;
             Instant from = FIXED_FROM;
             Instant to = FIXED_TO;
 
-            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
                 .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), 1));
-            when(checkpoint.isDone(eq(instrumentUid), any())).thenReturn(true);
+            when(checkpoint.isDone(eq(instrumentId), any())).thenReturn(true);
 
             CandleMigrationService serviceWithCheckpoint = CandleMigrationService.builder(source, target)
                 .progressTrackerFactory(new NullProgressTrackerFactory())
@@ -372,25 +372,25 @@ class CandleMigrationServiceTest {
                 .checkpoint(checkpoint)
                 .build();
 
-            serviceWithCheckpoint.migrateInstrument(instrumentUid, from, to);
+            serviceWithCheckpoint.migrateInstrument(instrumentId, from, to);
 
-            verify(source).getRangeMetadata(eq(instrumentUid), any(), any());
-            verify(checkpoint).isDone(eq(instrumentUid), any());
+            verify(source).getRangeMetadata(eq(instrumentId), any(), any());
+            verify(checkpoint).isDone(eq(instrumentId), any());
             verifyNoMoreInteractions(source);
             verifyNoInteractions(target);
         }
 
         @Test
         void marksChunkDoneAfterSuccessfulSave() {
-            String instrumentUid = "TEST_INSTRUMENT";
+            long instrumentId = 1;
             Instant from = FIXED_FROM;
             Instant to = FIXED_TO;
             Candle candle = Candle.of(CANDLE_TIME_1, 100, 100.0);
 
-            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
                 .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), 1));
-            when(checkpoint.isDone(eq(instrumentUid), any())).thenReturn(false);
-            when(source.getPeriod(eq(instrumentUid), any(), any())).thenReturn(List.of(candle));
+            when(checkpoint.isDone(eq(instrumentId), any())).thenReturn(false);
+            when(source.getPeriod(eq(instrumentId), any(), any())).thenReturn(List.of(candle));
 
             CandleMigrationService serviceWithCheckpoint = CandleMigrationService.builder(source, target)
                 .progressTrackerFactory(new NullProgressTrackerFactory())
@@ -398,22 +398,22 @@ class CandleMigrationServiceTest {
                 .checkpoint(checkpoint)
                 .build();
 
-            serviceWithCheckpoint.migrateInstrument(instrumentUid, from, to);
+            serviceWithCheckpoint.migrateInstrument(instrumentId, from, to);
 
             verify(target).saveBatch(List.of(candle));
-            verify(checkpoint).markDone(eq(instrumentUid), any());
+            verify(checkpoint).markDone(eq(instrumentId), any());
         }
 
         @Test
         void doesNotMarkChunkDoneOnFailure() {
-            String instrumentUid = "TEST_INSTRUMENT";
+            long instrumentId = 1;
             Instant from = FIXED_FROM;
             Instant to = FIXED_TO;
 
-            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
                 .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), 1));
-            when(checkpoint.isDone(eq(instrumentUid), any())).thenReturn(false);
-            when(source.getPeriod(eq(instrumentUid), any(), any()))
+            when(checkpoint.isDone(eq(instrumentId), any())).thenReturn(false);
+            when(source.getPeriod(eq(instrumentId), any(), any()))
                 .thenThrow(new RuntimeException("boom"));
 
             CandleMigrationService serviceWithCheckpoint = CandleMigrationService.builder(source, target)
@@ -422,9 +422,9 @@ class CandleMigrationServiceTest {
                 .checkpoint(checkpoint)
                 .build();
 
-            serviceWithCheckpoint.migrateInstrument(instrumentUid, from, to);
+            serviceWithCheckpoint.migrateInstrument(instrumentId, from, to);
 
-            verify(checkpoint, never()).markDone(eq(instrumentUid), any());
+            verify(checkpoint, never()).markDone(eq(instrumentId), any());
         }
     }
 
@@ -437,15 +437,15 @@ class CandleMigrationServiceTest {
             // Ошибка при записи (например, рассинхронизация схемы БД) - структурная
             // проблема, которая будет повторяться на каждом чанке одинаково, поэтому
             // должна прерывать миграцию, а не тихо проглатываться.
-            String instrumentUid = "TEST_INSTRUMENT";
+            long instrumentId = 1;
             Instant from = FIXED_FROM;
             Instant to = FIXED_TO;
             Candle candle = Candle.of(CANDLE_TIME_1, 100, 100.0);
 
-            when(source.getRangeMetadata(eq(instrumentUid), any(), any()))
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
                 .thenReturn(new CandleRangeMetadata(new TimePointRange(from, to), 1));
-            when(checkpoint.isDone(eq(instrumentUid), any())).thenReturn(false);
-            when(source.getPeriod(eq(instrumentUid), any(), any())).thenReturn(List.of(candle));
+            when(checkpoint.isDone(eq(instrumentId), any())).thenReturn(false);
+            when(source.getPeriod(eq(instrumentId), any(), any())).thenReturn(List.of(candle));
             doThrow(new RuntimeException("SQLITE_ERROR: constraint mismatch"))
                 .when(target).saveBatch(List.of(candle));
 
@@ -456,9 +456,9 @@ class CandleMigrationServiceTest {
                 .build();
 
             Assertions.assertThrows(CompletionException.class,
-                () -> serviceWithCheckpoint.migrateInstrument(instrumentUid, from, to));
+                () -> serviceWithCheckpoint.migrateInstrument(instrumentId, from, to));
 
-            verify(checkpoint, never()).markDone(eq(instrumentUid), any());
+            verify(checkpoint, never()).markDone(eq(instrumentId), any());
         }
     }
 }

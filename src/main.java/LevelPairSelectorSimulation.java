@@ -18,16 +18,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class LevelPairSelectorSimulation {
+    // Our id for TMOS - what its candles are kept under.
+    private static final long TMOS = 2;
     public static void main(String[] args) {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
         CvsFileCandleRepositoryFactory factory = new CvsFileCandleRepositoryFactory();
 
         CvsCandleRepository candleRepository = factory.create(
-            "TMOS",
+            TMOS,
             "src/test/resources/entity.candle.cvs/TMOS"
         );
-        List<Candle> candles = candleRepository.getPeriod("TMOS", startTime, endTime);
+        List<Candle> candles = candleRepository.getPeriod(TMOS, startTime, endTime);
         ExtremeLocator minExtremeLocator = PivotPointExtremeLocator.ofMinimums(70);
         ExtremeLocator maxExtremeLocator = PivotPointExtremeLocator.ofMaximums(70);
 
@@ -63,7 +65,7 @@ public class LevelPairSelectorSimulation {
 
         PriceChart priceChart = new PriceChart(
             candleRepository,
-            "TMOS",
+            TMOS,
             Candle::getCloseAsDouble
         );
         List<Level<Double>> selectedSupportLevels = new ArrayList<>();

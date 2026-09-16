@@ -96,7 +96,7 @@ class VarianceRatioTest {
 
         for (int i = 0; i < prices.size(); i++) {
             Quotation price = Quotation.of(prices.get(i));
-            candles.add(new Candle("TEST", new TimePoint(START.plusSeconds(i * 60L)), price, price, price, price, 100));
+            candles.add(new Candle(1L, new TimePoint(START.plusSeconds(i * 60L)), price, price, price, price, 100));
         }
 
         return candles;

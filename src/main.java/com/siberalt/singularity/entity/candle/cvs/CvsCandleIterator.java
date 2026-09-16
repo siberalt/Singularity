@@ -15,7 +15,7 @@ class CvsCandleIterator implements Iterator<Candle> {
     private final Scanner scanner;
     private Instant to;
     private Instant currentTime;
-    private String instrumentUid;
+    private long instrumentId = Candle.NO_INSTRUMENT;
     private String initFromLastLine = null;
     private long currentIndex = -1;
 
@@ -45,7 +45,7 @@ class CvsCandleIterator implements Iterator<Candle> {
             currentTime = Instant.parse(data[1]);
 
             return new Candle(
-                instrumentUid == null ? data[0] : instrumentUid,
+                instrumentId,
                 new TimePoint(currentIndex, currentTime),
                 Quotation.of(data[2]),
                 Quotation.of(data[3]),
@@ -85,8 +85,8 @@ class CvsCandleIterator implements Iterator<Candle> {
         return this;
     }
 
-    public CvsCandleIterator initInstrumentUid(String instrumentUid) {
-        this.instrumentUid = instrumentUid;
+    public CvsCandleIterator initInstrumentId(long instrumentId) {
+        this.instrumentId = instrumentId;
         return this;
     }
 }

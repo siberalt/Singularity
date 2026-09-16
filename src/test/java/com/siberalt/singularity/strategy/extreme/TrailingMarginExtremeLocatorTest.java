@@ -64,6 +64,6 @@ class TrailingMarginExtremeLocatorTest {
     private Candle candle(int index) {
         Quotation price = Quotation.of(100 + index);
 
-        return new Candle("instrument1", new TimePoint(index), price, price, price, price, 0);
+        return new Candle(1L, new TimePoint(index), price, price, price, price, 0);
     }
 }

@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class InvertedUpsideCalculatorTest {
     private static final List<Candle> ANY_CANDLES = List.of(new Candle(
-        "TEST",
+        1L,
         new TimePoint(Instant.parse("2021-06-03T10:00:00Z")),
         Quotation.of(1), Quotation.of(1), Quotation.of(1), Quotation.of(1), 1
     ));

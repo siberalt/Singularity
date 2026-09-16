@@ -7,12 +7,12 @@ import java.util.List;
 public record ExtremeRange(
     String id,
     RangeLong range,
-    String instrumentId,
+    long instrumentId,
     String extremeType,
     RangeType rangeType
 ) {
 
-    ExtremeRange(RangeLong range, String instrumentId, String extremeType, RangeType rangeType) {
+    ExtremeRange(RangeLong range, long instrumentId, String extremeType, RangeType rangeType) {
         this(
             generateId(instrumentId, extremeType, range.fromIndex(), range.toIndex()),
             range,
@@ -22,7 +22,7 @@ public record ExtremeRange(
         );
     }
 
-    ExtremeRange(String id, long fromIndex, long toIndex, String instrumentId, String extremeType, RangeType rangeType) {
+    ExtremeRange(String id, long fromIndex, long toIndex, long instrumentId, String extremeType, RangeType rangeType) {
         this(
             id,
             new RangeLong(fromIndex, toIndex),
@@ -32,7 +32,7 @@ public record ExtremeRange(
         );
     }
 
-    ExtremeRange(long fromIndex, long toIndex, String instrumentId, String extremeType, RangeType rangeType) {
+    ExtremeRange(long fromIndex, long toIndex, long instrumentId, String extremeType, RangeType rangeType) {
         this(
             generateId(instrumentId, extremeType, fromIndex, toIndex),
             fromIndex,
@@ -43,7 +43,7 @@ public record ExtremeRange(
         );
     }
 
-    ExtremeRange(long fromIndex, long toIndex, String instrumentId, String extremeType) {
+    ExtremeRange(long fromIndex, long toIndex, long instrumentId, String extremeType) {
         this(
             generateId(instrumentId, extremeType, fromIndex, toIndex),
             fromIndex,
@@ -68,18 +68,18 @@ public record ExtremeRange(
 
     public boolean isEdgeSubsetOf(ExtremeRange other) {
         return range().isEdgeSubsetOf(other.range()) &&
-            this.instrumentId.equals(other.instrumentId) &&
+            this.instrumentId == other.instrumentId &&
             this.extremeType.equals(other.extremeType);
     }
 
     public boolean isOverlapping(ExtremeRange other) {
-        return this.instrumentId.equals(other.instrumentId) &&
+        return this.instrumentId == other.instrumentId &&
             this.extremeType.equals(other.extremeType) &&
             this.range().isOverlapping(other.range());
     }
 
     public boolean isSubsetOf(ExtremeRange other) {
-        return this.instrumentId.equals(other.instrumentId) && this.extremeType.equals(other.extremeType)
+        return this.instrumentId == other.instrumentId && this.extremeType.equals(other.extremeType)
             && this.range().isSubsetOf(other.range());
     }
 
@@ -149,7 +149,7 @@ public record ExtremeRange(
     public static ExtremeRange average(List<ExtremeRange> ranges, RangeType resultRangeType) {
         RangeLong averageRange = RangeLong.average(ranges.stream().map(ExtremeRange::range).toList());
 
-        String instrumentId = ranges.get(0).instrumentId();
+        long instrumentId = ranges.get(0).instrumentId();
         String extremeType = ranges.get(0).extremeType();
 
         return new ExtremeRange(averageRange, instrumentId, extremeType, resultRangeType);
@@ -162,18 +162,18 @@ public record ExtremeRange(
     public static ExtremeRange unite(List<ExtremeRange> extremeRanges, RangeType resultRangeType) {
         RangeLong unitedRange = RangeLong.unite(extremeRanges.stream().map(ExtremeRange::range).toList());
 
-        String instrumentId = extremeRanges.get(0).instrumentId();
+        long instrumentId = extremeRanges.get(0).instrumentId();
         String extremeType = extremeRanges.get(0).extremeType();
 
         return new ExtremeRange(unitedRange, instrumentId, extremeType, resultRangeType);
     }
 
     private boolean isHomogeneous(ExtremeRange range, ExtremeRange other) {
-        return range.instrumentId.equals(other.instrumentId)
+        return range.instrumentId == other.instrumentId
             && range.extremeType.equals(other.extremeType);
     }
 
-    private static String generateId(String instrumentId, String extremeType, long fromIndex, long toIndex) {
+    private static String generateId(long instrumentId, String extremeType, long fromIndex, long toIndex) {
         return instrumentId + "-" + extremeType + "-" + fromIndex + "-" + toIndex;
     }
 }

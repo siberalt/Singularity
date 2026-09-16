@@ -15,7 +15,7 @@ import static org.mockito.Mockito.*;
 public class WindowUpsideCalculatorTest {
     private UpsideCalculator baseCalculatorMock;
     private WindowUpsideCalculator calculator;
-    private final CandleFactory candleFactory = new CandleFactory("TEST");
+    private final CandleFactory candleFactory = new CandleFactory(1L);
 
     @BeforeEach
     void setUp() {

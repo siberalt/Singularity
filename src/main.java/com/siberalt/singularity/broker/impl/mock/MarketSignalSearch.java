@@ -82,8 +82,8 @@ public class MarketSignalSearch {
 
         return marketDataService.findByPrice(
                 CandleInterval.MIN_1,
+                order.getInstrument().getUid(),
                 new FindPriceParams(
-                    order.getInstrument().getUid(),
                     from,
                     to,
                     order.getRequestedPrice(),

@@ -26,12 +26,13 @@ public class MockBrokerOrderServiceTest extends AbstractMockOrderServiceTest {
     @Override
     MockBroker createBroker(
         ReadCandleRepository candleStorage,
+        com.siberalt.singularity.entity.instrument.InstrumentIdResolver instrumentIds,
         ReadInstrumentRepository instrumentStorage,
         OrderRepository orderRepository,
         OperationRepository operationRepository,
         Clock clock
     ) {
-        return new MockBroker(candleStorage, instrumentStorage, orderRepository, operationRepository, clock);
+        return new MockBroker(candleStorage, instrumentIds, instrumentStorage, orderRepository, operationRepository, clock);
     }
 
     @Test

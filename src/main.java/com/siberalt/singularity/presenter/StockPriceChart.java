@@ -22,6 +22,8 @@ import java.time.ZoneId;
 import java.util.Date;
 
 public class StockPriceChart extends JFrame {
+    // The file holds one instrument and there is no database behind it, so any id names it.
+    private static final long SERIES = 1;
 
     public StockPriceChart(String title) {
         super(title);
@@ -71,11 +73,11 @@ public class StockPriceChart extends JFrame {
 
         // Add data points (Date, Price)
         try (CvsCandleRepository candleRepository = repositoryFactory.create(
-            "TMOS",
+            SERIES,
             "src/test/resources/entity.candle.cvs/TMOS"
         )) {
             Iterable<Candle> candles = candleRepository.getPeriod(
-                "TMOS",
+                SERIES,
                 Instant.parse("2019-01-01T00:00:00Z"),
                 Instant.parse("2023-05-01T00:00:00Z")
             );

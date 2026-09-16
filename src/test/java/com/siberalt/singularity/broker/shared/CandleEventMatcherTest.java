@@ -55,7 +55,7 @@ class CandleEventMatcherTest {
     void matchesReturnsFalseWhenInstrumentIdNotInSubscriptionSpec() {
         when(newCandleSubscriptionSpec.getEventType()).thenReturn(NewCandleEvent.class);
         when(newCandleSubscriptionSpec.getInstrumentIds()).thenReturn(Set.of("instrument1"));
-        when(newCandleEvent.getCandle()).thenReturn(Candle.builder().setInstrumentUid("instrument").build());
+        when(newCandleEvent.getInstrumentUid()).thenReturn("instrument");
 
         assertFalse(eventMatcher.matches(newCandleSubscriptionSpec, newCandleEvent));
     }
@@ -64,7 +64,7 @@ class CandleEventMatcherTest {
     void matchesReturnsTrueWhenAllConditionsAreMet() {
         when(newCandleSubscriptionSpec.getEventType()).thenReturn(NewCandleEvent.class);
         when(newCandleSubscriptionSpec.getInstrumentIds()).thenReturn(Set.of("instrument1"));
-        when(newCandleEvent.getCandle()).thenReturn(Candle.builder().setInstrumentUid("instrument1").build());
+        when(newCandleEvent.getInstrumentUid()).thenReturn("instrument1");
 
         assertTrue(eventMatcher.matches(newCandleSubscriptionSpec, newCandleEvent));
     }

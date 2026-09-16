@@ -111,7 +111,7 @@ class MeanReversionUpsideCalculatorTest {
 
         for (int index = 0; index < 5; index++) {
             candles.add(new Candle(
-                "TEST",
+                1L,
                 new TimePoint(START.plusSeconds(index * 60L)),
                 Quotation.of(100),
                 Quotation.of(100 - index),
@@ -135,7 +135,7 @@ class MeanReversionUpsideCalculatorTest {
             // High and low a rouble either side, close a rouble under: the typical price is the
             // plain one, the close is not.
             candles.add(new Candle(
-                "TEST",
+                1L,
                 new TimePoint(START.plusSeconds(index * 60L)),
                 Quotation.of(price),
                 Quotation.of(price - 1),

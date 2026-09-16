@@ -11,15 +11,17 @@ import java.util.List;
 import java.util.function.Function;
 
 public class LinearLevelCalculatorSimulator {
+    // Our id for TMOS - what its candles are kept under.
+    private static final long TMOS = 2;
     public static void main(String[] args) {
         var factory = new CvsFileCandleRepositoryFactory();
-        var candleRepository = factory.create("TMOS", "src/test/resources/entity.candle.cvs/TMOS");
+        var candleRepository = factory.create(TMOS, "src/test/resources/entity.candle.cvs/TMOS");
         var priceExtractor = (Function<Candle, Double>) Candle::getCloseAsDouble;
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
 
         List<Candle> candles = candleRepository.getPeriod(
-            "TMOS", Instant.parse("2021-01-01T00:00:00Z"), Instant.parse("2021-02-02T00:00:00Z")
+            TMOS, Instant.parse("2021-01-01T00:00:00Z"), Instant.parse("2021-02-02T00:00:00Z")
         );
         int frameSize = 400;
 
@@ -34,7 +36,7 @@ public class LinearLevelCalculatorSimulator {
         var resultResistance = resistanceDetector.detect(candles);
 
         var renderer = new FasterXmlRenderer("src/main/resources/presenter/google/PriceChart.json");
-        var priceChart = new PriceChart(candleRepository, "TMOS", priceExtractor);
+        var priceChart = new PriceChart(candleRepository, TMOS, priceExtractor);
         priceChart.setDataRenderer(renderer);
         priceChart.setStepInterval(1);
 

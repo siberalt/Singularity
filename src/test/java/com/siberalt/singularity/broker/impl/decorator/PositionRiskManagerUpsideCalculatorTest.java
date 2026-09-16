@@ -378,6 +378,7 @@ public class PositionRiskManagerUpsideCalculatorTest {
     private PositionRiskManagerUpsideCalculator createCalculator() {
         return new PositionRiskManagerUpsideCalculator(
             ACCOUNT_ID,
+            INSTRUMENT_UID,
             entryPriceCalculatorMock,
             volatilityCalculatorMock,
             maxLocatorMock,
@@ -387,12 +388,12 @@ public class PositionRiskManagerUpsideCalculatorTest {
     }
 
     private Candle createCandle(String time, double closePrice) {
-        CandleFactory factory = new CandleFactory(INSTRUMENT_UID);
+        CandleFactory factory = new CandleFactory(1L);
         return factory.createCommon(time, closePrice);
     }
 
     private List<Candle> createCandlesWithPrices(double... closePrices) {
-        CandleFactory factory = new CandleFactory(INSTRUMENT_UID);
+        CandleFactory factory = new CandleFactory(1L);
         List<Candle> candles = new java.util.ArrayList<>();
         for (int i = 0; i < closePrices.length; i++) {
             String time = "2024-01-01T00:00:" + String.format("%02d", i) + "Z";

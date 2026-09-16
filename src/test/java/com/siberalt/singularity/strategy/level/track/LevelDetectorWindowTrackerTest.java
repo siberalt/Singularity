@@ -18,7 +18,7 @@ import static org.mockito.Mockito.when;
 class LevelDetectorWindowTrackerTest {
     private LevelDetector wrappedDetectorMock;
     private LevelDetectorWindowTracker tracker;
-    private final CandleFactory candleFactory = new CandleFactory("TEST");
+    private final CandleFactory candleFactory = new CandleFactory(1L);
 
     @BeforeEach
     void setUp() {

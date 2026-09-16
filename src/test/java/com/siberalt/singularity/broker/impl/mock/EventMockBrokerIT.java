@@ -38,6 +38,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 public class EventMockBrokerIT {
+    // The one instrument these tests trade, by the id its candles are kept under.
+    private static final long INSTRUMENT_ID = 1;
     private static Logger logger;
     private EventMockBroker broker;
     private UserActionSimulator<Map<String, Object>> userActionSimulator;
@@ -80,7 +82,7 @@ public class EventMockBrokerIT {
         OrderRepository orderRepository = new InMemoryOrderRepository();
         OperationRepository operationRepository = new InMemoryOperationRepository();
         clock = new SimpleSimulationClock();
-        broker = EventMockBroker.builder(candleStorage, instrumentRepository, orderRepository, operationRepository, clock)
+        broker = EventMockBroker.builder(candleStorage, uid -> java.util.OptionalLong.of(INSTRUMENT_ID), instrumentRepository, orderRepository, operationRepository, clock)
             .setCommissionRatio(0)
             .build();
 
@@ -110,17 +112,17 @@ public class EventMockBrokerIT {
         Instant sellFillTime = sellingTime.plusSeconds(60);
 
         SandboxBrokerFacade brokerFacade = SandboxBrokerFacade.of(broker);
-        when(candleStorage.findBeforeOrEqual(instrumentUid, buyingTime, 1))
+        when(candleStorage.findBeforeOrEqual(INSTRUMENT_ID, buyingTime, 1))
             .thenReturn(List.of(Candle.of(buyingTime, 1000, 7.1)));
-        when(candleStorage.findAfterOrEqual(instrumentUid, buyFillTime, 1))
+        when(candleStorage.findAfterOrEqual(INSTRUMENT_ID, buyFillTime, 1))
             .thenReturn(List.of(Candle.of(buyFillTime, 1000, 7.1)));
-        when(candleStorage.findBeforeOrEqual(instrumentUid, buyFillTime, 1))
+        when(candleStorage.findBeforeOrEqual(INSTRUMENT_ID, buyFillTime, 1))
             .thenReturn(List.of(Candle.of(buyFillTime, 1000, 7.1)));
-        when(candleStorage.findBeforeOrEqual(instrumentUid, sellingTime,1))
+        when(candleStorage.findBeforeOrEqual(INSTRUMENT_ID, sellingTime,1))
             .thenReturn(List.of(Candle.of(sellingTime, 1000, 7.2)));
-        when(candleStorage.findAfterOrEqual(instrumentUid, sellFillTime, 1))
+        when(candleStorage.findAfterOrEqual(INSTRUMENT_ID, sellFillTime, 1))
             .thenReturn(List.of(Candle.of(sellFillTime, 1000, 7.2)));
-        when(candleStorage.findBeforeOrEqual(instrumentUid, sellFillTime, 1))
+        when(candleStorage.findBeforeOrEqual(INSTRUMENT_ID, sellFillTime, 1))
             .thenReturn(List.of(Candle.of(sellFillTime, 1000, 7.2)));
 
         userActionSimulator.planAction(openingTime, (userContext) -> {
@@ -164,12 +166,12 @@ public class EventMockBrokerIT {
         Instant postSellOrderTime = Instant.parse("1997-05-04T08:20:00.00Z");
         Instant executeSellOrderTime = Instant.parse("1997-05-04T14:25:00.00Z");
 
-        when(candleStorage.findBeforeOrEqual(instrumentUid, postBuyOrderTime, 1))
+        when(candleStorage.findBeforeOrEqual(INSTRUMENT_ID, postBuyOrderTime, 1))
             .thenReturn(List.of(Candle.of(postBuyOrderTime, 1000, 7.3)));
-        when(candleStorage.findByPrice(any()))
+        when(candleStorage.findByPrice(anyLong(), any()))
             .thenReturn(List.of(Candle.of(executeBuyOrderTime, 1000, 7)))
             .thenReturn(List.of(Candle.of(executeSellOrderTime, 1000, 8)));
-        when(candleStorage.findBeforeOrEqual(instrumentUid, postSellOrderTime, 1))
+        when(candleStorage.findBeforeOrEqual(INSTRUMENT_ID, postSellOrderTime, 1))
             .thenReturn(List.of(Candle.of(postSellOrderTime, 1000, 6)));
 
         userActionSimulator.planAction(openingTime, (userContext) -> {
@@ -193,9 +195,9 @@ public class EventMockBrokerIT {
         );
 
         // Verify that the mocks were called at least once
-        verify(candleStorage, times(1)).findBeforeOrEqual(instrumentUid, postBuyOrderTime, 1);
-        verify(candleStorage, times(2)).findByPrice(any());
-        verify(candleStorage, times(1)).findBeforeOrEqual(instrumentUid, postSellOrderTime, 1);
+        verify(candleStorage, times(1)).findBeforeOrEqual(INSTRUMENT_ID, postBuyOrderTime, 1);
+        verify(candleStorage, times(2)).findByPrice(anyLong(), any());
+        verify(candleStorage, times(1)).findBeforeOrEqual(INSTRUMENT_ID, postSellOrderTime, 1);
 
         // Assert balance after simulation
         var money = operationsService.getAvailableMoney((String) userContext.get("accountId"), "RUB");
@@ -219,18 +221,18 @@ public class EventMockBrokerIT {
         Instant endTime = startTime.plus(60, java.time.temporal.ChronoUnit.MINUTES);
 
         String instrumentUid = config.getInstrument().getUid();
-        when(candleStorage.findBeforeOrEqual(instrumentUid, postBuyLimitTime, 1))
+        when(candleStorage.findBeforeOrEqual(INSTRUMENT_ID, postBuyLimitTime, 1))
             .thenReturn(List.of(Candle.of(postBuyLimitTime, 1000, 6)));
-        when(candleStorage.findBeforeOrEqual(instrumentUid, postSellLimitTime, 1))
+        when(candleStorage.findBeforeOrEqual(INSTRUMENT_ID, postSellLimitTime, 1))
             .thenReturn(List.of(Candle.of(postSellLimitTime, 1000, 6)));
-        when(candleStorage.findByPrice(any()))
+        when(candleStorage.findByPrice(anyLong(), any()))
             .thenReturn(List.of(Candle.of(executeBuyLimitTime, 1000, 4)))
             .thenReturn(List.of(Candle.of(executeSellLimitTime, 1000, 8)));
-        when(candleStorage.findBeforeOrEqual(instrumentUid, postBuyMarketTime, 1))
+        when(candleStorage.findBeforeOrEqual(INSTRUMENT_ID, postBuyMarketTime, 1))
             .thenReturn(List.of(Candle.of(postBuyMarketTime, 1000, 5)));
-        when(candleStorage.findAfterOrEqual(instrumentUid, executeBuyMarketTime, 1))
+        when(candleStorage.findAfterOrEqual(INSTRUMENT_ID, executeBuyMarketTime, 1))
             .thenReturn(List.of(Candle.of(executeBuyMarketTime, 1000, 5)));
-        when(candleStorage.findBeforeOrEqual(instrumentUid, executeBuyMarketTime, 1))
+        when(candleStorage.findBeforeOrEqual(INSTRUMENT_ID, executeBuyMarketTime, 1))
             .thenReturn(List.of(Candle.of(executeBuyMarketTime, 1000, 5)));
 
         Money initialMoney = Money.of("RUB", Quotation.of(1000000));

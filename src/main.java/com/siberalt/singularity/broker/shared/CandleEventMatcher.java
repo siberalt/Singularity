@@ -23,7 +23,7 @@ public class CandleEventMatcher implements com.siberalt.singularity.event.EventM
                 return false;
             }
             // Check if the instrument ID is in the subscription spec
-            return newCandleSpec.getInstrumentIds().contains(newCandleEvent.getCandle().instrumentUid());
+            return newCandleSpec.getInstrumentIds().contains(newCandleEvent.getInstrumentUid());
         }
 
         return true; // If no specific checks are needed, return true

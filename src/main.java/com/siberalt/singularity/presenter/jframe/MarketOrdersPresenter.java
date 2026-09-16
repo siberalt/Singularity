@@ -24,17 +24,20 @@ import java.util.List;
 
 public class MarketOrdersPresenter extends JFrame {
     private final ReadCandleRepository candleRepository;
+    private final long instrumentId;
     private final String instrumentUid;
     private final String accountId;
     private final ReadOperationRepository operationRepository;
 
     public MarketOrdersPresenter(
         ReadCandleRepository candleRepository,
+        long instrumentId,
         String instrumentUid,
         String accountId,
         ReadOperationRepository operationRepository
     ) {
         this.candleRepository = candleRepository;
+        this.instrumentId = instrumentId;
         this.instrumentUid = instrumentUid;
         this.accountId = accountId;
         this.operationRepository = operationRepository;
@@ -89,7 +92,7 @@ public class MarketOrdersPresenter extends JFrame {
         XYSeries buyOrders = new XYSeries("Buy Orders");
         XYSeries sellOrders = new XYSeries("Sell Orders");
 
-        for (Candle candle : candleRepository.getPeriod(instrumentUid, from, to)) {
+        for (Candle candle : candleRepository.getPeriod(instrumentId, from, to)) {
             double price = candle.getCloseAsDouble();
             stockPrices.add((double) candle.getTime().getEpochSecond() * 1000, price);
         }

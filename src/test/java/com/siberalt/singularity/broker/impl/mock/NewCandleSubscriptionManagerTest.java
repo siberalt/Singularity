@@ -4,6 +4,7 @@ import com.siberalt.singularity.broker.contract.service.event.dispatcher.events.
 import com.siberalt.singularity.broker.contract.service.event.dispatcher.subscriptions.NewCandleSubscriptionSpec;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.CandleRepository;
+import com.siberalt.singularity.entity.instrument.InstrumentIdResolver;
 import com.siberalt.singularity.event.EventHandler;
 import com.siberalt.singularity.event.subscription.Subscription;
 import com.siberalt.singularity.event.subscription.SubscriptionSpec;
@@ -18,6 +19,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -27,6 +29,10 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class NewCandleSubscriptionManagerTest {
+    // The broker speaks of "instrumentN"; the candles of it are kept under id N.
+    private static final InstrumentIdResolver INSTRUMENT_IDS = uid -> uid.startsWith("instrument") && uid.length() == 11
+        ? OptionalLong.of(Long.parseLong(uid.substring(10)))
+        : OptionalLong.empty();
     @Mock
     private CandleRepository candleRepository;
 
@@ -36,7 +42,7 @@ public class NewCandleSubscriptionManagerTest {
 
     @BeforeEach
     public void setUp() {
-        subscriptionManager = new NewCandleSubscriptionManager(candleRepository, Set.of("instrument1", "instrument2"));
+        subscriptionManager = new NewCandleSubscriptionManager(candleRepository, INSTRUMENT_IDS, Set.of("instrument1", "instrument2"));
 
         eventSimulator = new EventSimulator();
         eventSimulator.addEventInvoker(subscriptionManager);
@@ -94,14 +100,14 @@ public class NewCandleSubscriptionManagerTest {
     @Test
     public void tickNotifiesHandlersForScheduledEvents() {
         Instant candleTime = Instant.parse("2020-12-30T07:00:00Z");
-        Candle candle1 = Candle.of(candleTime, "instrument1", 1000, 12);
-        Candle candle2 = Candle.of(candleTime, "instrument2", 2000, 24);
+        Candle candle1 = Candle.of(candleTime, 1L, 1000, 12);
+        Candle candle2 = Candle.of(candleTime, 2L, 2000, 24);
 
         // Stubbing for both "instrument1" and "instrument2"
-        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(List.of(candle1));
-        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(List.of(candle2));
+        when(candleRepository.getPeriod(eq(1L), any(), any())).thenReturn(List.of(candle1));
+        when(candleRepository.getPeriod(eq(2L), any(), any())).thenReturn(List.of(candle2));
 
-        NewCandleEvent event1 = new NewCandleEvent(candle1);
+        NewCandleEvent event1 = new NewCandleEvent("instrument" + candle1.instrumentId(), candle1);
         EventHandler<NewCandleEvent> handler = mock(EventHandler.class);
         NewCandleSubscriptionSpec spec = new NewCandleSubscriptionSpec(Set.of("instrument1"));
 
@@ -116,8 +122,8 @@ public class NewCandleSubscriptionManagerTest {
     void tickDoesNotNotifyHandlersForUnscheduledEvents() {
         Instant time = Instant.parse("2020-12-30T07:00:00Z");
 
-        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(Collections.emptyList());
-        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(Collections.emptyList());
+        when(candleRepository.getPeriod(eq(1L), any(), any())).thenReturn(Collections.emptyList());
+        when(candleRepository.getPeriod(eq(2L), any(), any())).thenReturn(Collections.emptyList());
 
         EventHandler<NewCandleEvent> handler = mock(EventHandler.class);
         NewCandleSubscriptionSpec subscription = new NewCandleSubscriptionSpec(Set.of("instrument1"));
@@ -135,18 +141,18 @@ public class NewCandleSubscriptionManagerTest {
         Instant candleTime3 = Instant.parse("2020-12-30T08:00:00Z");
         Instant candleTime4 = Instant.parse("2020-12-30T08:01:00Z");
 
-        Candle candle1 = Candle.of(candleTime1, "instrument1", 1000, 12);
-        Candle candle2 = Candle.of(candleTime2, "instrument1", 1100, 13);
-        Candle candle3 = Candle.of(candleTime3, "instrument2", 2000, 24);
-        Candle candle4 = Candle.of(candleTime4, "instrument2", 2100, 25);
+        Candle candle1 = Candle.of(candleTime1, 1L, 1000, 12);
+        Candle candle2 = Candle.of(candleTime2, 1L, 1100, 13);
+        Candle candle3 = Candle.of(candleTime3, 2L, 2000, 24);
+        Candle candle4 = Candle.of(candleTime4, 2L, 2100, 25);
 
-        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(List.of(candle1, candle2));
-        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(List.of(candle3, candle4));
+        when(candleRepository.getPeriod(eq(1L), any(), any())).thenReturn(List.of(candle1, candle2));
+        when(candleRepository.getPeriod(eq(2L), any(), any())).thenReturn(List.of(candle3, candle4));
 
-        NewCandleEvent event1 = new NewCandleEvent(candle1);
-        NewCandleEvent event2 = new NewCandleEvent(candle2);
-        NewCandleEvent event3 = new NewCandleEvent(candle3);
-        NewCandleEvent event4 = new NewCandleEvent(candle4);
+        NewCandleEvent event1 = new NewCandleEvent("instrument" + candle1.instrumentId(), candle1);
+        NewCandleEvent event2 = new NewCandleEvent("instrument" + candle2.instrumentId(), candle2);
+        NewCandleEvent event3 = new NewCandleEvent("instrument" + candle3.instrumentId(), candle3);
+        NewCandleEvent event4 = new NewCandleEvent("instrument" + candle4.instrumentId(), candle4);
 
         EventHandler<NewCandleEvent> handler = mock(EventHandler.class);
         NewCandleSubscriptionSpec subscriptionSpec = new NewCandleSubscriptionSpec(Set.of("instrument1", "instrument2"));
@@ -165,11 +171,11 @@ public class NewCandleSubscriptionManagerTest {
     void unsubscribeRemovesHandler() {
         NewCandleSubscriptionSpec validSpec = new NewCandleSubscriptionSpec(Set.of("instrument1"));
         Instant candleTime = Instant.parse("2020-12-30T07:00:00Z");
-        Candle candle = Candle.of(candleTime, "instrument1", 1000, 12);
+        Candle candle = Candle.of(candleTime, 1L, 1000, 12);
 
         EventHandler<NewCandleEvent> handler = mock(EventHandler.class);
-        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(List.of(candle));
-        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(Collections.emptyList());
+        when(candleRepository.getPeriod(eq(1L), any(), any())).thenReturn(List.of(candle));
+        when(candleRepository.getPeriod(eq(2L), any(), any())).thenReturn(Collections.emptyList());
 
         Subscription subscription = subscriptionManager.subscribe(
             validSpec,
@@ -191,14 +197,14 @@ public class NewCandleSubscriptionManagerTest {
     void throwExceptionOnEventHandler() {
         NewCandleSubscriptionSpec validSpec = new NewCandleSubscriptionSpec(Set.of("instrument1"));
         Instant candleTime = Instant.parse("2020-12-30T07:00:00Z");
-        Candle candle = Candle.of(candleTime, "instrument1", 1000, 12);
+        Candle candle = Candle.of(candleTime, 1L, 1000, 12);
 
         EventHandler<NewCandleEvent> handler = (event, subscription) -> {
             throw new RuntimeException("Test exception");
         };
 
-        when(candleRepository.getPeriod(eq("instrument1"), any(), any())).thenReturn(List.of(candle));
-        when(candleRepository.getPeriod(eq("instrument2"), any(), any())).thenReturn(Collections.emptyList());
+        when(candleRepository.getPeriod(eq(1L), any(), any())).thenReturn(List.of(candle));
+        when(candleRepository.getPeriod(eq(2L), any(), any())).thenReturn(Collections.emptyList());
 
         subscriptionManager.setInterruptOnError(false);
 
@@ -215,5 +221,24 @@ public class NewCandleSubscriptionManagerTest {
         // Verify that the subscription is still active despite the exception
         assertTrue(subscription.isActive());
         assertFalse(subscription.getErrors().isEmpty());
+    }
+
+    /**
+     * An instrument the broker trades whose candles the resolver cannot find is a wiring error.
+     * Replaying nothing for it would be indistinguishable from a strategy that simply never traded.
+     */
+    @Test
+    void refusesToReplayAnInstrumentItHasNoCandleIdFor() {
+        NewCandleSubscriptionManager unwired = new NewCandleSubscriptionManager(
+            candleRepository, INSTRUMENT_IDS, Set.of("unlisted")
+        );
+        Instant time = Instant.parse("2020-12-30T07:00:00Z");
+
+        IllegalStateException exception = assertThrows(
+            IllegalStateException.class,
+            () -> unwired.init(time, time.plusSeconds(60))
+        );
+
+        assertTrue(exception.getMessage().contains("unlisted"));
     }
 }

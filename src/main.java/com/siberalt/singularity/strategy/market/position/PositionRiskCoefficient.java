@@ -36,14 +36,21 @@ import java.util.Optional;
  */
 public class PositionRiskCoefficient implements MarketCoefficient {
     private final String accountId;
+    private final String instrumentUid;
     private final EntryPriceCalculator entryPriceCalculator;
     private final VolatilityCalculator volatilityCalculator;
     private final ExtremeLocator maxLocator;
     private final ExtremeLocator minLocator;
     private final PriceExtractor priceExtractor;
 
+    /**
+     * @param instrumentUid what the broker calls the instrument the position is in - positions are
+     *                      the broker's record, so they are looked up by its name for the instrument,
+     *                      not by the id the candles carry
+     */
     public PositionRiskCoefficient(
         String accountId,
+        String instrumentUid,
         EntryPriceCalculator entryPriceCalculator,
         VolatilityCalculator volatilityCalculator,
         ExtremeLocator maxLocator,
@@ -56,6 +63,7 @@ public class PositionRiskCoefficient implements MarketCoefficient {
         }
 
         this.accountId = accountId;
+        this.instrumentUid = instrumentUid;
         this.entryPriceCalculator = entryPriceCalculator;
         this.volatilityCalculator = volatilityCalculator;
         this.maxLocator = maxLocator;
@@ -64,9 +72,10 @@ public class PositionRiskCoefficient implements MarketCoefficient {
     }
 
     /** Defaults: an hourly-style ATR of fourteen, close prices, and extremes over a vicinity of three. */
-    public PositionRiskCoefficient(String accountId, EntryPriceCalculator entryPriceCalculator) {
+    public PositionRiskCoefficient(String accountId, String instrumentUid, EntryPriceCalculator entryPriceCalculator) {
         this(
             accountId,
+            instrumentUid,
             entryPriceCalculator,
             new ATRVolatilityCalculator(14),
             LastExtremeLocator.ofMaximums(3, Candle::getCloseAsDouble),
@@ -77,11 +86,13 @@ public class PositionRiskCoefficient implements MarketCoefficient {
 
     public PositionRiskCoefficient(
         String accountId,
+        String instrumentUid,
         EntryPriceCalculator entryPriceCalculator,
         VolatilityCalculator volatilityCalculator
     ) {
         this(
             accountId,
+            instrumentUid,
             entryPriceCalculator,
             volatilityCalculator,
             LastExtremeLocator.ofMaximums(3, Candle::getCloseAsDouble),
@@ -96,7 +107,7 @@ public class PositionRiskCoefficient implements MarketCoefficient {
             return 0;
         }
 
-        EntryPrice position = positionIn(lastCandles);
+        EntryPrice position = position();
 
         if (position.isEmpty() || position.quantity() == 0) {
             return 0;
@@ -112,9 +123,9 @@ public class PositionRiskCoefficient implements MarketCoefficient {
         return against / (volatility == 0 ? Double.MIN_VALUE : volatility);
     }
 
-    /** The position this reading is about, which is the one held in the instrument these candles are of. */
-    public EntryPrice positionIn(List<Candle> lastCandles) {
-        return entryPriceCalculator.calculate(accountId, lastCandles.getFirst().instrumentUid());
+    /** The position this reading is about. */
+    public EntryPrice position() {
+        return entryPriceCalculator.calculate(accountId, instrumentUid);
     }
 
     private double referenceOf(EntryPrice position, List<Candle> lastCandles) {

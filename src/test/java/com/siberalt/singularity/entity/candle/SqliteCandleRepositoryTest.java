@@ -16,14 +16,21 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 class SqliteCandleRepositoryTest {
     private static final String BROKER = "tinkoff";
     private static final String INSTRUMENT_UID = "TEST_INSTRUMENT";
     private static final String OTHER_INSTRUMENT_UID = "OTHER_INSTRUMENT";
 
+    private long instrumentId;
+    private long otherInstrumentId;
     private Connection connection;
     private SqliteCandleRepository repository;
 
@@ -44,8 +51,10 @@ class SqliteCandleRepositoryTest {
         // в рабочем коде это делает загрузчик перед миграцией.
         instruments.save(BROKER, new Instrument().setUid(INSTRUMENT_UID).setName(INSTRUMENT_UID).setLot(1).setCurrency("RUB"));
         instruments.save(BROKER, new Instrument().setUid(OTHER_INSTRUMENT_UID).setName(OTHER_INSTRUMENT_UID).setLot(1).setCurrency("RUB"));
+        instrumentId = instruments.idOf(INSTRUMENT_UID).orElseThrow();
+        otherInstrumentId = instruments.idOf(OTHER_INSTRUMENT_UID).orElseThrow();
 
-        repository = new SqliteCandleRepository(connection, instruments);
+        repository = new SqliteCandleRepository(connection);
     }
 
     @AfterEach
@@ -63,7 +72,7 @@ class SqliteCandleRepositoryTest {
             insertPlaceholder(Instant.parse("2025-01-01T00:01:00Z"), 0);
             insertPlaceholder(Instant.parse("2025-01-01T00:02:00Z"), 0);
 
-            repository.normalizeIndex(INSTRUMENT_UID, Instant.parse("2025-01-01T00:00:00Z"));
+            repository.normalizeIndex(instrumentId, Instant.parse("2025-01-01T00:00:00Z"));
 
             Assertions.assertEquals(0, indexAt("2025-01-01T00:01:00Z"));
             Assertions.assertEquals(1, indexAt("2025-01-01T00:02:00Z"));
@@ -75,7 +84,7 @@ class SqliteCandleRepositoryTest {
             // Уже нормализованные ранее свечи
             insertPlaceholder(Instant.parse("2025-01-01T00:01:00Z"), 0);
             insertPlaceholder(Instant.parse("2025-01-01T00:02:00Z"), 1);
-            repository.normalizeIndex(INSTRUMENT_UID, Instant.parse("2025-01-01T00:00:00Z"));
+            repository.normalizeIndex(instrumentId, Instant.parse("2025-01-01T00:00:00Z"));
 
             // Новый хвост, добавленный отдельным (более поздним) прогоном миграции
             insertPlaceholder(Instant.parse("2025-01-01T00:04:00Z"), 0);
@@ -83,7 +92,7 @@ class SqliteCandleRepositoryTest {
 
             // Нормализация вызывается только от точки нового хвоста - старые
             // индексы трогать не нужно и они не должны измениться
-            repository.normalizeIndex(INSTRUMENT_UID, Instant.parse("2025-01-01T00:03:00Z"));
+            repository.normalizeIndex(instrumentId, Instant.parse("2025-01-01T00:03:00Z"));
 
             Assertions.assertEquals(0, indexAt("2025-01-01T00:01:00Z"));
             Assertions.assertEquals(1, indexAt("2025-01-01T00:02:00Z"));
@@ -95,14 +104,14 @@ class SqliteCandleRepositoryTest {
         void backfillingBeforeExistingDataShiftsSubsequentIndices() {
             insertPlaceholder(Instant.parse("2025-01-01T00:05:00Z"), 0);
             insertPlaceholder(Instant.parse("2025-01-01T00:06:00Z"), 1);
-            repository.normalizeIndex(INSTRUMENT_UID, Instant.parse("2025-01-01T00:00:00Z"));
+            repository.normalizeIndex(instrumentId, Instant.parse("2025-01-01T00:00:00Z"));
 
             // Докачали более ранний период - новые свечи ложатся ПЕРЕД уже
             // существующими, значит их индексы должны сдвинуться
             insertPlaceholder(Instant.parse("2025-01-01T00:01:00Z"), 0);
             insertPlaceholder(Instant.parse("2025-01-01T00:02:00Z"), 0);
 
-            repository.normalizeIndex(INSTRUMENT_UID, Instant.parse("2025-01-01T00:00:00Z"));
+            repository.normalizeIndex(instrumentId, Instant.parse("2025-01-01T00:00:00Z"));
 
             Assertions.assertEquals(0, indexAt("2025-01-01T00:01:00Z"));
             Assertions.assertEquals(1, indexAt("2025-01-01T00:02:00Z"));
@@ -112,14 +121,14 @@ class SqliteCandleRepositoryTest {
 
         @Test
         void differentInstrumentsAreNormalizedIndependently() {
-            insertPlaceholder(INSTRUMENT_UID, Instant.parse("2025-01-01T00:01:00Z"), 0);
-            insertPlaceholder(OTHER_INSTRUMENT_UID, Instant.parse("2025-01-01T00:01:00Z"), 0);
+            insertPlaceholder(instrumentId, Instant.parse("2025-01-01T00:01:00Z"), 0);
+            insertPlaceholder(otherInstrumentId, Instant.parse("2025-01-01T00:01:00Z"), 0);
 
-            repository.normalizeIndex(INSTRUMENT_UID, Instant.parse("2025-01-01T00:00:00Z"));
+            repository.normalizeIndex(instrumentId, Instant.parse("2025-01-01T00:00:00Z"));
 
-            Assertions.assertEquals(0, indexAt(INSTRUMENT_UID, "2025-01-01T00:01:00Z"));
+            Assertions.assertEquals(0, indexAt(instrumentId, "2025-01-01T00:01:00Z"));
             // Другой инструмент не нормализовался - остался с placeholder-индексом
-            Assertions.assertEquals(0, indexAt(OTHER_INSTRUMENT_UID, "2025-01-01T00:01:00Z"));
+            Assertions.assertEquals(0, indexAt(otherInstrumentId, "2025-01-01T00:01:00Z"));
         }
     }
 
@@ -155,8 +164,8 @@ class SqliteCandleRepositoryTest {
             insertCandle(TIME, 12, 13, 9, 12);
 
             List<Candle> found = repository.findByPrice(
+                instrumentId,
                 new FindPriceParams(
-                    INSTRUMENT_UID,
                     TIME.minusSeconds(60),
                     TIME.plusSeconds(60),
                     Quotation.of(12),
@@ -170,8 +179,8 @@ class SqliteCandleRepositoryTest {
 
         private int matchCount(CandlePriceField priceField, ComparisonOperator operator, double price) {
             return repository.findByPrice(
+                instrumentId,
                 new FindPriceParams(
-                    INSTRUMENT_UID,
                     TIME.minusSeconds(60),
                     TIME.plusSeconds(60),
                     Quotation.of(price),
@@ -183,10 +192,53 @@ class SqliteCandleRepositoryTest {
         }
     }
 
+    /**
+     * The migration saves batches from a pool of threads through one connection, and a connection
+     * carries a single transaction: unguarded, one thread's commit seals another's half-written batch
+     * and a rollback wipes candles it never wrote.
+     */
+    @Test
+    void batchesSavedFromManyThreadsThroughOneConnectionAllLand() throws Exception {
+        int threads = 8;
+        int batchesPerThread = 25;
+        int candlesPerBatch = 20;
+        Instant start = Instant.parse("2025-01-01T00:00:00Z");
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        List<Future<?>> work = new ArrayList<>();
+
+        for (int thread = 0; thread < threads; thread++) {
+            int first = thread * batchesPerThread;
+
+            work.add(pool.submit(() -> {
+                for (int batch = first; batch < first + batchesPerThread; batch++) {
+                    List<Candle> candles = new ArrayList<>();
+
+                    for (int minute = 0; minute < candlesPerBatch; minute++) {
+                        Quotation price = Quotation.of(100);
+                        Instant time = start.plusSeconds(60L * (batch * candlesPerBatch + minute));
+                        candles.add(new Candle(instrumentId, new TimePoint(time), price, price, price, price, 1));
+                    }
+
+                    repository.saveBatch(candles);
+                }
+                return null;
+            }));
+        }
+
+        for (Future<?> future : work) {
+            future.get(60, TimeUnit.SECONDS);
+        }
+
+        pool.shutdown();
+
+        int total = threads * batchesPerThread * candlesPerBatch;
+        Assertions.assertEquals(total, repository.getPeriod(instrumentId, start, start.plusSeconds(60L * total)).size());
+    }
+
     private void insertCandle(Instant time, double open, double high, double low, double close) {
         repository.save(
             new Candle(
-                INSTRUMENT_UID,
+                instrumentId,
                 new TimePoint(0, time),
                 Quotation.of(open),
                 Quotation.of(close),
@@ -200,12 +252,12 @@ class SqliteCandleRepositoryTest {
     }
 
     private void insertPlaceholder(Instant time, long placeholderIndex) {
-        insertPlaceholder(INSTRUMENT_UID, time, placeholderIndex);
+        insertPlaceholder(instrumentId, time, placeholderIndex);
     }
 
-    private void insertPlaceholder(String instrumentUid, Instant time, long placeholderIndex) {
+    private void insertPlaceholder(long instrumentId, Instant time, long placeholderIndex) {
         Candle candle = new Candle(
-            instrumentUid,
+            instrumentId,
             new TimePoint(placeholderIndex, time),
             Quotation.of(1.0),
             Quotation.of(1.0),
@@ -219,17 +271,13 @@ class SqliteCandleRepositoryTest {
     }
 
     private long indexAt(String time) {
-        return indexAt(INSTRUMENT_UID, time);
+        return indexAt(instrumentId, time);
     }
 
-    private long indexAt(String instrumentUid, String time) {
-        String sql = """
-            SELECT c.time_index FROM candle c
-            JOIN instrument_broker_listing l ON l.instrument_id = c.instrument_id
-            WHERE l.broker_instrument_id = ? AND c.time = ?
-            """;
+    private long indexAt(long instrumentId, String time) {
+        String sql = "SELECT time_index FROM candle WHERE instrument_id = ? AND time = ?";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, instrumentUid);
+            statement.setLong(1, instrumentId);
             statement.setLong(2, Instant.parse(time).toEpochMilli());
             try (ResultSet resultSet = statement.executeQuery()) {
                 Assertions.assertTrue(resultSet.next(), "No candle found at " + time);

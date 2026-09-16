@@ -22,7 +22,7 @@ class SlopeUpsideCalculatorTest {
 
     @BeforeEach
     void setUp() {
-        factory = new CandleFactory("TEST");
+        factory = new CandleFactory(1L);
     }
 
     @Nested

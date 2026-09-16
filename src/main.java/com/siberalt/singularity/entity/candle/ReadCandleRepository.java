@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ReadCandleRepository extends MigrationCandleSource {
-    Optional<Candle> getAt(String instrumentUid, Instant at);
+    Optional<Candle> getAt(long instrumentId, Instant at);
 
     /**
      * The candle at {@code at} together with {@code amountBefore} before it, oldest first - so
@@ -15,13 +15,13 @@ public interface ReadCandleRepository extends MigrationCandleSource {
      * last element is the one at {@code at}, and taking the first instead quietly prices against a
      * bar that has already gone.
      */
-    List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore);
+    List<Candle> findBeforeOrEqual(long instrumentId, Instant at, long amountBefore);
 
-    List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter);
+    List<Candle> findAfterOrEqual(long instrumentId, Instant at, long amountAfter);
 
     /**
      * Candles matching the price condition the params describe, oldest first. Which of the candle's
      * prices is compared is the caller's choice - see {@link CandlePriceField}.
      */
-    List<Candle> findByPrice(FindPriceParams params);
+    List<Candle> findByPrice(long instrumentId, FindPriceParams params);
 }

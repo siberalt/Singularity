@@ -69,7 +69,7 @@ class OrderPriceModelTest {
         priceModel.setHalfSpreadRatio(0.005);
 
         Candle candle = new Candle(
-            "TEST",
+            1L,
             new TimePoint(Instant.parse("2021-12-15T15:00:00Z")),
             Quotation.of(100),
             Quotation.of(100),
@@ -185,7 +185,7 @@ class OrderPriceModelTest {
 
     private Candle splitBar(long buy, long sell) {
         return new Candle(
-            "TEST",
+            1L,
             new TimePoint(Instant.parse("2021-12-15T15:00:00Z")),
             Quotation.of(100),
             Quotation.of(100),
@@ -199,7 +199,7 @@ class OrderPriceModelTest {
 
     private Candle bar(long volume) {
         return new Candle(
-            "TEST",
+            1L,
             new TimePoint(Instant.parse("2021-12-15T15:00:00Z")),
             Quotation.of(100),
             Quotation.of(100),

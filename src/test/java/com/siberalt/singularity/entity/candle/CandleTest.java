@@ -16,9 +16,9 @@ class CandleTest {
 
     @Test
     void equalCandlesHashEqually() {
-        Candle a = new Candle("uid", new TimePoint(7, TIME),
+        Candle a = new Candle(1L, new TimePoint(7, TIME),
             Quotation.of(1.5), Quotation.of(2.25), Quotation.of(3.0), Quotation.of(1.0), 100, 60, 40);
-        Candle b = new Candle("uid", new TimePoint(7, TIME),
+        Candle b = new Candle(1L, new TimePoint(7, TIME),
             Quotation.of(1.5), Quotation.of(2.25), Quotation.of(3.0), Quotation.of(1.0), 100, 60, 40);
 
         assertEquals(a, b);
@@ -28,13 +28,13 @@ class CandleTest {
 
     @Test
     void candlesWithEqualQuotationsBuiltDifferentlyAreEqualAndHashEqually() {
-        Candle a = new Candle("uid", new TimePoint(7, TIME),
+        Candle a = new Candle(1L, new TimePoint(7, TIME),
             Quotation.of(1, 500_000_000),
             Quotation.of(2, 250_000_000),
             Quotation.of(3, 0),
             Quotation.of(1, -1_000_000_000),
             100, 60, 40);
-        Candle b = new Candle("uid", new TimePoint(7, TIME),
+        Candle b = new Candle(1L, new TimePoint(7, TIME),
             Quotation.of(new BigDecimal("1.50")),
             Quotation.of(1, 1_250_000_000),
             Quotation.of(4, -1_000_000_000),
@@ -47,36 +47,36 @@ class CandleTest {
 
     @Test
     void equalCandlesCollapseInAHashSet() {
-        Candle a = Candle.of(new TimePoint(1, TIME), "uid", 10, 1.5, 2.0, 1.0, 1.75);
-        Candle sameAsA = Candle.of(new TimePoint(1, TIME), "uid", 10,
+        Candle a = Candle.of(new TimePoint(1, TIME), 1L, 10, 1.5, 2.0, 1.0, 1.75);
+        Candle sameAsA = Candle.of(new TimePoint(1, TIME), 1L, 10,
             Quotation.of(0, 1_500_000_000), Quotation.of(2L), Quotation.of(1, 0), Quotation.of("1.75"));
-        Candle later = Candle.of(new TimePoint(2, TIME.plusSeconds(60)), "uid", 10, 1.5, 2.0, 1.0, 1.75);
+        Candle later = Candle.of(new TimePoint(2, TIME.plusSeconds(60)), 1L, 10, 1.5, 2.0, 1.0, 1.75);
 
         Set<Candle> set = new HashSet<>(List.of(a, sameAsA, later));
 
         assertEquals(2, set.size());
-        assertTrue(set.contains(Candle.of(new TimePoint(1, TIME), "uid", 10, 1.5, 2.0, 1.0, 1.75)));
+        assertTrue(set.contains(Candle.of(new TimePoint(1, TIME), 1L, 10, 1.5, 2.0, 1.0, 1.75)));
     }
 
     @Test
     void candlesDifferingInOneFieldAreNotEqual() {
-        Candle base = new Candle("uid", new TimePoint(7, TIME),
+        Candle base = new Candle(1L, new TimePoint(7, TIME),
             Quotation.of(1.5), Quotation.of(2.25), Quotation.of(3.0), Quotation.of(1.0), 100, 60, 40);
 
-        assertNotEquals(base, new Candle("other", base.timePoint(),
+        assertNotEquals(base, new Candle(2L, base.timePoint(),
             base.open(), base.close(), base.high(), base.low(), 100, 60, 40));
-        assertNotEquals(base, new Candle("uid", new TimePoint(8, TIME),
+        assertNotEquals(base, new Candle(1L, new TimePoint(8, TIME),
             base.open(), base.close(), base.high(), base.low(), 100, 60, 40));
-        assertNotEquals(base, new Candle("uid", base.timePoint(),
+        assertNotEquals(base, new Candle(1L, base.timePoint(),
             base.open(), Quotation.of(2.26), base.high(), base.low(), 100, 60, 40));
-        assertNotEquals(base, new Candle("uid", base.timePoint(),
+        assertNotEquals(base, new Candle(1L, base.timePoint(),
             base.open(), base.close(), base.high(), base.low(), 100, 61, 39));
     }
 
     @Test
     void candleWithNullFieldsHashesLikeItsEqual() {
-        Candle a = new Candle(null, new TimePoint(3), null, null, null, null, 0);
-        Candle b = new Candle(null, new TimePoint(3), null, null, null, null, 0);
+        Candle a = new Candle(Candle.NO_INSTRUMENT, new TimePoint(3), null, null, null, null, 0);
+        Candle b = new Candle(Candle.NO_INSTRUMENT, new TimePoint(3), null, null, null, null, 0);
 
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());

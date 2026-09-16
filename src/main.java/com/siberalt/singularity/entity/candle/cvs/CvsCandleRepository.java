@@ -17,24 +17,24 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
     protected static final int READ_LIMIT = 1024 * 1024 * 1024;
 
     private final InputStream inputStream;
-    private final String instrumentUid;
+    private final long instrumentId;
 
-    public CvsCandleRepository(String instrumentUid, InputStream inputStream) {
+    public CvsCandleRepository(long instrumentId, InputStream inputStream) {
         this.inputStream = inputStream;
-        this.instrumentUid = instrumentUid;
+        this.instrumentId = instrumentId;
         this.inputStream.mark(READ_LIMIT);
     }
 
     @Override
-    public Optional<Candle> getAt(String instrumentUid, Instant at) {
-        if (!Objects.equals(this.instrumentUid, instrumentUid)) {
+    public Optional<Candle> getAt(long instrumentId, Instant at) {
+        if (this.instrumentId != instrumentId) {
             return Optional.empty();
         }
 
         resetInputStream(inputStream);
 
         var candle = new CvsCandleIterator(inputStream)
-            .initInstrumentUid(instrumentUid)
+            .initInstrumentId(instrumentId)
             .initFrom(at)
             .next();
 
@@ -42,13 +42,13 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
     }
 
     @Override
-    public List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore) {
-        if (!Objects.equals(this.instrumentUid, instrumentUid)) {
+    public List<Candle> findBeforeOrEqual(long instrumentId, Instant at, long amountBefore) {
+        if (this.instrumentId != instrumentId) {
             return Collections.emptyList();
         }
 
         resetInputStream(inputStream);
-        CvsCandleIterator iterator = new CvsCandleIterator(inputStream).initInstrumentUid(instrumentUid);
+        CvsCandleIterator iterator = new CvsCandleIterator(inputStream).initInstrumentId(instrumentId);
 
         ArrayDeque<Candle> candlesBuffer = new ArrayDeque<>();
 
@@ -78,13 +78,13 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
     }
 
     @Override
-    public List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter) {
-        if (!Objects.equals(this.instrumentUid, instrumentUid)) {
+    public List<Candle> findAfterOrEqual(long instrumentId, Instant at, long amountAfter) {
+        if (this.instrumentId != instrumentId) {
             return Collections.emptyList();
         }
 
         resetInputStream(inputStream);
-        CvsCandleIterator iterator = new CvsCandleIterator(inputStream).initInstrumentUid(instrumentUid).initFrom(at);
+        CvsCandleIterator iterator = new CvsCandleIterator(inputStream).initInstrumentId(instrumentId).initFrom(at);
 
         List<Candle> resultCandles = new ArrayList<>();
 
@@ -96,15 +96,15 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
     }
 
     @Override
-    public List<Candle> getPeriod(String instrumentUid, Instant from, Instant to) {
-        if (!Objects.equals(this.instrumentUid, instrumentUid)) {
+    public List<Candle> getPeriod(long instrumentId, Instant from, Instant to) {
+        if (this.instrumentId != instrumentId) {
             return Collections.emptyList();
         }
 
         resetInputStream(inputStream);
 
         CvsCandleIterator iterator = new CvsCandleIterator(inputStream)
-            .initInstrumentUid(instrumentUid)
+            .initInstrumentId(instrumentId)
             .initFrom(from)
             .initTo(to);
         List<Candle> resultCandles = new ArrayList<>();
@@ -117,15 +117,15 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
     }
 
     @Override
-    public List<Candle> findByPrice(FindPriceParams params) {
-        if (!Objects.equals(this.instrumentUid, params.instrumentUid())) {
+    public List<Candle> findByPrice(long instrumentId, FindPriceParams params) {
+        if (this.instrumentId != instrumentId) {
             return Collections.emptyList();
         }
 
         resetInputStream(inputStream);
 
         Iterable<Candle> iterator = () -> new CvsCandleIterator(inputStream)
-            .initInstrumentUid(instrumentUid)
+            .initInstrumentId(instrumentId)
             .initFrom(params.from())
             .initTo(params.to());
 
@@ -145,8 +145,8 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
     }
 
     @Override
-    public CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to) {
-        if (!Objects.equals(this.instrumentUid, instrumentUid)) {
+    public CandleRangeMetadata getRangeMetadata(long instrumentId, Instant from, Instant to) {
+        if (this.instrumentId != instrumentId) {
             return CandleRangeMetadata.EMPTY;
         }
 
@@ -156,7 +156,7 @@ public class CvsCandleRepository implements ReadCandleRepository, AutoCloseable 
         Instant lastTime = null, firstTime = null;
 
         Iterable<Candle> iterator = () -> new CvsCandleIterator(inputStream)
-            .initInstrumentUid(instrumentUid)
+            .initInstrumentId(instrumentId)
             .initFrom(from)
             .initTo(to);
 

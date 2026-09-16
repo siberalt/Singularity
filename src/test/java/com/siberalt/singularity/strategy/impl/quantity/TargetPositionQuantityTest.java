@@ -105,6 +105,6 @@ class TargetPositionQuantityTest {
     }
 
     private TradeMoment moment(double signal) {
-        return new TradeMoment("TMOS", NOW, new Upside(signal, 1.0));
+        return new TradeMoment(1L, NOW, new Upside(signal, 1.0));
     }
 }

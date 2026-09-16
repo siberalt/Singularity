@@ -1,7 +1,7 @@
 package com.siberalt.singularity.utils.entity;
 
 public interface CandleMigrationCheckpointRepository {
-    boolean isDone(String instrumentUid, MigrationChunk chunk);
+    boolean isDone(long instrumentId, MigrationChunk chunk);
 
-    void markDone(String instrumentUid, MigrationChunk chunk);
+    void markDone(long instrumentId, MigrationChunk chunk);
 }

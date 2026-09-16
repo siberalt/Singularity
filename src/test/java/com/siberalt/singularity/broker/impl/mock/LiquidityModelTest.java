@@ -193,7 +193,7 @@ class LiquidityModelTest {
     /** A bar carrying the split, for the direction-aware cases above. */
     private Candle split(long buy, long sell) {
         return new Candle(
-            INSTRUMENT,
+            1L,
             new TimePoint(BAR_TIME),
             Quotation.of(10), Quotation.of(10), Quotation.of(10), Quotation.of(10),
             buy + sell, buy, sell
@@ -206,7 +206,7 @@ class LiquidityModelTest {
 
     private Candle barAt(Instant time, long volume) {
         return new Candle(
-            INSTRUMENT,
+            1L,
             new TimePoint(time),
             Quotation.of(10),
             Quotation.of(10),

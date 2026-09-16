@@ -5,7 +5,7 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import java.time.Instant;
 
 public class CandleBuilder {
-    private String instrumentUid;
+    private long instrumentId;
     private Instant time;
     private Quotation open;
     private Quotation close;
@@ -14,8 +14,8 @@ public class CandleBuilder {
     private long volume;
     private long index = Candle.DEFAULT_INDEX;
 
-    public CandleBuilder setInstrumentUid(String instrumentUid) {
-        this.instrumentUid = instrumentUid;
+    public CandleBuilder setInstrumentId(long instrumentId) {
+        this.instrumentId = instrumentId;
         return this;
     }
 
@@ -56,7 +56,7 @@ public class CandleBuilder {
 
     public Candle build() {
         return new Candle(
-            instrumentUid,
+            instrumentId,
             new TimePoint(index, time),
             open,
             close,

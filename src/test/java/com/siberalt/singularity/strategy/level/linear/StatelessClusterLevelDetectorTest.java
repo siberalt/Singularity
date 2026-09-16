@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class StatelessClusterLevelDetectorTest {
-    private final CandleFactory candleFactory = new CandleFactory("TEST_INSTRUMENT");
+    private final CandleFactory candleFactory = new CandleFactory(1L);
 
     @Test
     void detectReturnsEmptyListWhenCandlesIsNull() {

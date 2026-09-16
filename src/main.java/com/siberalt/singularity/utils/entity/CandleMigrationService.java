@@ -143,21 +143,21 @@ public class CandleMigrationService {
      * Перед запуском предварительно рассчитывает все чанки для всех инструментов
      * и создаёт общий ProgressTracker для отслеживания общего прогресса.
      *
-     * @param instrumentUids список идентификаторов инструментов
+     * @param instrumentIds  список идентификаторов инструментов
      * @param from           начало интервала (включительно)
      * @param to             конец интервала (исключительно)
      */
-    public void migrateInstruments(List<String> instrumentUids, Instant from, Instant to) {
-        log.info("Starting migration for {} instruments from {} to {}", instrumentUids.size(), from, to);
+    public void migrateInstruments(List<Long> instrumentIds, Instant from, Instant to) {
+        log.info("Starting migration for {} instruments from {} to {}", instrumentIds.size(), from, to);
 
         // Предварительный расчёт всех чанков для всех инструментов (без учёта чекпойнта -
         // total должен отражать весь диапазон, а не только то, что осталось сделать)
-        Map<String, List<MigrationChunk>> instrumentAllChunks = new HashMap<>();
+        Map<Long, List<MigrationChunk>> instrumentAllChunks = new HashMap<>();
         int totalChunks = 0;
 
-        for (String instrumentUid : instrumentUids) {
-            List<MigrationChunk> allChunks = computeChunks(instrumentUid, from, to);
-            instrumentAllChunks.put(instrumentUid, allChunks);
+        for (long instrumentId : instrumentIds) {
+            List<MigrationChunk> allChunks = computeChunks(instrumentId, from, to);
+            instrumentAllChunks.put(instrumentId, allChunks);
             totalChunks += allChunks.size();
         }
 
@@ -167,15 +167,15 @@ public class CandleMigrationService {
 
         // Отсеиваем уже обработанные чанки и сразу продвигаем по ним прогресс - последовательно,
         // так как чекпойнт использует общее JDBC-соединение, не рассчитанное на конкурентный доступ
-        Map<String, List<MigrationChunk>> instrumentPendingChunks = new HashMap<>();
-        for (String instrumentUid : instrumentUids) {
+        Map<Long, List<MigrationChunk>> instrumentPendingChunks = new HashMap<>();
+        for (long instrumentId : instrumentIds) {
             instrumentPendingChunks.put(
-                instrumentUid,
-                filterNotDone(instrumentUid, instrumentAllChunks.get(instrumentUid), progressTracker)
+                instrumentId,
+                filterNotDone(instrumentId, instrumentAllChunks.get(instrumentId), progressTracker)
             );
         }
 
-        List<CompletableFuture<Void>> futures = instrumentUids.stream()
+        List<CompletableFuture<Void>> futures = instrumentIds.stream()
                 .map(uid -> CompletableFuture.runAsync(() -> {
                     List<MigrationChunk> chunks = instrumentPendingChunks.get(uid);
                     if (!chunks.isEmpty()) {
@@ -200,16 +200,16 @@ public class CandleMigrationService {
      * (см. {@code chunkParallelism}), после чего индексы свечей инструмента
      * пересчитываются одним шагом.
      *
-     * @param instrumentUid идентификатор инструмента
+     * @param instrumentId идентификатор инструмента
      * @param from          начало интервала
      * @param to            конец интервала
      */
-    public void migrateInstrument(String instrumentUid, Instant from, Instant to) {
-        log.info("Processing instrument: {}", instrumentUid);
-        List<MigrationChunk> allChunks = computeChunks(instrumentUid, from, to);
+    public void migrateInstrument(long instrumentId, Instant from, Instant to) {
+        log.info("Processing instrument: {}", instrumentId);
+        List<MigrationChunk> allChunks = computeChunks(instrumentId, from, to);
         ProgressTracker progressTracker = progressTrackerFactory.create(allChunks.size());
-        List<MigrationChunk> pendingChunks = filterNotDone(instrumentUid, allChunks, progressTracker);
-        migrateInstrumentChunks(instrumentUid, pendingChunks, progressTracker);
+        List<MigrationChunk> pendingChunks = filterNotDone(instrumentId, allChunks, progressTracker);
+        migrateInstrumentChunks(instrumentId, pendingChunks, progressTracker);
     }
 
     /**
@@ -223,9 +223,9 @@ public class CandleMigrationService {
      * {@link CandleIndexNormalizer}, индексы свечей инструмента пересчитываются
      * начиная с самого раннего из обработанных в этом вызове чанков.
      */
-    private void migrateInstrumentChunks(String instrumentUid, List<MigrationChunk> chunks, ProgressTracker progressTracker) {
+    private void migrateInstrumentChunks(long instrumentId, List<MigrationChunk> chunks, ProgressTracker progressTracker) {
         if (chunks.isEmpty()) {
-            log.info("Nothing to migrate for instrument {}", instrumentUid);
+            log.info("Nothing to migrate for instrument {}", instrumentId);
             return;
         }
 
@@ -235,7 +235,7 @@ public class CandleMigrationService {
         try {
             List<CompletableFuture<Void>> futures = chunks.stream()
                 .map(chunk -> CompletableFuture.runAsync(
-                    () -> processChunk(instrumentUid, chunk, progressTracker, totalSaved),
+                    () -> processChunk(instrumentId, chunk, progressTracker, totalSaved),
                     chunkExecutor
                 ))
                 .toList();
@@ -247,14 +247,14 @@ public class CandleMigrationService {
 
         if (target instanceof CandleIndexNormalizer normalizer) {
             Instant earliestProcessed = chunks.getFirst().from();
-            log.debug("Normalizing indices for {} from {}", instrumentUid, earliestProcessed);
-            normalizer.normalizeIndex(instrumentUid, earliestProcessed);
+            log.debug("Normalizing indices for {} from {}", instrumentId, earliestProcessed);
+            normalizer.normalizeIndex(instrumentId, earliestProcessed);
         }
 
-        log.info("Finished instrument {}: total {} candles saved", instrumentUid, totalSaved.get());
+        log.info("Finished instrument {}: total {} candles saved", instrumentId, totalSaved.get());
     }
 
-    private void processChunk(String instrumentUid, MigrationChunk chunk, ProgressTracker progressTracker, AtomicInteger totalSaved) {
+    private void processChunk(long instrumentId, MigrationChunk chunk, ProgressTracker progressTracker, AtomicInteger totalSaved) {
         Instant chunkFrom = chunk.from();
         Instant chunkTo = chunk.to();
 
@@ -263,9 +263,9 @@ public class CandleMigrationService {
             // Чтение свечей за чанк - не синхронизировано, безопасно выполнять параллельно.
             // Ошибки здесь ожидаемы (сеть, временная недоступность брокера) - чанк просто
             // не помечается обработанным и будет повторён при следующем запуске.
-            candles = source.getPeriod(instrumentUid, chunkFrom, chunkTo);
+            candles = source.getPeriod(instrumentId, chunkFrom, chunkTo);
         } catch (Exception e) {
-            log.error("Error fetching chunk for {} from {} to {}", instrumentUid, chunkFrom, chunkTo, e);
+            log.error("Error fetching chunk for {} from {} to {}", instrumentId, chunkFrom, chunkTo, e);
             return;
         }
 
@@ -278,11 +278,11 @@ public class CandleMigrationService {
                 target.saveBatch(candles);
                 totalSaved.addAndGet(candles.size());
             }
-            checkpoint.markDone(instrumentUid, chunk);
+            checkpoint.markDone(instrumentId, chunk);
             progressTracker.advance(1);
         }
 
-        log.debug("Saved {} candles for {} in chunk {} – {}", candles.size(), instrumentUid, chunkFrom, chunkTo);
+        log.debug("Saved {} candles for {} in chunk {} – {}", candles.size(), instrumentId, chunkFrom, chunkTo);
     }
 
     /**
@@ -292,15 +292,15 @@ public class CandleMigrationService {
      * что из них уже отмечено как обработанное в {@link #checkpoint} - это нужно,
      * чтобы total прогресс-трекера отражал весь диапазон, а не только его остаток.
      *
-     * @param instrumentUid идентификатор инструмента
+     * @param instrumentId идентификатор инструмента
      * @param from начало запрошенного интервала
      * @param to   конец запрошенного интервала
      * @return полный список чанков в существующем диапазоне данных
      */
-    private List<MigrationChunk> computeChunks(String instrumentUid, Instant from, Instant to) {
-        CandleRangeMetadata metadata = source.getRangeMetadata(instrumentUid, from, to);
+    private List<MigrationChunk> computeChunks(long instrumentId, Instant from, Instant to) {
+        CandleRangeMetadata metadata = source.getRangeMetadata(instrumentId, from, to);
         if (metadata.isEmpty()) {
-            log.debug("No candles found for {} in range {} – {}", instrumentUid, from, to);
+            log.debug("No candles found for {} in range {} – {}", instrumentId, from, to);
             return List.of();
         }
 
@@ -333,11 +333,11 @@ public class CandleMigrationService {
      *
      * @return чанки, ещё не перенесённые ранее
      */
-    private List<MigrationChunk> filterNotDone(String instrumentUid, List<MigrationChunk> allChunks, ProgressTracker progressTracker) {
+    private List<MigrationChunk> filterNotDone(long instrumentId, List<MigrationChunk> allChunks, ProgressTracker progressTracker) {
         List<MigrationChunk> pending = new ArrayList<>();
         for (MigrationChunk chunk : allChunks) {
-            if (checkpoint.isDone(instrumentUid, chunk)) {
-                log.debug("Skipping already migrated chunk for {}: {} – {}", instrumentUid, chunk.from(), chunk.to());
+            if (checkpoint.isDone(instrumentId, chunk)) {
+                log.debug("Skipping already migrated chunk for {}: {} – {}", instrumentId, chunk.from(), chunk.to());
                 progressTracker.advance(1);
             } else {
                 pending.add(chunk);

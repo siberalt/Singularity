@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 class CachingExtremeLocatorTest {
-    private final CandleFactory candleFactory = new CandleFactory("instrument1");
+    private final CandleFactory candleFactory = new CandleFactory(1L);
 
     @Test
     void locateReturnsEmptyListWhenNoExtremesFound() {
@@ -380,7 +380,7 @@ class CachingExtremeLocatorTest {
     private List<Candle> hourlyCandles(int amount) {
         return IntStream.range(0, amount)
             .mapToObj(position -> new Candle(
-                "instrument1",
+                1L,
                 new TimePoint(position * 60L),
                 Quotation.of(100 + position),
                 Quotation.of(100 + position),
@@ -392,11 +392,11 @@ class CachingExtremeLocatorTest {
     }
 
     private ExtremeRange createOuterRange(int fromIndex, int toIndex) {
-        return new ExtremeRange(fromIndex, toIndex, "instrument1", "DEFAULT", RangeType.OUTER);
+        return new ExtremeRange(fromIndex, toIndex, 1L, "DEFAULT", RangeType.OUTER);
     }
 
     private ExtremeRange createInnerRange(int fromIndex, int toIndex) {
-        return new ExtremeRange(fromIndex, toIndex, "instrument1", "DEFAULT", RangeType.INNER);
+        return new ExtremeRange(fromIndex, toIndex, 1L, "DEFAULT", RangeType.INNER);
     }
 
     /**
@@ -514,7 +514,7 @@ class CachingExtremeLocatorTest {
             double depth = Math.max(0, 10 - 2 * Math.abs(offset - 10)) + Math.max(0, 9 - 2 * Math.abs(offset - 17));
             Quotation price = Quotation.of(100 - depth);
 
-            return new Candle("instrument1", new TimePoint(index, Instant.EPOCH.plusSeconds(60L * index)),
+            return new Candle(1L, new TimePoint(index, Instant.EPOCH.plusSeconds(60L * index)),
                 price, price, price, price, 0);
         }
 
@@ -632,7 +632,7 @@ class CachingExtremeLocatorTest {
         private Candle waveCandle(int index) {
             Quotation price = Quotation.of(100 + 10 * Math.sin(index / 7.0));
 
-            return new Candle("instrument1", new TimePoint(index, Instant.EPOCH.plusSeconds(60L * index)),
+            return new Candle(1L, new TimePoint(index, Instant.EPOCH.plusSeconds(60L * index)),
                 price, price, price, price, 0);
         }
     }

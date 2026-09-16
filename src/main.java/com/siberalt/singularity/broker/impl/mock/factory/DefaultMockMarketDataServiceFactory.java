@@ -5,6 +5,6 @@ import com.siberalt.singularity.broker.impl.mock.MockMarketDataService;
 public class DefaultMockMarketDataServiceFactory implements MockServiceFactory<MockMarketDataService> {
     @Override
     public MockMarketDataService create(MockServiceContext context) {
-        return new MockMarketDataService(context.clock(), context.candleRepository());
+        return new MockMarketDataService(context.clock(), context.candleRepository(), context.instrumentIds());
     }
 }

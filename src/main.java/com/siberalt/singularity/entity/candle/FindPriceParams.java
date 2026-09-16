@@ -5,12 +5,15 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import java.time.Instant;
 
 /**
- * A search for the candles of one instrument, within a time range, whose {@code priceField} stands
- * in {@code comparisonOperator} relation to {@code price} - at most {@code maxCount} of them, in
- * time order.
+ * A search for candles, within a time range, whose {@code priceField} stands in
+ * {@code comparisonOperator} relation to {@code price} - at most {@code maxCount} of them, in time
+ * order.
+ * <p>
+ * Which instrument is searched is not part of it: every other query names its instrument as its own
+ * argument, and a search is no different. It also means the same criteria can be put to an
+ * instrument by whatever id the asker knows it by - the candle store by ours, a broker by its own.
  */
 public record FindPriceParams(
-    String instrumentUid,
     Instant from,
     Instant to,
     Quotation price,
@@ -25,17 +28,16 @@ public record FindPriceParams(
      * every touch that happened inside the bar.
      */
     public FindPriceParams(
-        String instrumentUid,
         Instant from,
         Instant to,
         Quotation price,
         ComparisonOperator comparisonOperator,
         int maxCount
     ) {
-        this(instrumentUid, from, to, price, CandlePriceField.OPEN, comparisonOperator, maxCount);
+        this(from, to, price, CandlePriceField.OPEN, comparisonOperator, maxCount);
     }
 
     public FindPriceParams withRange(Instant from, Instant to) {
-        return new FindPriceParams(instrumentUid, from, to, price, priceField, comparisonOperator, maxCount);
+        return new FindPriceParams(from, to, price, priceField, comparisonOperator, maxCount);
     }
 }

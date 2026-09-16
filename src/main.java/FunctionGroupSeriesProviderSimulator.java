@@ -8,16 +8,18 @@ import java.time.Instant;
 import java.util.List;
 
 public class FunctionGroupSeriesProviderSimulator {
+    // Our id for TMOS - what its candles are kept under.
+    private static final long TMOS = 2;
     public static void main(String[] args) {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
         CvsFileCandleRepositoryFactory factory = new CvsFileCandleRepositoryFactory();
 
         CvsCandleRepository candleRepository = factory.create(
-            "TMOS",
+            TMOS,
             "src/test/resources/entity.candle.cvs/TMOS"
         );
-        List<Candle> candles = candleRepository.getPeriod("TMOS", startTime, endTime);
+        List<Candle> candles = candleRepository.getPeriod(TMOS, startTime, endTime);
         FunctionGroupSeriesProvider blueLinesGroup = new FunctionGroupSeriesProvider("Blue lines group");
         blueLinesGroup.setColor("#0000FF");
         blueLinesGroup.addFunction(0, 200, x -> 5.8);
@@ -30,7 +32,7 @@ public class FunctionGroupSeriesProviderSimulator {
         redLinesGroup.addFunction(3000, 6000, x -> (6000 - x) / 10000 + 5.6);
         PriceChart priceChart = new PriceChart(
             candleRepository,
-            "TMOS",
+            TMOS,
             Candle::getTypicalAsDouble
         );
         priceChart.setStepInterval(10);

@@ -25,7 +25,7 @@ public class RuntimeExtremeRangeRepository implements ExtremeRangeRepository {
     public List<ExtremeRange> getNeighbors(ExtremeRange range, RangeType neighborType) {
         return ranges.stream()
             .filter(r -> r.rangeType() == neighborType &&
-                r.instrumentId().equals(range.instrumentId()) &&
+                r.instrumentId() == range.instrumentId() &&
                 r.extremeType().equals(range.extremeType()) &&
                 (r.toIndex() + 1 == range.fromIndex() || r.fromIndex() - 1 == range.toIndex()))
             .collect(Collectors.toList());

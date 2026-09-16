@@ -10,6 +10,8 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.entity.candle.SqliteCandleRepository;
 import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
+import com.siberalt.singularity.entity.instrument.InstrumentIdResolver;
+import com.siberalt.singularity.entity.instrument.SqliteInstrumentRepository;
 import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.entity.instrument.InstrumentRepository;
@@ -65,17 +67,18 @@ import java.util.stream.Collectors;
 public class BasicTradeStrategySimulation {
     private final static String INSTRUMENT_ID = "55371b1f-8f7c-4c12-9d93-386fae5ec12a";
 
-    public static void main(String[] args) throws AbstractException, IOException {
+    public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2022-01-01T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
 
+        String dbPath = ConfigFacade.of(configuration).getAsString("dbPath");
         SqliteCandleRepositoryFactory sqliteCandleRepositoryFactory = new SqliteCandleRepositoryFactory();
-        SqliteCandleRepository candleRepository = sqliteCandleRepositoryFactory.create(
-            ConfigFacade.of(configuration).getAsString("dbPath")
-        );
+        SqliteCandleRepository candleRepository = sqliteCandleRepositoryFactory.create(dbPath);
+        // The broker trades by uid and the candles are kept by our id; the listings say which is which.
+        SqliteInstrumentRepository instruments = new SqliteInstrumentRepository(java.sql.DriverManager.getConnection(dbPath));
 
         OrderRepository orderRepository = new InMemoryOrderRepository();
         OperationRepository operationRepository = new InMemoryOperationRepository();
@@ -108,7 +111,7 @@ public class BasicTradeStrategySimulation {
         // benchmark's - a buy-and-hold measured on easier terms than the strategy is not a
         // comparison.
         SimulationBrokerFactory<EventMockBroker> brokerFactory = (clock, orders, operations) ->
-            createBroker(candleRepository, instrumentRepository, orders, operations, clock, commission);
+            createBroker(candleRepository, instruments, instrumentRepository, orders, operations, clock, commission);
 
         StrategyStarter<EventMockBroker> strategyStarter = (timeRange, accountId, broker, observer) ->
         {
@@ -131,6 +134,7 @@ public class BasicTradeStrategySimulation {
             INSTRUMENT_ID,
             initialInvestment,
             candleRepository,
+            instruments,
             brokerFactory,
             orderRepository,
             operationRepository
@@ -166,7 +170,7 @@ public class BasicTradeStrategySimulation {
                 List.of(),
                 orders,
                 candleRepository,
-                INSTRUMENT_ID,
+                instruments.idOf(INSTRUMENT_ID).orElseThrow(),
                 startTime,
                 endTime,
                 List.of()
@@ -177,7 +181,7 @@ public class BasicTradeStrategySimulation {
                 resistanceTracker.getSnapshots(),
                 orders,
                 candleRepository,
-                INSTRUMENT_ID,
+                instruments.idOf(INSTRUMENT_ID).orElseThrow(),
                 startTime,
                 endTime,
                 selectorTracker.getTrackedLevelPairs()
@@ -251,6 +255,7 @@ public class BasicTradeStrategySimulation {
 
         PositionRiskManagerUpsideCalculator riskManagerUpsideCalculator = new PositionRiskManagerUpsideCalculator(
             accountId,
+            INSTRUMENT_ID,
             new BaseEntryPriceCalculator(readOperationRepository),
             ATRVolatilityCalculator.ofMultiplier(4)
         );
@@ -284,6 +289,7 @@ public class BasicTradeStrategySimulation {
      */
     private static EventMockBroker createBroker(
         ReadCandleRepository candleRepository,
+        InstrumentIdResolver instrumentIds,
         InstrumentRepository instrumentRepository,
         OrderRepository orderRepository,
         OperationRepository operationRepository,
@@ -292,6 +298,7 @@ public class BasicTradeStrategySimulation {
     ) {
         EventMockBroker broker = EventMockBroker.builder(
             candleRepository,
+            instrumentIds,
             instrumentRepository,
             orderRepository,
             operationRepository,
@@ -312,12 +319,12 @@ public class BasicTradeStrategySimulation {
         List<SnapshotLevelGroup> resistanceLevelsSnapshots,
         List<Operation> ordersOperations,
         ReadCandleRepository candleRepository,
-        String instrumentUid,
+        long instrumentId,
         Instant startTime,
         Instant endTime,
         List<LevelPairsSnapshot> levelPairsSnapshots
     ) {
-        List<Candle> candles = candleRepository.getPeriod(instrumentUid, startTime, endTime);
+        List<Candle> candles = candleRepository.getPeriod(instrumentId, startTime, endTime);
         OrderSeriesProvider orderSeriesProvider = new OrderSeriesProvider(ordersOperations, candles)
             .setBuyPointsSize(4)
             .setSellPointsSize(4)
@@ -325,7 +332,7 @@ public class BasicTradeStrategySimulation {
 
         PriceChart priceChart = new PriceChart(
             candleRepository,
-            instrumentUid,
+            instrumentId,
             Candle::getCloseAsDouble
         );
         priceChart.addSeriesProvider(orderSeriesProvider);

@@ -37,13 +37,16 @@ import java.util.Comparator;
 import java.util.List;
 
 public class ProfitTakerStrategySimulation {
+    // The broker trades TMOS by its uid; the candles in the file are kept under our id for it.
+    private static final String TMOS_UID = "TMOS";
+    private static final long TMOS = 2;
     public static void main(String[] args) throws AbstractException {
         CvsFileCandleRepositoryFactory factory = new CvsFileCandleRepositoryFactory();
         OrderRepository orderRepository = new InMemoryOrderRepository();
         OperationRepository operationRepository = new InMemoryOperationRepository();
 
         CvsCandleRepository candleRepository = factory.create(
-            "TMOS",
+            TMOS,
             "src/test/resources/entity.candle.cvs/TMOS"
         );
         InstrumentRepository instrumentRepository = new InMemoryInstrumentRepository();
@@ -54,11 +57,12 @@ public class ProfitTakerStrategySimulation {
                 .setLot(1)
                 .setIsin("RU102")
                 .setCurrency("RUB")
-                .setUid("TMOS")
+                .setUid(TMOS_UID)
         );
         SimulationClock clock = new SimpleSimulationClock();
         EventMockBroker broker = new EventMockBroker(
             candleRepository,
+            uid -> uid.equals(TMOS_UID) ? java.util.OptionalLong.of(TMOS) : java.util.OptionalLong.empty(),
             instrumentRepository,
             orderRepository,
             operationRepository,
@@ -75,7 +79,7 @@ public class ProfitTakerStrategySimulation {
         broker.getOperationsService().addMoney(account.getId(), Money.of("RUB", initialInvestment));
 
         ProfitTakerStrategy strategy = new ProfitTakerStrategy(
-            "TMOS",
+            TMOS_UID,
             account.getId(),
             0.15,
             0.065,
@@ -87,7 +91,7 @@ public class ProfitTakerStrategySimulation {
         simulator.addSimulationUnit(broker.getSubscriptionManager());
         simulator.addInitializableUnit((from, to) -> {
             try {
-                BrokerFacade.of(broker).buyBestPriceFullBalance(account.getId(), "TMOS");
+                BrokerFacade.of(broker).buyBestPriceFullBalance(account.getId(), TMOS_UID);
             } catch (AbstractException e) {
                 throw new RuntimeException(e);
             }
@@ -143,23 +147,23 @@ public class ProfitTakerStrategySimulation {
 
         System.out.printf("APY: %.2f%%", apy);
 
-        drawOrdersChart(orders, candleRepository, "TMOS", startTime, endTime);
+        drawOrdersChart(orders, candleRepository, TMOS, startTime, endTime);
     }
 
     private static void drawOrdersChart(
         List<Operation> orders,
         ReadCandleRepository candleRepository,
-        String instrumentUid,
+        long instrumentId,
         Instant startTime,
         Instant endTime
     ) {
-        List<Candle> candles = candleRepository.getPeriod(instrumentUid, startTime, endTime);
+        List<Candle> candles = candleRepository.getPeriod(instrumentId, startTime, endTime);
         OrderSeriesProvider orderSeriesProvider = new OrderSeriesProvider(orders, candles)
             .setIncludeOutOfRangeOrders(true);
 
         PriceChart priceChart = new PriceChart(
             candleRepository,
-            instrumentUid,
+            instrumentId,
             Candle::getCloseAsDouble
         );
         priceChart.setStepInterval(10);

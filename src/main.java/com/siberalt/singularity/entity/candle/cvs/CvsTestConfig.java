@@ -1,16 +1,16 @@
 package com.siberalt.singularity.entity.candle.cvs;
 
 public class CvsTestConfig {
-    protected String instrumentUid;
+    protected long instrumentId;
     protected String instrumentDataPath;
 
-    public CvsTestConfig(String instrumentUid, String instrumentDataPath) {
-        this.instrumentUid = instrumentUid;
+    public CvsTestConfig(long instrumentId, String instrumentDataPath) {
+        this.instrumentId = instrumentId;
         this.instrumentDataPath = instrumentDataPath;
     }
 
-    public String getInstrumentUid() {
-        return instrumentUid;
+    public long getInstrumentId() {
+        return instrumentId;
     }
 
     public String getInstrumentDataPath() {

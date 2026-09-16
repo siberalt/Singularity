@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CachingCandleRepositoryTest {
-    private static final String INSTRUMENT = "TEST";
+    private static final long INSTRUMENT = 1;
     private static final Instant START = Instant.parse("2021-06-03T10:00:00Z");
 
     private CountingRepository counting;
@@ -115,11 +115,11 @@ class CachingCandleRepositoryTest {
     @Test
     void tellsInstrumentsApart() {
         repository.getPeriod(INSTRUMENT, START, minute(99));
-        repository.getPeriod("OTHER", START, minute(99));
+        repository.getPeriod(2L, START, minute(99));
 
         assertEquals(2, counting.reads.get());
         assertEquals(1, repository.getStretchCount(INSTRUMENT));
-        assertEquals(1, repository.getStretchCount("OTHER"));
+        assertEquals(1, repository.getStretchCount(2L));
     }
 
     /**
@@ -223,7 +223,7 @@ class CachingCandleRepositoryTest {
         private final AtomicInteger reads = new AtomicInteger();
 
         @Override
-        public List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore) {
+        public List<Candle> findBeforeOrEqual(long instrumentId, Instant at, long amountBefore) {
             reads.incrementAndGet();
 
             // The candle at the moment asked about and amountBefore before it, as the sqlite
@@ -231,41 +231,41 @@ class CachingCandleRepositoryTest {
             int last = offsetOf(at);
             int first = (int) Math.max(0, last - amountBefore);
 
-            return grid(instrumentUid, first, last);
+            return grid(instrumentId, first, last);
         }
 
         @Override
-        public List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter) {
+        public List<Candle> findAfterOrEqual(long instrumentId, Instant at, long amountAfter) {
             reads.incrementAndGet();
 
             int first = offsetOf(at);
 
-            return grid(instrumentUid, first, (int) (first + amountAfter - 1));
+            return grid(instrumentId, first, (int) (first + amountAfter - 1));
         }
 
         @Override
-        public List<Candle> getPeriod(String instrumentUid, Instant from, Instant to) {
+        public List<Candle> getPeriod(long instrumentId, Instant from, Instant to) {
             reads.incrementAndGet();
 
-            return grid(instrumentUid, offsetOf(from), offsetOf(to));
+            return grid(instrumentId, offsetOf(from), offsetOf(to));
         }
 
         @Override
-        public List<Candle> findByPrice(FindPriceParams params) {
+        public List<Candle> findByPrice(long instrumentId, FindPriceParams params) {
             reads.incrementAndGet();
 
             return List.of();
         }
 
         @Override
-        public Optional<Candle> getAt(String instrumentUid, Instant at) {
+        public Optional<Candle> getAt(long instrumentId, Instant at) {
             reads.incrementAndGet();
 
-            return grid(instrumentUid, offsetOf(at), offsetOf(at)).stream().findFirst();
+            return grid(instrumentId, offsetOf(at), offsetOf(at)).stream().findFirst();
         }
 
         @Override
-        public CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to) {
+        public CandleRangeMetadata getRangeMetadata(long instrumentId, Instant from, Instant to) {
             return null;
         }
 
@@ -273,13 +273,13 @@ class CachingCandleRepositoryTest {
             return (int) ((at.toEpochMilli() - START.toEpochMilli()) / 60_000);
         }
 
-        private List<Candle> grid(String instrumentUid, int first, int last) {
+        private List<Candle> grid(long instrumentId, int first, int last) {
             List<Candle> candles = new ArrayList<>();
 
             for (int offset = Math.max(0, first); offset <= last; offset++) {
                 Quotation price = Quotation.of(100);
                 candles.add(new Candle(
-                    instrumentUid, new TimePoint(minute(offset)), price, price, price, price, 1
+                    instrumentId, new TimePoint(minute(offset)), price, price, price, price, 1
                 ));
             }
 

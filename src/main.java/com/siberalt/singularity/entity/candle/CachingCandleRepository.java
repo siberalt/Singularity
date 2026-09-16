@@ -56,7 +56,7 @@ public class CachingCandleRepository implements ReadCandleRepository {
     private final Object lock = new Object();
 
     /** Runs of candles per instrument, disjoint and in time order. */
-    private final Map<String, List<Stretch>> stretches = new HashMap<>();
+    private final Map<Long, List<Stretch>> stretches = new HashMap<>();
 
     private long cachedCandles;
     private int maxCachedCandles = DEFAULT_MAX_CACHED_CANDLES;
@@ -100,9 +100,9 @@ public class CachingCandleRepository implements ReadCandleRepository {
     }
 
     /** Runs held for an instrument. More than one means the reads so far have not met. */
-    public int getStretchCount(String instrumentUid) {
+    public int getStretchCount(long instrumentId) {
         synchronized (lock) {
-            return stretches.getOrDefault(instrumentUid, List.of()).size();
+            return stretches.getOrDefault(instrumentId, List.of()).size();
         }
     }
 
@@ -114,37 +114,37 @@ public class CachingCandleRepository implements ReadCandleRepository {
     }
 
     @Override
-    public List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore) {
-        List<Candle> known = fromStretch(instrumentUid, at, stretch -> stretch.endingAt(at, amountBefore));
+    public List<Candle> findBeforeOrEqual(long instrumentId, Instant at, long amountBefore) {
+        List<Candle> known = fromStretch(instrumentId, at, stretch -> stretch.endingAt(at, amountBefore));
 
         if (known != null) {
             return known;
         }
 
-        List<Candle> candles = base.findBeforeOrEqual(instrumentUid, at, amountBefore);
+        List<Candle> candles = base.findBeforeOrEqual(instrumentId, at, amountBefore);
 
         // Complete from the oldest candle it found up to the moment asked about: nothing inside
         // that window was left out, whatever lies before it.
-        return keep(instrumentUid, candles, candles.isEmpty() ? at : candles.getFirst().getTime(), at);
+        return keep(instrumentId, candles, candles.isEmpty() ? at : candles.getFirst().getTime(), at);
     }
 
     @Override
-    public List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter) {
-        List<Candle> known = fromStretch(instrumentUid, at, stretch -> stretch.startingAt(at, amountAfter));
+    public List<Candle> findAfterOrEqual(long instrumentId, Instant at, long amountAfter) {
+        List<Candle> known = fromStretch(instrumentId, at, stretch -> stretch.startingAt(at, amountAfter));
 
         if (known != null) {
             return known;
         }
 
-        List<Candle> candles = base.findAfterOrEqual(instrumentUid, at, amountAfter);
+        List<Candle> candles = base.findAfterOrEqual(instrumentId, at, amountAfter);
 
-        return keep(instrumentUid, candles, at, candles.isEmpty() ? at : candles.getLast().getTime());
+        return keep(instrumentId, candles, at, candles.isEmpty() ? at : candles.getLast().getTime());
     }
 
     @Override
-    public List<Candle> getPeriod(String instrumentUid, Instant from, Instant to) {
+    public List<Candle> getPeriod(long instrumentId, Instant from, Instant to) {
         synchronized (lock) {
-            Stretch covering = find(instrumentUid, from, to);
+            Stretch covering = find(instrumentId, from, to);
 
             if (covering != null) {
                 return covering.between(from, to);
@@ -153,7 +153,7 @@ public class CachingCandleRepository implements ReadCandleRepository {
 
         // The window asked about is what becomes known, not merely the window the candles landed
         // in: asking again from a moment before the first candle must not count as a miss.
-        return keep(instrumentUid, base.getPeriod(instrumentUid, from, to), from, to);
+        return keep(instrumentId, base.getPeriod(instrumentId, from, to), from, to);
     }
 
     /**
@@ -161,39 +161,39 @@ public class CachingCandleRepository implements ReadCandleRepository {
      * which says nothing about the bars in between and so cannot be kept as a stretch.
      */
     @Override
-    public List<Candle> findByPrice(FindPriceParams params) {
-        return base.findByPrice(params);
+    public List<Candle> findByPrice(long instrumentId, FindPriceParams params) {
+        return base.findByPrice(instrumentId, params);
     }
 
     @Override
-    public Optional<Candle> getAt(String instrumentUid, Instant at) {
+    public Optional<Candle> getAt(long instrumentId, Instant at) {
         synchronized (lock) {
-            Stretch covering = find(instrumentUid, at, at);
+            Stretch covering = find(instrumentId, at, at);
 
             if (covering != null) {
                 return covering.at(at);
             }
         }
 
-        return base.getAt(instrumentUid, at);
+        return base.getAt(instrumentId, at);
     }
 
     @Override
-    public CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to) {
-        return base.getRangeMetadata(instrumentUid, from, to);
+    public CandleRangeMetadata getRangeMetadata(long instrumentId, Instant from, Instant to) {
+        return base.getRangeMetadata(instrumentId, from, to);
     }
 
     /**
      * Files what was read as a run complete over {@code [from, to]}, merging it into any run it
      * meets, and hands back the candles as the cache now holds them.
      */
-    protected List<Candle> keep(String instrumentUid, List<Candle> candles, Instant from, Instant to) {
+    protected List<Candle> keep(long instrumentId, List<Candle> candles, Instant from, Instant to) {
         if (candles.size() < minCachedResult || candles.size() > maxCachedCandles) {
             return candles;
         }
 
         synchronized (lock) {
-            List<Stretch> known = stretches.computeIfAbsent(instrumentUid, uid -> new ArrayList<>());
+            List<Stretch> known = stretches.computeIfAbsent(instrumentId, uid -> new ArrayList<>());
             Stretch merged = new Stretch(from, to, List.copyOf(candles));
 
             for (var others = known.iterator(); others.hasNext(); ) {
@@ -215,17 +215,17 @@ public class CachingCandleRepository implements ReadCandleRepository {
         }
     }
 
-    private List<Candle> fromStretch(String instrumentUid, Instant at, StretchQuery query) {
+    private List<Candle> fromStretch(long instrumentId, Instant at, StretchQuery query) {
         synchronized (lock) {
-            Stretch stretch = find(instrumentUid, at, at);
+            Stretch stretch = find(instrumentId, at, at);
 
             return stretch == null ? null : query.answer(stretch);
         }
     }
 
     /** The run covering the whole of {@code [from, to]}, or null when no single one does. */
-    private Stretch find(String instrumentUid, Instant from, Instant to) {
-        for (Stretch stretch : stretches.getOrDefault(instrumentUid, List.of())) {
+    private Stretch find(long instrumentId, Instant from, Instant to) {
+        for (Stretch stretch : stretches.getOrDefault(instrumentId, List.of())) {
             if (stretch.covers(from, to)) {
                 return stretch;
             }

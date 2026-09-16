@@ -14,7 +14,7 @@ import static org.mockito.Mockito.when;
 import java.util.*;
 
 class BaseClusterAggregatorTest {
-    private final CandleFactory candleFactory = new CandleFactory("TEST");
+    private final CandleFactory candleFactory = new CandleFactory(1L);
 
     @Test
     void aggregatesClustersWithMultipleExtremes() {

@@ -78,13 +78,16 @@ public class FetchTinkoffCandles {
             SqliteCandleRepository candleRepository = new SqliteCandleRepository(connection);
             InstrumentService instrumentService = new TinkoffInstrumentServiceFactory().create(serviceStubFactory);
             MarketDataService marketDataService = new TinkoffMarketDataServiceFactory().create(serviceStubFactory);
-            // Одна и та же реализация отвечает и за листинги, и за перевод uid в инструмент,
-            // поэтому чекпойнту миграции достаётся ровно то же соответствие, что видит загрузчик.
             SqliteInstrumentRepository instruments = new SqliteInstrumentRepository(connection);
 
-            TinkoffCandleSource candleSource = new TinkoffCandleSource(marketDataService, INTERVAL);
-            CandleMigrationCheckpointRepository checkpoint =
-                new SqliteCandleMigrationCheckpointRepository(connection, instruments);
+            // Свечи мигрируются по нашему id, а T-Bank спрашивается по своему uid - его источник берёт
+            // из листинга, который сохраняется ниже до того, как о свечах инструмента спросят.
+            TinkoffCandleSource candleSource = new TinkoffCandleSource(marketDataService, INTERVAL, instrumentId ->
+                instruments.brokerInstrumentIdOf(AbstractTinkoffBroker.ID, instrumentId).orElseThrow(
+                    () -> new IllegalStateException("Instrument " + instrumentId + " has no T-Bank listing")));
+            // Свечи и чекпойнт пишут через одно соединение из нескольких потоков; их транзакции
+            // сериализует монитор соединения, который держат оба репозитория.
+            CandleMigrationCheckpointRepository checkpoint = new SqliteCandleMigrationCheckpointRepository(connection);
 
             CandleMigrationService migrationService = CandleMigrationService.builder(candleSource, candleRepository)
                 .progressTrackerFactory(new ConsoleProgressTrackerFactory())
@@ -101,13 +104,13 @@ public class FetchTinkoffCandles {
                 }
 
                 instruments.save(AbstractTinkoffBroker.ID, instrument);
+                long instrumentId = instruments.idOf(instrument.getUid()).orElseThrow();
 
                 System.out.printf("%n%s (%s, %s), instrument %d, lot %d %s%n",
                     instrument.getName(), instrument.getUid(), instrument.getIsin(),
-                    instruments.idOf(instrument.getUid()).orElseThrow(),
-                    instrument.getLot(), instrument.getCurrency());
+                    instrumentId, instrument.getLot(), instrument.getCurrency());
 
-                migrationService.migrateInstrument(instrument.getUid(), FROM, TO);
+                migrationService.migrateInstrument(instrumentId, FROM, TO);
             }
         } finally {
             serviceStubFactory.getChannel().shutdown();

@@ -15,6 +15,8 @@ import java.sql.SQLException;
 import java.time.Instant;
 
 public class MigrateCandles {
+    // Our id for TMOS - what its candles are kept under.
+    private static final long TMOS = 2;
     public static void main(String[] args) throws IOException, SQLException {
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
@@ -25,7 +27,7 @@ public class MigrateCandles {
 
         try (
             CvsCandleRepository cvsCandleRepository = cvsCandleRepositoryFactory.create(
-                "TMOS",
+                TMOS,
                 "src/test/resources/entity.candle.cvs/TMOS"
             );
             SqliteCandleRepository sqliteCandleRepository = sqliteCandleRepositoryFactory.create(
@@ -37,7 +39,7 @@ public class MigrateCandles {
                 .parallelism(5)
                 .chunkSizeDays(360)
                 .build();
-            candleMigrationService.migrateInstrument("TMOS", Instant.MIN, Instant.MAX);
+            candleMigrationService.migrateInstrument(TMOS, Instant.MIN, Instant.MAX);
         }
     }
 }

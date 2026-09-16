@@ -12,9 +12,12 @@ import com.siberalt.singularity.broker.impl.tinkoff.shared.factory.TinkoffOrderS
 import com.siberalt.singularity.broker.impl.tinkoff.shared.factory.TinkoffServiceFactory;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.factory.TinkoffSubscriptionManagerFactory;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.factory.TinkoffUserServiceFactory;
+import com.siberalt.singularity.entity.instrument.InstrumentIdResolver;
 import com.siberalt.singularity.event.subscription.SubscriptionManager;
 import ru.ttech.piapi.core.connector.ConnectorConfiguration;
 import ru.ttech.piapi.core.connector.ServiceStubFactory;
+
+import java.util.OptionalLong;
 
 /**
  * Composition root for a Tinkoff broker's services: builds the shared {@link ServiceStubFactory}
@@ -30,7 +33,10 @@ public class TinkoffServicesFactory {
     private TinkoffServiceFactory<OperationsService> operationsServiceFactory = new TinkoffOperationsServiceFactory();
     private TinkoffServiceFactory<UserService> userServiceFactory = new TinkoffUserServiceFactory();
     private TinkoffServiceFactory<InstrumentService> instrumentServiceFactory = new TinkoffInstrumentServiceFactory();
-    private TinkoffServiceFactory<SubscriptionManager> subscriptionManagerFactory = new TinkoffSubscriptionManagerFactory();
+    // Knows no instruments until told: live candles of unregistered instruments are dropped with an
+    // error - see instrumentIds.
+    private TinkoffServiceFactory<SubscriptionManager> subscriptionManagerFactory =
+        new TinkoffSubscriptionManagerFactory(uid -> OptionalLong.empty());
 
     public TinkoffServicesFactory orderServiceFactory(TinkoffServiceFactory<OrderService> factory) {
         this.orderServiceFactory = factory;
@@ -54,6 +60,15 @@ public class TinkoffServicesFactory {
 
     public TinkoffServicesFactory instrumentServiceFactory(TinkoffServiceFactory<InstrumentService> factory) {
         this.instrumentServiceFactory = factory;
+        return this;
+    }
+
+    /**
+     * Where live candles get our instrument ids from - usually the listing repository over the same
+     * database the candles are saved to. Without it every streamed candle is dropped.
+     */
+    public TinkoffServicesFactory instrumentIds(InstrumentIdResolver instrumentIds) {
+        this.subscriptionManagerFactory = new TinkoffSubscriptionManagerFactory(instrumentIds);
         return this;
     }
 

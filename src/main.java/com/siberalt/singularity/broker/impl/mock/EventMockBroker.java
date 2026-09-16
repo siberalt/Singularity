@@ -5,6 +5,7 @@ import com.siberalt.singularity.broker.contract.simulation.SimulationBroker;
 import com.siberalt.singularity.broker.impl.mock.factory.DefaultEventOrderServiceFactory;
 import com.siberalt.singularity.broker.impl.mock.factory.MockServicesFactory;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.entity.instrument.InstrumentIdResolver;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
 import com.siberalt.singularity.entity.operation.OperationRepository;
@@ -38,6 +39,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
 
     public EventMockBroker(
         ReadCandleRepository candleRepository,
+        InstrumentIdResolver instrumentIds,
         ReadInstrumentRepository instrumentRepository,
         OrderRepository orderRepository,
         OperationRepository operationRepository,
@@ -45,6 +47,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
     ) {
         this(
             candleRepository,
+            instrumentIds,
             instrumentRepository,
             orderRepository,
             operationRepository,
@@ -56,6 +59,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
 
     public EventMockBroker(
         ReadCandleRepository candleRepository,
+        InstrumentIdResolver instrumentIds,
         ReadInstrumentRepository instrumentRepository,
         OrderRepository orderRepository,
         OperationRepository operationRepository,
@@ -64,6 +68,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
     ) {
         this(
             candleRepository,
+            instrumentIds,
             instrumentRepository,
             orderRepository,
             operationRepository,
@@ -77,6 +82,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
 
     public EventMockBroker(
         ReadCandleRepository candleRepository,
+        InstrumentIdResolver instrumentIds,
         ReadInstrumentRepository instrumentRepository,
         OrderRepository orderRepository,
         OperationRepository operationRepository,
@@ -86,6 +92,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
     ) {
         this(
             candleRepository,
+            instrumentIds,
             instrumentRepository,
             orderRepository,
             operationRepository,
@@ -106,6 +113,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
      */
     public EventMockBroker(
         ReadCandleRepository candleRepository,
+        InstrumentIdResolver instrumentIds,
         ReadInstrumentRepository instrumentRepository,
         OrderRepository orderRepository,
         OperationRepository operationRepository,
@@ -117,6 +125,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
     ) {
         super(
             candleRepository,
+            instrumentIds,
             instrumentRepository,
             orderRepository,
             operationRepository,
@@ -130,6 +139,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
         // the broker is built.
         this.subscriptionManager = new NewCandleSubscriptionManager(
             candleRepository,
+            instrumentIds,
             () -> instrumentRepository.getAll(id)
                 .stream()
                 .map(Instrument::getUid)
@@ -164,6 +174,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
 
     public static Builder builder(
         ReadCandleRepository candleRepository,
+        InstrumentIdResolver instrumentIds,
         ReadInstrumentRepository instrumentRepository,
         OrderRepository orderRepository,
         OperationRepository operationRepository,
@@ -171,6 +182,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
     ) {
         return new Builder(
             candleRepository,
+            instrumentIds,
             instrumentRepository,
             orderRepository,
             operationRepository,
@@ -184,6 +196,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
         protected DefaultEventOrderServiceFactory orderServiceFactory = new DefaultEventOrderServiceFactory();
         protected Duration executionLatency = DEFAULT_EXECUTION_LATENCY;
         protected final ReadCandleRepository candleRepository;
+        protected final InstrumentIdResolver instrumentIds;
         protected final ReadInstrumentRepository instrumentRepository;
         protected final OrderRepository orderRepository;
         protected final OperationRepository operationRepository;
@@ -191,12 +204,14 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
 
         public Builder(
             ReadCandleRepository candleRepository,
+            InstrumentIdResolver instrumentIds,
             ReadInstrumentRepository instrumentRepository,
             OrderRepository orderRepository,
             OperationRepository operationRepository,
             Clock clock
         ) {
             this.candleRepository = candleRepository;
+            this.instrumentIds = instrumentIds;
             this.instrumentRepository = instrumentRepository;
             this.orderRepository = orderRepository;
             this.operationRepository = operationRepository;
@@ -231,6 +246,7 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
         public EventMockBroker build() {
             return new EventMockBroker(
                 candleRepository,
+                instrumentIds,
                 instrumentRepository,
                 orderRepository,
                 operationRepository,

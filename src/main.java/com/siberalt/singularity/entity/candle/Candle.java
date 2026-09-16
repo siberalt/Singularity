@@ -9,7 +9,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 public record Candle (
-    String instrumentUid,
+    long instrumentId,
     TimePoint timePoint,
     Quotation open,
     Quotation close,
@@ -21,8 +21,15 @@ public record Candle (
 ){
     public static final long DEFAULT_INDEX = -1;
 
+    /**
+     * The id of a candle that belongs to no instrument we know - one built in a test or a calculation
+     * that only cares about prices. Real instruments are numbered from one, so this can never be
+     * mistaken for one of them.
+     */
+    public static final long NO_INSTRUMENT = 0;
+
     public Candle(
-        String instrumentUid,
+        long instrumentId,
         TimePoint timePoint,
         Quotation open,
         Quotation close,
@@ -30,11 +37,11 @@ public record Candle (
         Quotation low,
         long volume
     ) {
-        this(instrumentUid, timePoint, open, close, high, low, volume, 0L, 0L);
+        this(instrumentId, timePoint, open, close, high, low, volume, 0L, 0L);
     }
 
     public static final Candle EMPTY = new Candle(
-        null,
+        NO_INSTRUMENT,
         TimePoint.NULL,
         Quotation.ZERO,
         Quotation.ZERO,
@@ -51,7 +58,7 @@ public record Candle (
         return volume == candle.volume &&
             volumeBuy == candle.volumeBuy &&
             volumeSell == candle.volumeSell &&
-            Objects.equals(instrumentUid, candle.instrumentUid) &&
+            instrumentId == candle.instrumentId &&
             Objects.equals(timePoint, candle.timePoint) &&
             Objects.equals(open, candle.open) &&
             Objects.equals(close, candle.close) &&
@@ -61,7 +68,7 @@ public record Candle (
 
     @Override
     public int hashCode() {
-        int result = Objects.hashCode(instrumentUid);
+        int result = Long.hashCode(instrumentId);
         result = 31 * result + Objects.hashCode(timePoint);
         result = 31 * result + Objects.hashCode(open);
         result = 31 * result + Objects.hashCode(close);
@@ -173,15 +180,15 @@ public record Candle (
 
     @Override
     public Candle clone() {
-        return new Candle(instrumentUid, timePoint, open, close, high, low, volume, volumeBuy, volumeSell);
+        return new Candle(instrumentId, timePoint, open, close, high, low, volume, volumeBuy, volumeSell);
     }
 
     public boolean isEmpty() {
         return open == null && close == null && high == null && low == null && volume == 0;
     }
 
-    public static Candle of(Instant time, String instrumentUid, long volume, double repeatedValue) {
-        return Candle.of(time, instrumentUid, volume, repeatedValue, repeatedValue, repeatedValue, repeatedValue);
+    public static Candle of(Instant time, long instrumentId, long volume, double repeatedValue) {
+        return Candle.of(time, instrumentId, volume, repeatedValue, repeatedValue, repeatedValue, repeatedValue);
     }
 
     public static Candle of(Instant time, long volume, double repeatedValue) {
@@ -198,19 +205,19 @@ public record Candle (
 
     public static Candle of(
         TimePoint timePoint, 
-        String instrumentUid, 
+        long instrumentId, 
         long volume,
         Quotation open, 
         Quotation high,
         Quotation low,
         Quotation close
     ) {
-        return new Candle(instrumentUid, timePoint, open, close, high, low, volume);
+        return new Candle(instrumentId, timePoint, open, close, high, low, volume);
     }
 
-    public static Candle of(TimePoint timePoint, String instrumentUid, long volume, double open, double high, double low, double close) {
+    public static Candle of(TimePoint timePoint, long instrumentId, long volume, double open, double high, double low, double close) {
         return new Candle(
-            instrumentUid,
+            instrumentId,
             timePoint,
             Quotation.of(open),
             Quotation.of(close),
@@ -222,7 +229,7 @@ public record Candle (
 
     public static Candle of(TimePoint timePoint, long volume, double open, double high, double low, double close) {
         return new Candle(
-            null,
+            NO_INSTRUMENT,
             timePoint,
             Quotation.of(open),
             Quotation.of(close),
@@ -232,9 +239,9 @@ public record Candle (
         );
     }
 
-    public static Candle of(Instant time, String instrumentUid, long volume, double open, double high, double low, double close) {
+    public static Candle of(Instant time, long instrumentId, long volume, double open, double high, double low, double close) {
         return new Candle(
-            instrumentUid,
+            instrumentId,
             new TimePoint(time),
             Quotation.of(open),
             Quotation.of(close),
@@ -244,9 +251,9 @@ public record Candle (
         );
     }
 
-    public static Candle of(Instant time, String instrumentUid, long volume, Quotation open, Quotation high, Quotation low, Quotation close) {
+    public static Candle of(Instant time, long instrumentId, long volume, Quotation open, Quotation high, Quotation low, Quotation close) {
         return new Candle(
-            instrumentUid,
+            instrumentId,
             new TimePoint(time),
             open,
             close,
@@ -258,7 +265,7 @@ public record Candle (
 
     public static Candle of(Instant time, long volume, double open, double high, double low, double close) {
         return new Candle(
-            null,
+            NO_INSTRUMENT,
             new TimePoint(time),
             Quotation.of(open),
             Quotation.of(close),
@@ -272,7 +279,7 @@ public record Candle (
         return new CandleBuilder();
     }
 
-    public static CandleFactory factory(String instrumentUid, long startIndex) {
-        return new CandleFactory(instrumentUid, startIndex);
+    public static CandleFactory factory(long instrumentId, long startIndex) {
+        return new CandleFactory(instrumentId, startIndex);
     }
 }

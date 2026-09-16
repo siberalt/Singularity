@@ -12,13 +12,21 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 class SqliteCandleMigrationCheckpointRepositoryTest {
     private static final String BROKER = "tinkoff";
     private static final String INSTRUMENT_UID = "TEST_INSTRUMENT";
     private static final String OTHER_INSTRUMENT_UID = "OTHER_INSTRUMENT";
 
+    private long instrumentId;
+    private long otherInstrumentId;
     private Connection connection;
     private SqliteCandleMigrationCheckpointRepository repository;
 
@@ -41,8 +49,10 @@ class SqliteCandleMigrationCheckpointRepositoryTest {
 
         instruments.save(BROKER,
             new Instrument().setUid(OTHER_INSTRUMENT_UID).setName(OTHER_INSTRUMENT_UID).setLot(1).setCurrency("RUB"));
+        instrumentId = instruments.idOf(INSTRUMENT_UID).orElseThrow();
+        otherInstrumentId = instruments.idOf(OTHER_INSTRUMENT_UID).orElseThrow();
 
-        repository = new SqliteCandleMigrationCheckpointRepository(connection, instruments);
+        repository = new SqliteCandleMigrationCheckpointRepository(connection);
     }
 
     @AfterEach
@@ -53,67 +63,108 @@ class SqliteCandleMigrationCheckpointRepositoryTest {
     @Test
     void isDoneReturnsFalseWhenNothingStored() {
         var chunk = chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z");
-        Assertions.assertFalse(repository.isDone(INSTRUMENT_UID, chunk));
+        Assertions.assertFalse(repository.isDone(instrumentId, chunk));
     }
 
     @Test
     void isDoneReturnsTrueForExactlyMarkedChunk() {
         var chunk = chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z");
-        repository.markDone(INSTRUMENT_UID, chunk);
-        Assertions.assertTrue(repository.isDone(INSTRUMENT_UID, chunk));
+        repository.markDone(instrumentId, chunk);
+        Assertions.assertTrue(repository.isDone(instrumentId, chunk));
     }
 
     @Test
     void isDoneReturnsTrueForSubChunkOfLargerMarkedRange() {
-        repository.markDone(INSTRUMENT_UID, chunk("2025-01-01T00:00:00Z", "2025-01-10T00:00:00Z"));
+        repository.markDone(instrumentId, chunk("2025-01-01T00:00:00Z", "2025-01-10T00:00:00Z"));
 
-        Assertions.assertTrue(repository.isDone(INSTRUMENT_UID, chunk("2025-01-03T00:00:00Z", "2025-01-05T00:00:00Z")));
+        Assertions.assertTrue(repository.isDone(instrumentId, chunk("2025-01-03T00:00:00Z", "2025-01-05T00:00:00Z")));
     }
 
     @Test
     void adjacentChunksAreMergedIntoOneContinuousRange() {
-        repository.markDone(INSTRUMENT_UID, chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z"));
-        repository.markDone(INSTRUMENT_UID, chunk("2025-01-02T00:00:00Z", "2025-01-03T00:00:00Z"));
+        repository.markDone(instrumentId, chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z"));
+        repository.markDone(instrumentId, chunk("2025-01-02T00:00:00Z", "2025-01-03T00:00:00Z"));
 
         // Ни один из двух отмеченных чанков не покрывает весь диапазон целиком -
         // но после слияния соседних диапазонов он должен считаться выполненным.
-        Assertions.assertTrue(repository.isDone(INSTRUMENT_UID, chunk("2025-01-01T00:00:00Z", "2025-01-03T00:00:00Z")));
+        Assertions.assertTrue(repository.isDone(instrumentId, chunk("2025-01-01T00:00:00Z", "2025-01-03T00:00:00Z")));
     }
 
     @Test
     void overlappingChunksAreMerged() {
-        repository.markDone(INSTRUMENT_UID, chunk("2025-01-01T00:00:00Z", "2025-01-05T00:00:00Z"));
-        repository.markDone(INSTRUMENT_UID, chunk("2025-01-03T00:00:00Z", "2025-01-08T00:00:00Z"));
+        repository.markDone(instrumentId, chunk("2025-01-01T00:00:00Z", "2025-01-05T00:00:00Z"));
+        repository.markDone(instrumentId, chunk("2025-01-03T00:00:00Z", "2025-01-08T00:00:00Z"));
 
-        Assertions.assertTrue(repository.isDone(INSTRUMENT_UID, chunk("2025-01-01T00:00:00Z", "2025-01-08T00:00:00Z")));
+        Assertions.assertTrue(repository.isDone(instrumentId, chunk("2025-01-01T00:00:00Z", "2025-01-08T00:00:00Z")));
     }
 
     @Test
     void newChunkCanBridgeAGapBetweenTwoExistingRanges() {
-        repository.markDone(INSTRUMENT_UID, chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z"));
-        repository.markDone(INSTRUMENT_UID, chunk("2025-01-05T00:00:00Z", "2025-01-06T00:00:00Z"));
+        repository.markDone(instrumentId, chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z"));
+        repository.markDone(instrumentId, chunk("2025-01-05T00:00:00Z", "2025-01-06T00:00:00Z"));
         // Пока между ними разрыв - объединяющий диапазон не должен считаться готовым.
-        Assertions.assertFalse(repository.isDone(INSTRUMENT_UID, chunk("2025-01-01T00:00:00Z", "2025-01-06T00:00:00Z")));
+        Assertions.assertFalse(repository.isDone(instrumentId, chunk("2025-01-01T00:00:00Z", "2025-01-06T00:00:00Z")));
 
         // Чанк, закрывающий разрыв и касающийся обеих сторон, должен слить все три в один.
-        repository.markDone(INSTRUMENT_UID, chunk("2025-01-02T00:00:00Z", "2025-01-05T00:00:00Z"));
+        repository.markDone(instrumentId, chunk("2025-01-02T00:00:00Z", "2025-01-05T00:00:00Z"));
 
-        Assertions.assertTrue(repository.isDone(INSTRUMENT_UID, chunk("2025-01-01T00:00:00Z", "2025-01-06T00:00:00Z")));
+        Assertions.assertTrue(repository.isDone(instrumentId, chunk("2025-01-01T00:00:00Z", "2025-01-06T00:00:00Z")));
     }
 
     @Test
     void chunksWithGapRemainSeparateAndUncoveredRangeIsNotDone() {
-        repository.markDone(INSTRUMENT_UID, chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z"));
-        repository.markDone(INSTRUMENT_UID, chunk("2025-01-05T00:00:00Z", "2025-01-06T00:00:00Z"));
+        repository.markDone(instrumentId, chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z"));
+        repository.markDone(instrumentId, chunk("2025-01-05T00:00:00Z", "2025-01-06T00:00:00Z"));
 
-        Assertions.assertFalse(repository.isDone(INSTRUMENT_UID, chunk("2025-01-02T00:00:00Z", "2025-01-05T00:00:00Z")));
+        Assertions.assertFalse(repository.isDone(instrumentId, chunk("2025-01-02T00:00:00Z", "2025-01-05T00:00:00Z")));
     }
 
     @Test
     void differentInstrumentsAreTrackedIndependently() {
-        repository.markDone(INSTRUMENT_UID, chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z"));
+        repository.markDone(instrumentId, chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z"));
 
-        Assertions.assertFalse(repository.isDone(OTHER_INSTRUMENT_UID, chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z")));
+        Assertions.assertFalse(repository.isDone(otherInstrumentId, chunk("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z")));
+    }
+
+    /**
+     * Chunks are marked done from a pool of threads through one connection. Marking is a read, a
+     * delete and an insert in one transaction, and a connection carries only one: unguarded, threads
+     * commit and roll back each other's marks, and a chunk the migration finished is left undone.
+     */
+    @Test
+    void chunksMarkedFromManyThreadsThroughOneConnectionAreAllDone() throws Exception {
+        int threads = 8;
+        int chunksPerThread = 50;
+        Instant start = Instant.parse("2025-01-01T00:00:00Z");
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        List<Future<?>> work = new ArrayList<>();
+
+        for (int thread = 0; thread < threads; thread++) {
+            int first = thread * chunksPerThread;
+
+            work.add(pool.submit(() -> {
+                for (int chunk = first; chunk < first + chunksPerThread; chunk++) {
+                    repository.markDone(instrumentId, separateChunk(start, chunk));
+                }
+                return null;
+            }));
+        }
+
+        for (Future<?> future : work) {
+            future.get(60, TimeUnit.SECONDS);
+        }
+
+        pool.shutdown();
+
+        for (int chunk = 0; chunk < threads * chunksPerThread; chunk++) {
+            Assertions.assertTrue(repository.isDone(instrumentId, separateChunk(start, chunk)), "chunk " + chunk);
+        }
+    }
+
+    /** An hour each, two hours apart, so no two of them merge into one range. */
+    private static MigrationChunk separateChunk(Instant start, int chunk) {
+        Instant from = start.plusSeconds(2 * 3600L * chunk);
+        return new MigrationChunk(from, from.plusSeconds(3600));
     }
 
     private static MigrationChunk chunk(String from, String to) {

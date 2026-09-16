@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.List;
 
 public interface MigrationCandleSource {
-    List<Candle> getPeriod(String instrumentUid, Instant from, Instant to);
+    List<Candle> getPeriod(long instrumentId, Instant from, Instant to);
 
-    CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to);
+    CandleRangeMetadata getRangeMetadata(long instrumentId, Instant from, Instant to);
 }

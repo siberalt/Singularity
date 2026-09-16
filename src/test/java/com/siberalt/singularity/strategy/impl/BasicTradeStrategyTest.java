@@ -51,9 +51,9 @@ class BasicTradeStrategyTest {
     @Test
     void doesNotProcessCandleWithDifferentInstrumentId() {
         Candle candle = Candle.of(
-            Instant.parse("2023-01-01T00:00:00Z"), "differentInstrumentId", 100L, 25
+            Instant.parse("2023-01-01T00:00:00Z"), 1L, 100L, 25
         );
-        when(event.getCandle()).thenReturn(candle);
+        when(event.getInstrumentUid()).thenReturn("differentInstrumentId");
 
         strategy.handleNewCandle(event, subscription);
 
@@ -63,10 +63,11 @@ class BasicTradeStrategyTest {
     @Test
     void processesCandleAndExecutesBuyWhenUpsideSignalExceedsThreshold() throws AbstractException {
         Candle candle1 = Candle.of(
-            Instant.parse("2023-01-01T00:00:00Z"), "instrumentId", 100L, 25
+            Instant.parse("2023-01-01T00:00:00Z"), 2L, 100L, 25
         );
+        when(event.getInstrumentUid()).thenReturn("instrumentId");
         when(event.getCandle()).thenReturn(candle1);
-        when(candleRepository.findBeforeOrEqual(anyString(), any(), anyLong())).thenReturn(List.of(candle1));
+        when(candleRepository.findBeforeOrEqual(anyLong(), any(), anyLong())).thenReturn(List.of(candle1));
         when(upsideCalculator.calculate(anyList())).thenReturn(new Upside(0.7, 1.0));
         when(broker.getMaxBuyQuantity("accountId", "instrumentId", OrderType.BEST_PRICE))
             .thenReturn(100L);
@@ -81,10 +82,11 @@ class BasicTradeStrategyTest {
     @Test
     void processesCandleAndExecutesSellWhenUpsideSignalFallsBelowThreshold() throws AbstractException {
         Candle candle1 = Candle.of(
-            Instant.parse("2023-01-01T00:00:00Z"), "instrumentId", 100L, 25
+            Instant.parse("2023-01-01T00:00:00Z"), 2L, 100L, 25
         );
+        when(event.getInstrumentUid()).thenReturn("instrumentId");
         when(event.getCandle()).thenReturn(candle1);
-        when(candleRepository.findBeforeOrEqual(anyString(), any(), anyLong())).thenReturn(List.of(candle1));
+        when(candleRepository.findBeforeOrEqual(anyLong(), any(), anyLong())).thenReturn(List.of(candle1));
         when(upsideCalculator.calculate(anyList())).thenReturn(new Upside(-0.6, 1.0));
         when(broker.getPositionSize("accountId", "instrumentId")).thenReturn(100L);
 
@@ -98,10 +100,12 @@ class BasicTradeStrategyTest {
     @Test
     void doesNotExecuteTradeWhenUpsideSignalIsWithinThresholds() {
         NewCandleEvent event1 = new NewCandleEvent(
-            Candle.of(Instant.parse("2023-01-01T00:00:00Z"), "instrumentId", 100L, 25)
+            "instrumentId",
+            Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 2L, 100L, 25)
         );
         NewCandleEvent event2 = new NewCandleEvent(
-            Candle.of(Instant.parse("2023-01-01T00:01:00Z"), "instrumentId", 100L, 26)
+            "instrumentId",
+            Candle.of(Instant.parse("2023-01-01T00:01:00Z"), 2L, 100L, 26)
         );
         when(upsideCalculator.calculate(anyList())).thenReturn(new Upside(0.0, 1.0));
 

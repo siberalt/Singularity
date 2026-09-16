@@ -36,15 +36,15 @@ public class CvsCandleRepositoryTest {
     @Test
     void testGetAt() throws IOException {
         var config = createTestConfig();
-        String instrumentUid = config.getInstrumentUid();
+        long instrumentId = config.getInstrumentId();
         String instrumentDataPath = config.getInstrumentDataPath();
         var candleStorageFactory = new CvsFileCandleRepositoryFactory();
 
-        try (var candleStorage = candleStorageFactory.create(instrumentUid, instrumentDataPath)) {
+        try (var candleStorage = candleStorageFactory.create(instrumentId, instrumentDataPath)) {
             // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-10T09:45:00Z;5.436;5.436;5.436;5.434;1588;
             assertCandleEquals(
                 new Candle(
-                    instrumentUid,
+                    instrumentId,
                     new TimePoint(Instant.parse("2020-12-10T09:45:00Z")),
                     Quotation.of(5.436),
                     Quotation.of(5.436),
@@ -52,13 +52,13 @@ public class CvsCandleRepositoryTest {
                     Quotation.of(5.434),
                     1588
                 ),
-                candleStorage.getAt(instrumentUid, Instant.parse("2020-12-10T09:45:00Z"))
+                candleStorage.getAt(instrumentId, Instant.parse("2020-12-10T09:45:00Z"))
             );
 
             // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-10T10:40:00Z;5.44;5.436;5.44;5.436;1750;
             assertCandleEquals(
                 new Candle(
-                    instrumentUid,
+                    instrumentId,
                     new TimePoint(Instant.parse("2020-12-10T10:40:00Z")),
                     Quotation.of(5.44),
                     Quotation.of(5.436),
@@ -66,13 +66,13 @@ public class CvsCandleRepositoryTest {
                     Quotation.of(5.436),
                     1750
                 ),
-                candleStorage.getAt(instrumentUid, Instant.parse("2020-12-10T10:40:00Z"))
+                candleStorage.getAt(instrumentId, Instant.parse("2020-12-10T10:40:00Z"))
             );
 
             // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-10T11:33:00Z;5.44;5.442;5.442;5.44;785;
             assertCandleEquals(
                 new Candle(
-                    instrumentUid,
+                    instrumentId,
                     new TimePoint(Instant.parse("2020-12-10T11:33:00Z")),
                     Quotation.of(5.44),
                     Quotation.of(5.442),
@@ -80,7 +80,7 @@ public class CvsCandleRepositoryTest {
                     Quotation.of(5.44),
                     785
                 ),
-                candleStorage.getAt(instrumentUid, Instant.parse("2020-12-10T11:33:00Z"))
+                candleStorage.getAt(instrumentId, Instant.parse("2020-12-10T11:33:00Z"))
             );
         }
     }
@@ -88,15 +88,15 @@ public class CvsCandleRepositoryTest {
     @Test
     void testGetPeriod() throws IOException {
         var config = createTestConfig();
-        String instrumentUid = config.getInstrumentUid();
+        long instrumentId = config.getInstrumentId();
         String instrumentDataPath = config.getInstrumentDataPath();
         var candleStorageFactory = new CvsFileCandleRepositoryFactory();
 
-        try (var candleStorage = candleStorageFactory.create(instrumentUid, instrumentDataPath)) {
+        try (var candleStorage = candleStorageFactory.create(instrumentId, instrumentDataPath)) {
             List<Candle> matchCandles = List.of(
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-09-02T07:00:00Z;4.97;4.968;4.97;4.948;255;
                 new Candle(
-                    instrumentUid,
+                    instrumentId,
                     new TimePoint(Instant.parse("2020-09-02T07:00:00Z")),
                     Quotation.of(4.97),
                     Quotation.of(4.968),
@@ -106,7 +106,7 @@ public class CvsCandleRepositoryTest {
                 ),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-09-02T07:11:00Z;4.968;4.968;4.968;4.966;8572;
                 new Candle(
-                    instrumentUid,
+                    instrumentId,
                     new TimePoint(Instant.parse("2020-09-02T07:11:00Z")),
                     Quotation.of(4.968),
                     Quotation.of(4.968),
@@ -116,7 +116,7 @@ public class CvsCandleRepositoryTest {
                 ),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-09-02T11:59:00Z;4.99;4.99;4.99;4.99;584;
                 new Candle(
-                    instrumentUid,
+                    instrumentId,
                     new TimePoint(Instant.parse("2020-09-02T11:59:00Z")),
                     Quotation.of(4.99),
                     Quotation.of(4.99),
@@ -126,7 +126,7 @@ public class CvsCandleRepositoryTest {
                 ),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-09-02T15:40:00Z;4.916;4.918;4.918;4.91;710;
                 new Candle(
-                    instrumentUid,
+                    instrumentId,
                     new TimePoint(Instant.parse("2020-09-02T15:40:00Z")),
                     Quotation.of(4.916),
                     Quotation.of(4.918),
@@ -141,7 +141,7 @@ public class CvsCandleRepositoryTest {
 
             assertPeriod(
                 candleStorage,
-                instrumentUid,
+                instrumentId,
                 Instant.parse("2020-09-02T07:00:00Z"),
                 Instant.parse("2020-09-02T15:40:00Z"),
                 matchCandles
@@ -150,7 +150,7 @@ public class CvsCandleRepositoryTest {
             matchCandles = List.of(
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-25T07:00:00Z;5.466;5.464;5.466;5.454;570;
                 new Candle(
-                    instrumentUid,
+                    instrumentId,
                     new TimePoint(Instant.parse("2020-12-25T07:00:00Z")),
                     Quotation.of(5.466),
                     Quotation.of(5.464),
@@ -160,7 +160,7 @@ public class CvsCandleRepositoryTest {
                 ),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-25T08:11:00Z;5.454;5.452;5.454;5.452;4373;
                 new Candle(
-                    instrumentUid,
+                    instrumentId,
                     new TimePoint(Instant.parse("2020-12-25T08:11:00Z")),
                     Quotation.of(5.454),
                     Quotation.of(5.452),
@@ -170,7 +170,7 @@ public class CvsCandleRepositoryTest {
                 ),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-25T09:41:00Z;5.454;5.454;5.454;5.454;104;
                 new Candle(
-                    instrumentUid,
+                    instrumentId,
                     new TimePoint(Instant.parse("2020-12-25T09:41:00Z")),
                     Quotation.of(5.454),
                     Quotation.of(5.454),
@@ -180,7 +180,7 @@ public class CvsCandleRepositoryTest {
                 ),
                 // 9654c2dd-6993-427e-80fa-04e80a1cf4da;2020-12-25T15:44:00Z;5.48;5.482;5.482;5.48;343;
                 new Candle(
-                    instrumentUid,
+                    instrumentId,
                     new TimePoint(Instant.parse("2020-12-25T15:44:00Z")),
                     Quotation.of(5.48),
                     Quotation.of(5.482),
@@ -195,7 +195,7 @@ public class CvsCandleRepositoryTest {
 
             assertPeriod(
                 candleStorage,
-                instrumentUid,
+                instrumentId,
                 Instant.parse("2020-12-25T07:00:00Z"),
                 Instant.parse("2020-12-25T15:44:00Z"),
                 matchCandles
@@ -208,14 +208,14 @@ public class CvsCandleRepositoryTest {
     @Test
     void testGetRangeMetadata() throws IOException {
         var config = createTestConfig();
-        String instrumentUid = config.getInstrumentUid();
+        long instrumentId = config.getInstrumentId();
         String instrumentDataPath = config.getInstrumentDataPath();
         var candleStorageFactory = new CvsFileCandleRepositoryFactory();
 
-        try (var candleStorage = candleStorageFactory.create(instrumentUid, instrumentDataPath)) {
+        try (var candleStorage = candleStorageFactory.create(instrumentId, instrumentDataPath)) {
             // Test existing range
             CandleRangeMetadata metadata = candleStorage.getRangeMetadata(
-                instrumentUid,
+                instrumentId,
                 Instant.parse("2020-09-02T07:00:00Z"),
                 Instant.parse("2020-09-02T15:40:00Z")
             );
@@ -229,7 +229,7 @@ public class CvsCandleRepositoryTest {
 
             // Verify count matches actual candles
             List<Candle> candles = candleStorage.getPeriod(
-                instrumentUid,
+                instrumentId,
                 Instant.parse("2020-09-02T07:00:00Z"),
                 Instant.parse("2020-09-02T15:40:00Z")
             );
@@ -237,7 +237,7 @@ public class CvsCandleRepositoryTest {
 
             // Test empty range (non-existent instrument)
             CandleRangeMetadata emptyMetadata = candleStorage.getRangeMetadata(
-                "NONEXISTENT",
+                instrumentId + 1,
                 Instant.parse("2020-09-02T07:00:00Z"),
                 Instant.parse("2020-09-02T15:40:00Z")
             );
@@ -247,7 +247,7 @@ public class CvsCandleRepositoryTest {
 
             // Test range with no candles
             CandleRangeMetadata noCandlesMetadata = candleStorage.getRangeMetadata(
-                instrumentUid,
+                instrumentId,
                 Instant.parse("2099-01-01T00:00:00Z"),
                 Instant.parse("2099-12-31T23:59:59Z")
             );
@@ -260,15 +260,15 @@ public class CvsCandleRepositoryTest {
     @Test
     void testFindByPrice() throws IOException {
         var config = createTestConfig();
-        String instrumentUid = config.getInstrumentUid();
+        long instrumentId = config.getInstrumentId();
         String instrumentDataPath = config.getInstrumentDataPath();
         var candleStorageFactory = new CvsFileCandleRepositoryFactory();
 
-        try (var candleStorage = candleStorageFactory.create(instrumentUid, instrumentDataPath)) {
+        try (var candleStorage = candleStorageFactory.create(instrumentId, instrumentDataPath)) {
             assertFindByPrice(
                 candleStorage,
+                instrumentId,
                 new FindPriceParams(
-                    instrumentUid,
                     Instant.parse("2020-09-07T07:06:00Z"),
                     Instant.parse("2020-09-07T15:40:00Z"),
                     Quotation.of(4.89),
@@ -279,8 +279,8 @@ public class CvsCandleRepositoryTest {
 
             assertFindByPrice(
                 candleStorage,
+                instrumentId,
                 new FindPriceParams(
-                    instrumentUid,
                     Instant.parse("2020-12-30T07:00:00Z"),
                     Instant.parse("2020-12-30T15:44:00Z"),
                     Quotation.of(4.89),
@@ -291,8 +291,8 @@ public class CvsCandleRepositoryTest {
 
             assertFindByPrice(
                 candleStorage,
+                instrumentId,
                 new FindPriceParams(
-                    instrumentUid,
                     Instant.parse("2020-12-30T07:00:00Z"),
                     Instant.parse("2020-12-30T15:44:00Z"),
                     Quotation.of(5.55),
@@ -305,8 +305,8 @@ public class CvsCandleRepositoryTest {
             // "the market reached this level" actually asks.
             assertFindByPrice(
                 candleStorage,
+                instrumentId,
                 new FindPriceParams(
-                    instrumentUid,
                     Instant.parse("2020-09-07T07:06:00Z"),
                     Instant.parse("2020-09-07T15:40:00Z"),
                     Quotation.of(4.89),
@@ -318,8 +318,8 @@ public class CvsCandleRepositoryTest {
 
             assertFindByPrice(
                 candleStorage,
+                instrumentId,
                 new FindPriceParams(
-                    instrumentUid,
                     Instant.parse("2020-09-07T07:06:00Z"),
                     Instant.parse("2020-09-07T15:40:00Z"),
                     Quotation.of(4.89),
@@ -334,15 +334,15 @@ public class CvsCandleRepositoryTest {
     CvsTestConfig createTestConfig() throws IOException {
         try (var configurationStream = Files.newInputStream(Paths.get(SETTINGS_PATH))) {
             ConfigInterface configuration = new YamlConfig(configurationStream);
-            String instrumentUid = (String) configuration.get("instrumentUid");
+            long instrumentId = ((Number) configuration.get("instrumentId")).longValue();
             String instrumentDataPath = (String) configuration.get("instrumentDataPath");
 
-            return new CvsTestConfig(instrumentUid, instrumentDataPath);
+            return new CvsTestConfig(instrumentId, instrumentDataPath);
         }
     }
 
-    void assertFindByPrice(CvsCandleRepository candleStorage, FindPriceParams findPriceParams) {
-        List<Candle> candles = candleStorage.findByPrice(findPriceParams);
+    void assertFindByPrice(CvsCandleRepository candleStorage, long instrumentId, FindPriceParams findPriceParams) {
+        List<Candle> candles = candleStorage.findByPrice(instrumentId, findPriceParams);
 
         int totalCount = 0;
         long prevIndex = -1;
@@ -373,7 +373,7 @@ public class CvsCandleRepositoryTest {
 
     void assertPeriod(
         CvsCandleRepository candleStorage,
-        String instrumentUid,
+        long instrumentId,
         Instant from,
         Instant to,
         List<Candle> matchCandles
@@ -389,7 +389,7 @@ public class CvsCandleRepositoryTest {
         long prevIndex = -1;
         TimeOrderAsserter timeOrderAsserter = new TimeOrderAsserter();
 
-        for (var candle : candleStorage.getPeriod(instrumentUid, from, to)) {
+        for (var candle : candleStorage.getPeriod(instrumentId, from, to)) {
             timeOrderAsserter.assertTime(candle.getTime());
 
             // Assert index increment
@@ -419,7 +419,7 @@ public class CvsCandleRepositoryTest {
     }
 
     void assertCandleEquals(Candle actual, Candle expected) {
-        Assertions.assertEquals(actual.instrumentUid(), expected.instrumentUid());
+        Assertions.assertEquals(actual.instrumentId(), expected.instrumentId());
         Assertions.assertEquals(actual.getTime(), expected.getTime());
         Assertions.assertEquals(actual.open(), expected.open());
         Assertions.assertEquals(actual.close(), expected.close());

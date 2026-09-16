@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LimitedExtremeRangeRepositoryTest {
-    private static final String INSTRUMENT = "instrument1";
+    private static final long INSTRUMENT = 1;
     private static final String TYPE = "DEFAULT";
 
     private final ExtremeRangeRepository delegate = new RuntimeExtremeRangeRepository();
@@ -107,7 +107,7 @@ class LimitedExtremeRangeRepositoryTest {
         cache(repository, outer(0, 9), inner(0, 9));
         cache(repository, outer(100, 109), inner(100, 109));
         repository.saveBatch(List.of(
-            new ExtremeRange(0, 19, "instrument2", TYPE, RangeType.OUTER)
+            new ExtremeRange(0, 19, 2L, TYPE, RangeType.OUTER)
         ));
 
         assertEquals(List.of(outer(0, 9), outer(100, 109)), heldOuterRanges(repository));

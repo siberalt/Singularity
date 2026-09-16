@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CandleSeriesTest {
-    private final CandleFactory candleFactory = new CandleFactory("EURUSD");
+    private final CandleFactory candleFactory = new CandleFactory(1L);
 
     @Test
     void provideReturnsEmptyWhenNoCandles() {

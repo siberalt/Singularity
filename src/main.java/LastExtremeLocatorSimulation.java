@@ -15,6 +15,8 @@ import java.time.Instant;
 import java.util.List;
 
 public class LastExtremeLocatorSimulation {
+    // Our id for TMOS - what its candles are kept under.
+    private static final long TMOS = 2;
     public static void main(String[] args) throws IOException {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
@@ -27,7 +29,7 @@ public class LastExtremeLocatorSimulation {
             ConfigFacade.of(configuration).getAsString("dbPath")
         );
 
-        List<Candle> candles = sqliteCandleRepository.getPeriod("TMOS", startTime, endTime);
+        List<Candle> candles = sqliteCandleRepository.getPeriod(TMOS, startTime, endTime);
         LastExtremeLocator minExtremeLocator = LastExtremeLocator.ofMinimums(
             50, 1, Candle::getTypicalAsDouble
         );
@@ -66,7 +68,7 @@ public class LastExtremeLocatorSimulation {
 
         PriceChart priceChart = new PriceChart(
             sqliteCandleRepository,
-            "TMOS",
+            TMOS,
             Candle::getTypicalAsDouble
         );
         priceChart.addSeriesProvider(minPoints);

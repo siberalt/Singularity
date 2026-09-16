@@ -4,6 +4,7 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.broker.contract.simulation.SimulationBroker;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.entity.instrument.InstrumentIdResolver;
 import com.siberalt.singularity.entity.operation.OperationRepository;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.simulation.SimulationClock;
@@ -27,11 +28,14 @@ public class EffectivenessAnalyzer<B extends SimulationBroker> {
     private final String instrumentId;
     private final Money initialInvestment;
     private final ReadCandleRepository candleRepository;
+    private final InstrumentIdResolver instrumentIds;
     private final SimulationBrokerFactory<B> brokerFactory;
     private final OrderRepository orderRepository;
     private final OperationRepository operationRepository;
 
     /**
+     * @param instrumentIds      how the uid the instrument is traded by maps to the id its candles are
+     *                           kept under - the benchmark reads its buy and sell moments from them
      * @param brokerFactory      how a broker for one run is built - used for the strategy's own and
      *                           for the benchmark's, which is what makes the two comparable
      * @param orderRepository    where the strategy's run writes its orders, passed in rather than
@@ -43,6 +47,7 @@ public class EffectivenessAnalyzer<B extends SimulationBroker> {
         String instrumentId,
         Money initialInvestment,
         ReadCandleRepository candleRepository,
+        InstrumentIdResolver instrumentIds,
         SimulationBrokerFactory<B> brokerFactory,
         OrderRepository orderRepository,
         OperationRepository operationRepository
@@ -51,6 +56,7 @@ public class EffectivenessAnalyzer<B extends SimulationBroker> {
         this.instrumentId = instrumentId;
         this.initialInvestment = initialInvestment;
         this.candleRepository = candleRepository;
+        this.instrumentIds = instrumentIds;
         this.brokerFactory = brokerFactory;
         this.orderRepository = orderRepository;
         this.operationRepository = operationRepository;
@@ -72,6 +78,7 @@ public class EffectivenessAnalyzer<B extends SimulationBroker> {
         ConservativeStrategyRunner conservativeRunner = new ConservativeStrategyRunner(
             instrumentId,
             candleRepository,
+            instrumentIds,
             brokerFactory,
             initialInvestment
         );

@@ -18,7 +18,7 @@ public class RangeLimitedCandleRepository implements ReadCandleRepository {
     }
 
     @Override
-    public Optional<Candle> getAt(String instrumentUid, Instant at) {
+    public Optional<Candle> getAt(long instrumentId, Instant at) {
         TimeRange timeRange = timeRangeSupplier.get();
         Instant from = timeRange.from();
         Instant to = timeRange.to();
@@ -26,30 +26,30 @@ public class RangeLimitedCandleRepository implements ReadCandleRepository {
         if (at.isBefore(from) || at.isAfter(to)) {
             return Optional.empty();
         }
-        return delegate.getAt(instrumentUid, at);
+        return delegate.getAt(instrumentId, at);
     }
 
     @Override
-    public List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore) {
+    public List<Candle> findBeforeOrEqual(long instrumentId, Instant at, long amountBefore) {
         TimeRange timeRange = timeRangeSupplier.get();
         Instant from = timeRange.from();
 
         if (at.isBefore(from)) {
             return Collections.emptyList();
         }
-        return delegate.findBeforeOrEqual(instrumentUid, at, amountBefore)
+        return delegate.findBeforeOrEqual(instrumentId, at, amountBefore)
             .stream()
             .filter(candle -> !candle.getTime().isBefore(from))
             .toList();
     }
 
     @Override
-    public List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter) {
+    public List<Candle> findAfterOrEqual(long instrumentId, Instant at, long amountAfter) {
         return List.of();
     }
 
     @Override
-    public List<Candle> getPeriod(String instrumentUid, Instant from, Instant to) {
+    public List<Candle> getPeriod(long instrumentId, Instant from, Instant to) {
         TimeRange timeRange = timeRangeSupplier.get();
         Instant rangeFrom = timeRange.from();
         Instant rangeTo = timeRange.to();
@@ -60,11 +60,11 @@ public class RangeLimitedCandleRepository implements ReadCandleRepository {
         if (adjustedFrom.isAfter(adjustedTo)) {
             return List.of();
         }
-        return delegate.getPeriod(instrumentUid, adjustedFrom, adjustedTo);
+        return delegate.getPeriod(instrumentId, adjustedFrom, adjustedTo);
     }
 
     @Override
-    public List<Candle> findByPrice(FindPriceParams params) {
+    public List<Candle> findByPrice(long instrumentId, FindPriceParams params) {
         TimeRange timeRange = timeRangeSupplier.get();
         Instant rangeFrom = timeRange.from();
         Instant rangeTo = timeRange.to();
@@ -76,11 +76,11 @@ public class RangeLimitedCandleRepository implements ReadCandleRepository {
         Instant adjustedFrom = params.from().isBefore(rangeFrom) ? rangeFrom : params.from();
         Instant adjustedTo = params.to().isAfter(rangeTo) ? rangeTo : params.to();
 
-        return delegate.findByPrice(params.withRange(adjustedFrom, adjustedTo));
+        return delegate.findByPrice(instrumentId, params.withRange(adjustedFrom, adjustedTo));
     }
 
     @Override
-    public CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to) {
+    public CandleRangeMetadata getRangeMetadata(long instrumentId, Instant from, Instant to) {
         TimeRange timeRange = timeRangeSupplier.get();
         Instant rangeFrom = timeRange.from();
         Instant rangeTo = timeRange.to();
@@ -92,6 +92,6 @@ public class RangeLimitedCandleRepository implements ReadCandleRepository {
             return CandleRangeMetadata.EMPTY;
         }
 
-        return delegate.getRangeMetadata(instrumentUid, adjustedFrom, adjustedTo);
+        return delegate.getRangeMetadata(instrumentId, adjustedFrom, adjustedTo);
     }
 }

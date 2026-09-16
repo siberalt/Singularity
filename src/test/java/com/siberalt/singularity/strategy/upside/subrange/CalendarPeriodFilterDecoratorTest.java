@@ -23,7 +23,7 @@ class CalendarPeriodFilterDecoratorTest {
      */
     @Test
     void should_FilterOnlyLast2Days() {
-        CandleFactory candleFactory = new CandleFactory("TEST");
+        CandleFactory candleFactory = new CandleFactory(1L);
         List<Candle> candles = List.of(
             candleFactory.createCommon("2024-01-01T00:00:00Z", 100),
             candleFactory.createCommon("2024-01-01T00:01:00Z", 100),
@@ -44,7 +44,7 @@ class CalendarPeriodFilterDecoratorTest {
      */
     @Test
     void should_FilterLastMonth() {
-        CandleFactory candleFactory = new CandleFactory("TEST");
+        CandleFactory candleFactory = new CandleFactory(1L);
         List<Candle> candles = List.of(
             candleFactory.createCommon("2024-01-01T00:00:00Z", 100),
             candleFactory.createCommon("2024-01-01T00:01:00Z", 100),
@@ -99,7 +99,7 @@ class CalendarPeriodFilterDecoratorTest {
      */
     @Test
     void should_HandleZeroPeriod() {
-        CandleFactory candleFactory = new CandleFactory("TEST");
+        CandleFactory candleFactory = new CandleFactory(1L);
         List<Candle> candles = List.of(
             candleFactory.createCommon("2024-01-01T00:00:00Z", 100),
             candleFactory.createCommon("2024-01-01T00:01:00Z", 100),

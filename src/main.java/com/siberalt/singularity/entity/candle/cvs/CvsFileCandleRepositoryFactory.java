@@ -14,7 +14,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 public class CvsFileCandleRepositoryFactory implements Factory {
-    public CvsCandleRepository create(String instrumentUid, String filesDir) {
+    public CvsCandleRepository create(long instrumentId, String filesDir) {
         File[] files = new File(filesDir).listFiles();
 
         if (null == files) {
@@ -51,14 +51,14 @@ public class CvsFileCandleRepositoryFactory implements Factory {
             throw new RuntimeException(e);
         }
 
-        return new CvsCandleRepository(instrumentUid, inputStream);
+        return new CvsCandleRepository(instrumentId, inputStream);
     }
 
     @Override
     public CvsCandleRepository create(ServiceDetails serviceDetails, DependencyManager dependencyManager) {
         String filesDir = (String) serviceDetails.config().get("filesDir");
-        var instrumentUid = (String) serviceDetails.config().get("instrumentUid");
+        long instrumentId = ((Number) serviceDetails.config().get("instrumentId")).longValue();
 
-        return create(instrumentUid, filesDir);
+        return create(instrumentId, filesDir);
     }
 }

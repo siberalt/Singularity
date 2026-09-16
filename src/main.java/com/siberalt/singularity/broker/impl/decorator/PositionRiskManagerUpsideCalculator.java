@@ -59,6 +59,7 @@ public class PositionRiskManagerUpsideCalculator implements UpsideCalculator {
      */
     public PositionRiskManagerUpsideCalculator(
         String accountId,
+        String instrumentUid,
         EntryPriceCalculator entryPriceCalculator,
         VolatilityCalculator volatilityCalculator,
         ExtremeLocator maxLocator,
@@ -66,19 +67,20 @@ public class PositionRiskManagerUpsideCalculator implements UpsideCalculator {
         PriceExtractor priceExtractor
     ) {
         this(new PositionRiskCoefficient(
-            accountId, entryPriceCalculator, volatilityCalculator, maxLocator, minLocator, priceExtractor));
+            accountId, instrumentUid, entryPriceCalculator, volatilityCalculator, maxLocator, minLocator, priceExtractor));
     }
 
     /** Defaults: an ATR of fourteen at a multiplier of one, close prices, extremes over a vicinity of three. */
-    public PositionRiskManagerUpsideCalculator(String accountId, EntryPriceCalculator entryPriceCalculator) {
-        this(new PositionRiskCoefficient(accountId, entryPriceCalculator));
+    public PositionRiskManagerUpsideCalculator(String accountId, String instrumentUid, EntryPriceCalculator entryPriceCalculator) {
+        this(new PositionRiskCoefficient(accountId, instrumentUid, entryPriceCalculator));
     }
 
     public PositionRiskManagerUpsideCalculator(String accountId,
+                                               String instrumentUid,
                                                EntryPriceCalculator entryPriceCalculator,
                                                VolatilityCalculator volatilityCalculator
     ) {
-        this(new PositionRiskCoefficient(accountId, entryPriceCalculator, volatilityCalculator));
+        this(new PositionRiskCoefficient(accountId, instrumentUid, entryPriceCalculator, volatilityCalculator));
     }
 
     /**
@@ -95,7 +97,7 @@ public class PositionRiskManagerUpsideCalculator implements UpsideCalculator {
             return Upside.NEUTRAL;
         }
 
-        EntryPrice position = coefficient.positionIn(lastCandles);
+        EntryPrice position = coefficient.position();
 
         if (position.isEmpty() || position.quantity() == 0) {
             return Upside.NEUTRAL;

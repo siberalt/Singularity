@@ -6,6 +6,7 @@ import com.siberalt.singularity.broker.impl.mock.factory.MockServiceContext;
 import com.siberalt.singularity.broker.impl.mock.factory.MockServices;
 import com.siberalt.singularity.broker.impl.mock.factory.MockServicesFactory;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.entity.instrument.InstrumentIdResolver;
 import com.siberalt.singularity.entity.instrument.ReadInstrumentRepository;
 import com.siberalt.singularity.entity.operation.OperationRepository;
 import com.siberalt.singularity.entity.order.OrderRepository;
@@ -25,8 +26,13 @@ public class MockBroker implements SandboxServiceAwareBroker
     protected MockSandboxService sandboxService;
     protected String id;
 
+    /**
+     * @param instrumentIds how the uids this broker is asked by map to the instrument ids the candles
+     *                      are stored under
+     */
     public MockBroker(
         ReadCandleRepository candleRepository,
+        InstrumentIdResolver instrumentIds,
         ReadInstrumentRepository instrumentStorage,
         OrderRepository orderRepository,
         OperationRepository operationRepository,
@@ -39,7 +45,7 @@ public class MockBroker implements SandboxServiceAwareBroker
         this.id = id;
 
         MockServices services = servicesFactory.create(
-            new MockServiceContext(clock, id, candleRepository, instrumentStorage, orderRepository, operationRepository, commissionRatio)
+            new MockServiceContext(clock, id, candleRepository, instrumentIds, instrumentStorage, orderRepository, operationRepository, commissionRatio)
         );
 
         instrumentService = services.instrumentService();
@@ -52,6 +58,7 @@ public class MockBroker implements SandboxServiceAwareBroker
 
     public MockBroker(
         ReadCandleRepository candleRepository,
+        InstrumentIdResolver instrumentIds,
         ReadInstrumentRepository instrumentStorage,
         OrderRepository orderRepository,
         OperationRepository operationRepository,
@@ -59,17 +66,18 @@ public class MockBroker implements SandboxServiceAwareBroker
         double commissionRatio,
         String id
     ) {
-        this(candleRepository, instrumentStorage, orderRepository, operationRepository, clock, commissionRatio, id, new MockServicesFactory());
+        this(candleRepository, instrumentIds, instrumentStorage, orderRepository, operationRepository, clock, commissionRatio, id, new MockServicesFactory());
     }
 
     public MockBroker(
         ReadCandleRepository candleRepository,
+        InstrumentIdResolver instrumentIds,
         ReadInstrumentRepository instrumentStorage,
         OrderRepository orderRepository,
         OperationRepository operationRepository,
         Clock clock
     ) {
-        this(candleRepository, instrumentStorage, orderRepository, operationRepository, clock, DEFAULT_COMMISSION_RATIO, DEFAULT_ID);
+        this(candleRepository, instrumentIds, instrumentStorage, orderRepository, operationRepository, clock, DEFAULT_COMMISSION_RATIO, DEFAULT_ID);
     }
 
     @Override

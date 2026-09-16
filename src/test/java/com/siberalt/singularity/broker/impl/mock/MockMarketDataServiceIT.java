@@ -33,6 +33,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class MockMarketDataServiceIT {
+    // The file holds one instrument; its candles answer to this id whatever the broker calls it.
+    private static final long INSTRUMENT_ID = 1;
     private MockMarketDataService marketDataService;
     private MockBroker broker;
     private ResourceHandler<CvsCandleRepository> storageHandler;
@@ -54,13 +56,13 @@ class MockMarketDataServiceIT {
 
         storageHandler = ResourceHandler.newHandler(() ->
             new CvsFileCandleRepositoryFactory().create(
-                config.getInstrument().getUid(),
+                INSTRUMENT_ID,
                 config.getInstrument().getDataPath()
             )
         );
 
         clock = new SimpleSimulationClock();
-        broker = new MockBroker(storageHandler.create(), instrumentRepository, null, null, clock);
+        broker = new MockBroker(storageHandler.create(), uid -> java.util.OptionalLong.of(INSTRUMENT_ID), instrumentRepository, null, null, clock);
         marketDataService = broker.getMarketDataService();
     }
 
@@ -252,14 +254,13 @@ class MockMarketDataServiceIT {
          */
         clock.syncCurrentTime(Instant.parse("2020-12-30T14:25:00Z"));
         FindPriceParams params = new FindPriceParams(
-            config.getInstrument().getUid(),
             Instant.parse("2020-12-30T14:25:00Z"),
             Instant.parse("2020-12-30T14:45:00Z"),
             Quotation.of(5.554),
             ComparisonOperator.MORE,
             4
         );
-        List<Candle> result = marketDataService.findByPrice(CandleInterval.MIN_1, params);
+        List<Candle> result = marketDataService.findByPrice(CandleInterval.MIN_1, config.getInstrument().getUid(), params);
 
         assertNotNull(result);
         assertEquals(4, result.size());
@@ -348,7 +349,7 @@ class MockMarketDataServiceIT {
         Instant from,
         Instant to
     ) {
-        var uniteCandles = new ArrayList<>(marketDataService.candleRepository.getPeriod(instrumentUid, from, to));
+        var uniteCandles = new ArrayList<>(marketDataService.candleRepository.getPeriod(INSTRUMENT_ID, from, to));
 
         uniteCandles.removeLast();
         assertTrue(uniteCandles.size() <= assertInterval.getDuration().toMinutes());

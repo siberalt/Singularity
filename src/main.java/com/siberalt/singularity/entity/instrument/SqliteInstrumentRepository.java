@@ -80,6 +80,29 @@ public class SqliteInstrumentRepository implements InstrumentRepository, Instrum
         }
     }
 
+    /**
+     * What this broker calls the instrument with our id - the other way round from {@link #idOf}.
+     * Candles are migrated by our id, and a broker can only be asked for them by its own name.
+     * <p>
+     * It lives here rather than on {@link ReadInstrumentRepository} for the same reason
+     * {@link InstrumentIdResolver} does: an in-memory store of broker instruments has no ids of ours
+     * to look anything up by.
+     */
+    public Optional<String> brokerInstrumentIdOf(String brokerId, long instrumentId) {
+        String sql = "SELECT broker_instrument_id FROM instrument_broker_listing WHERE broker_id = ? AND instrument_id = ?";
+
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, brokerId);
+            statement.setLong(2, instrumentId);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? Optional.of(resultSet.getString(1)) : Optional.empty();
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Не удалось найти листинг инструмента " + instrumentId + " у брокера " + brokerId, e);
+        }
+    }
+
     @Override
     public void save(String brokerId, Instrument instrument) {
         if (brokerId == null || instrument == null || instrument.getUid() == null) {

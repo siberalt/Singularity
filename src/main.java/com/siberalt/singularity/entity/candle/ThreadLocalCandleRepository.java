@@ -42,32 +42,32 @@ public class ThreadLocalCandleRepository implements ReadCandleRepository {
     }
 
     @Override
-    public Optional<Candle> getAt(String instrumentUid, Instant at) {
-        return repository().getAt(instrumentUid, at);
+    public Optional<Candle> getAt(long instrumentId, Instant at) {
+        return repository().getAt(instrumentId, at);
     }
 
     @Override
-    public List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore) {
-        return repository().findBeforeOrEqual(instrumentUid, at, amountBefore);
+    public List<Candle> findBeforeOrEqual(long instrumentId, Instant at, long amountBefore) {
+        return repository().findBeforeOrEqual(instrumentId, at, amountBefore);
     }
 
     @Override
-    public List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter) {
-        return repository().findAfterOrEqual(instrumentUid, at, amountAfter);
+    public List<Candle> findAfterOrEqual(long instrumentId, Instant at, long amountAfter) {
+        return repository().findAfterOrEqual(instrumentId, at, amountAfter);
     }
 
     @Override
-    public List<Candle> findByPrice(FindPriceParams params) {
-        return repository().findByPrice(params);
+    public List<Candle> findByPrice(long instrumentId, FindPriceParams params) {
+        return repository().findByPrice(instrumentId, params);
     }
 
     @Override
-    public List<Candle> getPeriod(String instrumentUid, Instant from, Instant to) {
-        return repository().getPeriod(instrumentUid, from, to);
+    public List<Candle> getPeriod(long instrumentId, Instant from, Instant to) {
+        return repository().getPeriod(instrumentId, from, to);
     }
 
     @Override
-    public CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to) {
-        return repository().getRangeMetadata(instrumentUid, from, to);
+    public CandleRangeMetadata getRangeMetadata(long instrumentId, Instant from, Instant to) {
+        return repository().getRangeMetadata(instrumentId, from, to);
     }
 }

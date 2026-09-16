@@ -6,17 +6,17 @@ import java.time.Instant;
 import java.util.HashMap;
 
 public class CandleFactory {
-    String instrumentUid;
+    long instrumentId;
     long startIndex = 0;
     HashMap<Instant, Candle> candleCache = new HashMap<>();
 
-    public CandleFactory(String instrumentUid, long startIndex) {
-        this.instrumentUid = instrumentUid;
+    public CandleFactory(long instrumentId, long startIndex) {
+        this.instrumentId = instrumentId;
         this.startIndex = startIndex;
     }
 
-    public CandleFactory(String instrumentUid) {
-        this.instrumentUid = instrumentUid;
+    public CandleFactory(long instrumentId) {
+        this.instrumentId = instrumentId;
     }
 
     public Candle createCommon(Instant time, long volume, double commonValue) {
@@ -81,7 +81,7 @@ public class CandleFactory {
         long volume
     ) {
         return new Candle(
-            instrumentUid,
+            instrumentId,
             new TimePoint(startIndex++),
             openPrice,
             closePrice,
@@ -112,7 +112,7 @@ public class CandleFactory {
         }
 
         candle = new Candle(
-            instrumentUid,
+            instrumentId,
             new TimePoint(startIndex++, time),
             openPrice,
             closePrice,
@@ -148,7 +148,7 @@ public class CandleFactory {
         }
 
         candle = new Candle(
-            instrumentUid,
+            instrumentId,
             new TimePoint(startIndex++, time),
             openPrice,
             closePrice,

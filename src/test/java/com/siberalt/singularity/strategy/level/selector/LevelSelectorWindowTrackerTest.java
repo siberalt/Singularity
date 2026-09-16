@@ -16,7 +16,7 @@ import static org.mockito.Mockito.*;
 class LevelSelectorWindowTrackerTest {
     private LevelPairSelector baseSelectorMock;
     private LevelPairSelectorWindowTracker tracker;
-    private final CandleFactory candleFactory = new CandleFactory("TEST");
+    private final CandleFactory candleFactory = new CandleFactory(1L);
 
     @BeforeEach
     void setUp() {

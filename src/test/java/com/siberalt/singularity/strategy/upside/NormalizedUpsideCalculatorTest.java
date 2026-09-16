@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class NormalizedUpsideCalculatorTest {
     private static final Instant AT = Instant.parse("2021-06-03T10:00:00Z");
     private static final List<Candle> ANY_CANDLES = List.of(new Candle(
-        "TEST", new TimePoint(AT), Quotation.of(1), Quotation.of(1), Quotation.of(1), Quotation.of(1), 1
+        1L, new TimePoint(AT), Quotation.of(1), Quotation.of(1), Quotation.of(1), Quotation.of(1), 1
     ));
 
     private double next;

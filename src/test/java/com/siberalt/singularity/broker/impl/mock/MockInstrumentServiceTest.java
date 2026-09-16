@@ -33,7 +33,7 @@ public class MockInstrumentServiceTest {
                 .setUid(instrumentUid)
         );
 
-        var mockBroker = new MockBroker(null, instrumentRepository, null, null, new ClockStub());
+        var mockBroker = new MockBroker(null, uid -> java.util.OptionalLong.empty(), instrumentRepository, null, null, new ClockStub());
         var instrumentService = mockBroker.getInstrumentService();
 
         var response = instrumentService.get(GetRequest.of(instrumentUid));
@@ -75,7 +75,7 @@ public class MockInstrumentServiceTest {
                 .setUid(usdInstrumentUid)
         );
 
-        var mockBroker = new MockBroker(null, instrumentRepository, null, null, new ClockStub());
+        var mockBroker = new MockBroker(null, uid -> java.util.OptionalLong.empty(), instrumentRepository, null, null, new ClockStub());
         var instrumentService = mockBroker.getInstrumentService();
 
         var response = instrumentService.getTradable(GetTradableRequest.of("rub"));
@@ -106,7 +106,7 @@ public class MockInstrumentServiceTest {
                 .setUid(UUID.randomUUID().toString())
         );
 
-        var mockBroker = new MockBroker(null, instrumentRepository, null, null, new ClockStub());
+        var mockBroker = new MockBroker(null, uid -> java.util.OptionalLong.empty(), instrumentRepository, null, null, new ClockStub());
         var instrumentService = mockBroker.getInstrumentService();
 
         var response = instrumentService.getTradable(new GetTradableRequest());

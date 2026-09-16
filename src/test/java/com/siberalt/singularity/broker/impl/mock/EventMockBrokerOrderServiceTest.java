@@ -51,6 +51,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
     @Override
     MockBroker createBroker(
         ReadCandleRepository candleStorage,
+        com.siberalt.singularity.entity.instrument.InstrumentIdResolver instrumentIds,
         ReadInstrumentRepository instrumentStorage,
         OrderRepository orderRepository,
         OperationRepository operationRepository,
@@ -62,6 +63,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         // simulation and not about the order service. Latency itself is covered by its own test.
         EventMockBroker broker = new EventMockBroker(
             candleStorage,
+            instrumentIds,
             instrumentStorage,
             orderRepository,
             operationRepository,
@@ -84,7 +86,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         );
 
         addMoney(validCandle.open().multiply(100));
-        when(candleStorage.findByPrice(any())).thenReturn(List.of(buySignalCandle));
+        when(candleStorage.findByPrice(anyLong(), any())).thenReturn(List.of(buySignalCandle));
 
         assertBuyParked(validCandle, 10, Quotation.of(9));
     }
@@ -117,7 +119,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         );
 
         addInstruments(80);
-        when(candleStorage.findByPrice(any())).thenReturn(List.of(sellSignalCandle));
+        when(candleStorage.findByPrice(anyLong(), any())).thenReturn(List.of(sellSignalCandle));
 
         assertSellParked(validCandle, 10, Quotation.of(11));
     }
@@ -151,13 +153,14 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         );
 
         addMoney(marketCandle.open().multiply(1000));
-        when(candleStorage.findByPrice(any())).thenReturn(List.of());
+        when(candleStorage.findByPrice(anyLong(), any())).thenReturn(List.of());
         stubLastCandleOfLifeTime(marketCandle);
 
         assertBuyParked(marketCandle, 10, Quotation.of(9));
 
         verify(candleStorage).findByPrice(
-            priceSearch(Quotation.of(9), CandlePriceField.LOW, ComparisonOperator.LESS_OR_EQUAL)
+            eq(idOf(config.getInstrument().getUid())),
+            eq(priceSearch(Quotation.of(9), CandlePriceField.LOW, ComparisonOperator.LESS_OR_EQUAL))
         );
     }
 
@@ -168,13 +171,14 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         );
 
         addInstruments(80);
-        when(candleStorage.findByPrice(any())).thenReturn(List.of());
+        when(candleStorage.findByPrice(anyLong(), any())).thenReturn(List.of());
         stubLastCandleOfLifeTime(marketCandle);
 
         assertSellParked(marketCandle, 10, Quotation.of(11));
 
         verify(candleStorage).findByPrice(
-            priceSearch(Quotation.of(11), CandlePriceField.HIGH, ComparisonOperator.MORE_OR_EQUAL)
+            eq(idOf(config.getInstrument().getUid())),
+            eq(priceSearch(Quotation.of(11), CandlePriceField.HIGH, ComparisonOperator.MORE_OR_EQUAL))
         );
     }
 
@@ -189,7 +193,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         );
 
         addMoney(marketCandle.open().multiply(1000));
-        when(candleStorage.findByPrice(any())).thenReturn(List.of(triggerCandle));
+        when(candleStorage.findByPrice(anyLong(), any())).thenReturn(List.of(triggerCandle));
 
         PostOrderResponse parked = assertBuyParked(marketCandle, 10, Quotation.of(9));
 
@@ -211,7 +215,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         );
 
         addMoney(marketCandle.open().multiply(1000));
-        when(candleStorage.findByPrice(any())).thenReturn(List.of(triggerCandle));
+        when(candleStorage.findByPrice(anyLong(), any())).thenReturn(List.of(triggerCandle));
 
         PostOrderResponse parked = assertBuyParked(marketCandle, 10, Quotation.of(9));
 
@@ -229,7 +233,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         );
 
         addInstruments(80);
-        when(candleStorage.findByPrice(any())).thenReturn(List.of(triggerCandle));
+        when(candleStorage.findByPrice(anyLong(), any())).thenReturn(List.of(triggerCandle));
 
         PostOrderResponse parked = assertSellParked(marketCandle, 10, Quotation.of(11));
 
@@ -246,7 +250,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         );
 
         addInstruments(80);
-        when(candleStorage.findByPrice(any())).thenReturn(List.of(triggerCandle));
+        when(candleStorage.findByPrice(anyLong(), any())).thenReturn(List.of(triggerCandle));
 
         PostOrderResponse parked = assertSellParked(marketCandle, 10, Quotation.of(11));
 
@@ -266,7 +270,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
 
         orderService.getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
         addMoney(Quotation.of(100000));
-        when(candleStorage.findAfterOrEqual(eq(config.getInstrument().getUid()), any(), eq(1L)))
+        when(candleStorage.findAfterOrEqual(eq(idOf(config.getInstrument().getUid())), any(), eq(1L)))
             .thenReturn(List.of(secondBar))
             .thenReturn(List.of(thirdBar));
 
@@ -319,7 +323,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         orderService.getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
         addMoney(Quotation.of(100000));
         // Nothing further to trade against: no next bar, and the data ends where it started.
-        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1L))).thenReturn(List.of(onlyBar));
+        when(candleStorage.findBeforeOrEqual(anyLong(), any(), eq(1L))).thenReturn(List.of(onlyBar));
 
         PostOrderResponse posted = postBuy(onlyBar, OrderType.MARKET, 30, null);
 
@@ -354,7 +358,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
 
         orderService.setExecutionLatency(Duration.ofMinutes(5));
         addMoney(Quotation.of(100000));
-        when(candleStorage.findAfterOrEqual(eq(config.getInstrument().getUid()), any(), eq(1L)))
+        when(candleStorage.findAfterOrEqual(eq(idOf(config.getInstrument().getUid())), any(), eq(1L)))
             .thenReturn(List.of(arrivalBar));
 
         PostOrderResponse posted = postBuy(postedBar, OrderType.MARKET, 10, null);
@@ -403,11 +407,11 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
             .add(expectedCommissionCost(firstBar.open(), 30));
 
         addMoney(wholeBalance);
-        when(candleStorage.findAfterOrEqual(eq(config.getInstrument().getUid()), any(), eq(1L)))
+        when(candleStorage.findAfterOrEqual(eq(idOf(config.getInstrument().getUid())), any(), eq(1L)))
             .thenReturn(List.of(dearerBar));
         // Where the data ends, so a remainder with no further bar to trade against can be scheduled
         // to stop rather than run off the end of the history.
-        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1L))).thenReturn(List.of(dearerBar));
+        when(candleStorage.findBeforeOrEqual(anyLong(), any(), eq(1L))).thenReturn(List.of(dearerBar));
 
         PostOrderResponse posted = postBuy(firstBar, OrderType.MARKET, 30, null);
 
@@ -463,10 +467,10 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
 
         orderService.getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
         addMoney(Quotation.of(100000));
-        when(candleStorage.findAfterOrEqual(eq(config.getInstrument().getUid()), any(), eq(1L)))
+        when(candleStorage.findAfterOrEqual(eq(idOf(config.getInstrument().getUid())), any(), eq(1L)))
             .thenReturn(List.of(bar));
         // Only the one bar exists, so a remainder looking past it finds where the data ends.
-        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1L))).thenReturn(List.of(bar));
+        when(candleStorage.findBeforeOrEqual(anyLong(), any(), eq(1L))).thenReturn(List.of(bar));
 
         PostOrderResponse first = postBuy(bar, OrderType.MARKET, 30, null);
 
@@ -494,10 +498,10 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
 
         orderService.getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
         addMoney(Quotation.of(100000));
-        when(candleStorage.findAfterOrEqual(eq(config.getInstrument().getUid()), any(), eq(1L)))
+        when(candleStorage.findAfterOrEqual(eq(idOf(config.getInstrument().getUid())), any(), eq(1L)))
             .thenReturn(List.of(bar));
         // Only the one bar exists, so a remainder looking past it finds where the data ends.
-        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1L))).thenReturn(List.of(bar));
+        when(candleStorage.findBeforeOrEqual(anyLong(), any(), eq(1L))).thenReturn(List.of(bar));
 
         String currency = config.getInstrument().getCurrency();
         Money before = broker.getOperationsService().getAvailableMoney(testAccount.getId(), currency);
@@ -543,7 +547,6 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         ComparisonOperator comparisonOperator
     ) {
         return new FindPriceParams(
-            config.getInstrument().getUid(),
             currentTime,
             lifeTimeEnd(),
             price,
@@ -603,7 +606,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
      * order to be rejected at that moment.
      */
     protected void stubLastCandleOfLifeTime(Candle expirationCandle) {
-        when(candleStorage.findBeforeOrEqual(config.getInstrument().getUid(), lifeTimeEnd(), 1))
+        when(candleStorage.findBeforeOrEqual(idOf(config.getInstrument().getUid()), lifeTimeEnd(), 1))
             .thenReturn(List.of(expirationCandle));
     }
 
@@ -615,7 +618,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         Candle expirationCandle = createCandle(
             Instant.parse("2021-12-15T15:10:00Z"), 10, 15, 6, 10, 100
         );
-        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1L)))
+        when(candleStorage.findBeforeOrEqual(anyLong(), any(), eq(1L)))
             .thenReturn(List.of(expirationCandle));
 
         addMoney(Quotation.of(20000D));
@@ -625,7 +628,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         Candle buySignalCandle = createCandle(
             Instant.parse("2021-12-15T15:20:00Z"), 10, 15, 6, 10, 100
         );
-        when(candleStorage.findByPrice(any()))
+        when(candleStorage.findByPrice(anyLong(), any()))
             .thenReturn(List.of(buySignalCandle));
         Candle sellCandle = createCandle(
             Instant.parse("2021-12-15T15:00:00Z"), 1000, 110, 90, 100, 100
@@ -693,7 +696,7 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         );
 
         addMoney(validCandle.open().multiply(100));
-        when(candleStorage.findByPrice(any())).thenReturn(List.of(buySignalCandle));
+        when(candleStorage.findByPrice(anyLong(), any())).thenReturn(List.of(buySignalCandle));
 
         PostOrderResponse parked = assertBuyParked(validCandle, 10, Quotation.of(9));
 

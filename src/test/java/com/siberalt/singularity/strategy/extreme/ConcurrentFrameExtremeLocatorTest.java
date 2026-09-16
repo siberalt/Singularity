@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ConcurrentFrameExtremeLocatorTest {
-    private final CandleFactory candleFactory = new CandleFactory("TEST_INSTRUMENT");
+    private final CandleFactory candleFactory = new CandleFactory(1L);
 
     @Test
     void locateReturnsEmptyListWhenCandlesIsEmpty() {
@@ -109,7 +109,7 @@ class ConcurrentFrameExtremeLocatorTest {
     @Test
     void locateHandlesNonZeroStartIndexIsOutsideRange() {
         ExtremeLocator baseLocator = mock(ExtremeLocator.class);
-        CandleFactory candleFactory = new CandleFactory("TEST_INSTRUMENT", 7);
+        CandleFactory candleFactory = new CandleFactory(1L, 7);
 
         List<Candle> frame1 = List.of(
             candleFactory.createCommon("2023-01-01T00:07:00Z", 100),

@@ -6,6 +6,7 @@ import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.shared.BrokerFacade;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.entity.instrument.InstrumentIdResolver;
 import com.siberalt.singularity.entity.operation.InMemoryOperationRepository;
 import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
 import com.siberalt.singularity.simulation.SimulationClock;
@@ -30,17 +31,20 @@ import java.util.Map;
 public class ConservativeStrategyRunner {
     private final String instrumentId;
     private final ReadCandleRepository candleRepository;
+    private final InstrumentIdResolver instrumentIds;
     private final SimulationBrokerFactory<?> brokerFactory;
     private final Money initialInvestment;
 
     public ConservativeStrategyRunner(
         String instrumentId,
         ReadCandleRepository candleRepository,
+        InstrumentIdResolver instrumentIds,
         SimulationBrokerFactory<?> brokerFactory,
         Money initialInvestment
     ) {
         this.instrumentId = instrumentId;
         this.candleRepository = candleRepository;
+        this.instrumentIds = instrumentIds;
         this.brokerFactory = brokerFactory;
         this.initialInvestment = initialInvestment;
     }
@@ -75,14 +79,20 @@ public class ConservativeStrategyRunner {
         return backtester.run(startTime, endTime);
     }
 
+    /**
+     * The first and last moments there is a market to trade in. The instrument is traded by the uid
+     * its broker knows it by and its history is kept by our id, so the times are read by the id.
+     */
     private TradeTiming findTradePoints(Instant startTime, Instant endTime) {
-        Instant buyTime = candleRepository.findAfterOrEqual(instrumentId, startTime, 1)
+        long candleSeries = instrumentIds.idOf(instrumentId).orElseThrow(
+            () -> new IllegalArgumentException("No candle history is known for instrument " + instrumentId));
+        Instant buyTime = candleRepository.findAfterOrEqual(candleSeries, startTime, 1)
             .stream()
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("No buy candle found"))
             .getTime();
 
-        List<Candle> lastCandles = candleRepository.findBeforeOrEqual(instrumentId, endTime, 1);
+        List<Candle> lastCandles = candleRepository.findBeforeOrEqual(candleSeries, endTime, 1);
 
         if (lastCandles.isEmpty()) {
             throw new IllegalArgumentException("No sell candle found");

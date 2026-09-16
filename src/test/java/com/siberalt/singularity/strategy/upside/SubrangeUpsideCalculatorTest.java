@@ -23,7 +23,7 @@ class SubrangeUpsideCalculatorTest {
     @BeforeEach
     void setUp() {
         mockBaseCalculator = mock(UpsideCalculator.class);
-        CandleFactory candleFactory = new CandleFactory("TEST");
+        CandleFactory candleFactory = new CandleFactory(1L);
 
         candles = List.of(
             candleFactory.createCommon("2021-01-01T00:01:00Z", 100.0),

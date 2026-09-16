@@ -177,7 +177,7 @@ class PivotPointExtremeLocatorTest {
                 .mapToObj(i -> {
                     Quotation price = Quotation.of(closes[i]);
 
-                    return new Candle("instrument1", new TimePoint(i * step), price, price, price, price, 0);
+                    return new Candle(1L, new TimePoint(i * step), price, price, price, price, 0);
                 })
                 .toList();
         }

@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class DBSCANClusterAggregatorTest {
-    private final CandleFactory candleFactory = new CandleFactory("TMOS");
+    private final CandleFactory candleFactory = new CandleFactory(1L);
     private final ExtremeLocator extremeLocator = mock(ExtremeLocator.class);
     private final VolatilityCalculator volatilityCalculator = mock(VolatilityCalculator.class);
 

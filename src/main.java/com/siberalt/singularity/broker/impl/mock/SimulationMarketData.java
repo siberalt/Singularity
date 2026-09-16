@@ -40,9 +40,10 @@ public interface SimulationMarketData {
     Optional<Candle> nextCandleAtOrAfter(String instrumentUid, Instant at);
 
     /**
-     * Candles matching a price condition, oldest first, aggregated to {@code interval}. Which of
+     * Candles of the instrument the broker calls {@code instrumentUid} matching a price condition,
+     * oldest first, aggregated to {@code interval}. Which of
      * the candle's prices the condition compares is part of the question - see
      * {@link com.siberalt.singularity.entity.candle.CandlePriceField}.
      */
-    List<Candle> findByPrice(CandleInterval interval, FindPriceParams params);
+    List<Candle> findByPrice(CandleInterval interval, String instrumentUid, FindPriceParams params);
 }

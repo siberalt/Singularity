@@ -197,7 +197,7 @@ class ProfitGiveBackUpsideCalculatorTest {
         Quotation price = Quotation.of(close);
 
         return List.of(new Candle(
-            INSTRUMENT,
+            1L,
             new TimePoint(START.plus(Duration.ofHours(hour))),
             price, price, price, price, 0
         ));

@@ -22,7 +22,7 @@ public class CachingExtremeLocatorIT {
     void setUp() {
         CvsFileCandleRepositoryFactory factory = new CvsFileCandleRepositoryFactory();
         candleRepository = factory.create(
-            "TMOS",
+            1L,
             "src/test/resources/entity.candle.cvs/TMOS"
         );
     }
@@ -32,7 +32,7 @@ public class CachingExtremeLocatorIT {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
 
-        List<Candle> candles = candleRepository.getPeriod("TMOS", startTime, endTime);
+        List<Candle> candles = candleRepository.getPeriod(1L, startTime, endTime);
         ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(
             150, BaseExtremeLocator.createMaxLocator()
         );
@@ -53,7 +53,7 @@ public class CachingExtremeLocatorIT {
         Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
 
-        List<Candle> allCandles = candleRepository.getPeriod("TMOS", startTime, endTime);
+        List<Candle> allCandles = candleRepository.getPeriod(1L, startTime, endTime);
         List<Candle> initialCandles = allCandles.subList(0, 5000);
         Deque<Candle> window = new ArrayDeque<>(initialCandles);
         ConcurrentFrameExtremeLocator locator = new ConcurrentFrameExtremeLocator(

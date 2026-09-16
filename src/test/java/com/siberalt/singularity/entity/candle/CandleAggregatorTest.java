@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class CandleAggregatorTest {
-    private static final String INSTRUMENT = "TMOS";
+    private static final long INSTRUMENT = 1;
     private static final Instant HOUR_START = Instant.parse("2021-06-03T10:00:00Z");
 
     private final CandleAggregator aggregator = new CandleAggregator();

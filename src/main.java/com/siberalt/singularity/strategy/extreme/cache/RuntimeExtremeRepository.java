@@ -11,7 +11,7 @@ public class RuntimeExtremeRepository implements ExtremeRepository {
 
     @Override
     public void saveBatch(ExtremeRange range, List<Candle> extremes) {
-        String instrumentId = range.instrumentId();
+        long instrumentId = range.instrumentId();
         String key = generateKey(instrumentId, range.extremeType());
         TreeMap<Long, Candle> instrumentStorage = storage.computeIfAbsent(key, k -> new TreeMap<>());
 
@@ -22,7 +22,7 @@ public class RuntimeExtremeRepository implements ExtremeRepository {
 
     @Override
     public ExtremeRange getInnerRange(ExtremeRange outerRange) {
-        String instrumentId = outerRange.instrumentId();
+        long instrumentId = outerRange.instrumentId();
         String key = generateKey(instrumentId, outerRange.extremeType());
         TreeMap<Long, Candle> instrumentStorage = storage.get(key);
 
@@ -46,7 +46,7 @@ public class RuntimeExtremeRepository implements ExtremeRepository {
 
     @Override
     public List<Candle> getByRange(ExtremeRange range) {
-        String instrumentId = range.instrumentId();
+        long instrumentId = range.instrumentId();
         String key = generateKey(instrumentId, range.extremeType());
         TreeMap<Long, Candle> instrumentStorage = storage.get(key);
 
@@ -63,7 +63,7 @@ public class RuntimeExtremeRepository implements ExtremeRepository {
     @Override
     public void deleteBatch(List<ExtremeRange> ranges) {
         for (ExtremeRange range : ranges) {
-            String instrumentId = range.instrumentId();
+            long instrumentId = range.instrumentId();
             String key = generateKey(instrumentId, range.extremeType());
             TreeMap<Long, Candle> instrumentStorage = storage.get(key);
 
@@ -73,7 +73,7 @@ public class RuntimeExtremeRepository implements ExtremeRepository {
         }
     }
 
-    private String generateKey(String instrumentId, String extremeType) {
+    private String generateKey(long instrumentId, String extremeType) {
         return instrumentId + ":" + extremeType;
     }
 }

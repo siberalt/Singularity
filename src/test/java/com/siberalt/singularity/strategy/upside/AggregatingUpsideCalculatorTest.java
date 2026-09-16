@@ -114,7 +114,7 @@ class AggregatingUpsideCalculatorTest {
 
     private Candle minute(int offset, double open, double close) {
         return new Candle(
-            "TEST",
+            1L,
             new TimePoint(HOUR_START.plusSeconds(offset * 60L)),
             Quotation.of(open),
             Quotation.of(close),

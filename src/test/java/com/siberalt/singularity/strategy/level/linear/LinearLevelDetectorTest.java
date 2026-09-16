@@ -17,7 +17,7 @@ import static org.mockito.Mockito.*;
 
 class LinearLevelDetectorTest {
     private final StrengthCalculator strengthCalculator = mock(StrengthCalculator.class);
-    private final CandleFactory candleFactory = new CandleFactory("TEST_INSTRUMENT");
+    private final CandleFactory candleFactory = new CandleFactory(1L);
 
     @Test
     void calculatesSupportLevelsCorrectly() {

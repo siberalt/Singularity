@@ -121,7 +121,7 @@ class VolumeImbalanceUpsideCalculatorTest {
         Quotation price = Quotation.of(100);
 
         return new Candle(
-            "TEST",
+            1L,
             new TimePoint(START.plusSeconds(index * 60L)),
             price, price, price, price,
             buy + sell, buy, sell

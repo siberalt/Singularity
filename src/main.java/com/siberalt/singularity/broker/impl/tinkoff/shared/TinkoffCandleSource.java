@@ -14,6 +14,7 @@ import com.siberalt.singularity.shared.TimePointRange;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.LongFunction;
 
 /**
  * Индекс свечей здесь не проставляется (используется placeholder из
@@ -25,23 +26,33 @@ import java.util.List;
 public class TinkoffCandleSource implements MigrationCandleSource {
     protected final MarketDataService marketDataService;
     protected final CandleInterval interval;
+    protected final LongFunction<String> brokerInstrumentIdOf;
 
-    public TinkoffCandleSource(MarketDataService marketDataService, CandleInterval interval) {
+    /**
+     * @param brokerInstrumentIdOf what T-Bank calls the instrument with our id - candles are asked
+     *                             for by our id and T-Bank has to be asked by its own
+     */
+    public TinkoffCandleSource(
+        MarketDataService marketDataService,
+        CandleInterval interval,
+        LongFunction<String> brokerInstrumentIdOf
+    ) {
         this.marketDataService = marketDataService;
         this.interval = interval;
+        this.brokerInstrumentIdOf = brokerInstrumentIdOf;
     }
 
     @Override
-    public List<Candle> getPeriod(String instrumentUid, Instant from, Instant to) {
+    public List<Candle> getPeriod(long instrumentId, Instant from, Instant to) {
         try {
             List<HistoricCandle> historicCandles = marketDataService.getCandles(
-                GetCandlesRequest.of(from, to, interval, instrumentUid)
+                GetCandlesRequest.of(from, to, interval, brokerInstrumentIdOf.apply(instrumentId))
             ).getCandles();
 
             List<Candle> candles = new ArrayList<>();
             for (HistoricCandle historicCandle : historicCandles) {
                 candles.add(new Candle(
-                    instrumentUid,
+                    instrumentId,
                     new TimePoint(historicCandle.getTime()),
                     historicCandle.getOpen(),
                     historicCandle.getClose(),
@@ -59,7 +70,7 @@ public class TinkoffCandleSource implements MigrationCandleSource {
     }
 
     @Override
-    public CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to) {
+    public CandleRangeMetadata getRangeMetadata(long instrumentId, Instant from, Instant to) {
         // Свечей из будущего не бывает - без этой обрезки CandleMigrationService
         // нарежет чанки вплоть до запрошенного to, часть из них уйдёт в API с
         // датой "из будущего", получит ошибку валидации и никогда не будет

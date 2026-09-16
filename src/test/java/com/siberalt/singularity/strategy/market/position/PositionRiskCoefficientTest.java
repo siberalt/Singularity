@@ -104,15 +104,15 @@ class PositionRiskCoefficientTest {
     @Test
     void refusesToBeBuiltWithoutWhatItReads() {
         assertThrows(IllegalArgumentException.class,
-            () -> new PositionRiskCoefficient(ACCOUNT, null, volatility, maximums, minimums, Candle::close));
+            () -> new PositionRiskCoefficient(ACCOUNT, INSTRUMENT, null, volatility, maximums, minimums, Candle::close));
         assertThrows(IllegalArgumentException.class,
-            () -> new PositionRiskCoefficient(ACCOUNT, positions, null, maximums, minimums, Candle::close));
+            () -> new PositionRiskCoefficient(ACCOUNT, INSTRUMENT, positions, null, maximums, minimums, Candle::close));
         assertThrows(IllegalArgumentException.class,
-            () -> new PositionRiskCoefficient(ACCOUNT, positions, volatility, maximums, minimums, null));
+            () -> new PositionRiskCoefficient(ACCOUNT, INSTRUMENT, positions, volatility, maximums, minimums, null));
     }
 
     private PositionRiskCoefficient coefficient() {
-        return new PositionRiskCoefficient(ACCOUNT, positions, volatility, maximums, minimums, Candle::close);
+        return new PositionRiskCoefficient(ACCOUNT, INSTRUMENT, positions, volatility, maximums, minimums, Candle::close);
     }
 
     private void holding(long quantity, double averagePrice) {
@@ -124,7 +124,7 @@ class PositionRiskCoefficientTest {
     }
 
     private Candle candle(String time, double price) {
-        return new CandleFactory(INSTRUMENT).createCommon(time, price);
+        return new CandleFactory(1L).createCommon(time, price);
     }
 
     private List<Candle> bars(double lastPrice) {

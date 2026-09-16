@@ -129,7 +129,9 @@ public class BasicTradeStrategy implements Strategy {
     }
 
     public void handleNewCandle(NewCandleEvent event, Subscription subscription) {
-        if (!event.getCandle().instrumentUid().equals(instrumentId)) {
+        // Matched by what the broker calls the instrument, which is what this strategy trades it by;
+        // history is then read by the id the candle itself carries.
+        if (!instrumentId.equals(event.getInstrumentUid())) {
             return;
         }
 
@@ -138,7 +140,7 @@ public class BasicTradeStrategy implements Strategy {
             isInitialized = true;
             lastCandles = new ArrayList<>(
                 candleRepository.findBeforeOrEqual(
-                    instrumentId,
+                    event.getCandle().instrumentId(),
                     event.getCandle().getTime(),
                     lookbackCandles
                 )
@@ -152,7 +154,7 @@ public class BasicTradeStrategy implements Strategy {
             lastCandles.clear();
 
             TradeMoment moment = new TradeMoment(
-                instrumentId,
+                event.getCandle().instrumentId(),
                 event.getCandle().getTime(),
                 upside
             );

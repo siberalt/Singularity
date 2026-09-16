@@ -15,25 +15,25 @@ import java.util.List;
 import java.util.function.Function;
 
 public class PriceChart {
-    private String instrumentUid;
+    private long instrumentId;
     private ReadCandleRepository candleRepository;
     private Function<Candle, Double> priceExtractor = Candle::getCloseAsDouble;
     private int stepInterval = 30; // Default step interval for rendering
     private DataRenderer dataRenderer = new FasterXmlRenderer();
     private final List<SeriesProvider> seriesProviders = new ArrayList<>();
 
-    public PriceChart(ReadCandleRepository candleRepository, String instrumentUid) {
+    public PriceChart(ReadCandleRepository candleRepository, long instrumentId) {
         this.candleRepository = candleRepository;
-        this.instrumentUid = instrumentUid;
+        this.instrumentId = instrumentId;
     }
 
     public PriceChart(
         ReadCandleRepository candleRepository,
-        String instrumentUid,
+        long instrumentId,
         Function<Candle, Double> priceExtractor
     ) {
         this.candleRepository = candleRepository;
-        this.instrumentUid = instrumentUid;
+        this.instrumentId = instrumentId;
         this.priceExtractor = priceExtractor;
     }
 
@@ -61,7 +61,7 @@ public class PriceChart {
             throw new IllegalStateException("Candle repository is not set");
         }
 
-        List<Candle> candles = candleRepository.getPeriod(instrumentUid, startTime, endTime);
+        List<Candle> candles = candleRepository.getPeriod(instrumentId, startTime, endTime);
 
         long start = candles.get(0).getIndex();
         long end = candles.get(candles.size() - 1).getIndex();

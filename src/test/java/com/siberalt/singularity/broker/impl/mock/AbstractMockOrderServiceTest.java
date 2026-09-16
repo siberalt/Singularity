@@ -39,7 +39,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -70,6 +72,8 @@ public abstract class AbstractMockOrderServiceTest {
     protected OrderRepository orderRepository;
     protected OperationRepository operationRepository;
     protected Clock clock;
+    // The broker is asked by uid and candles are kept by id; each uid the tests use gets its own id.
+    protected final Map<String, Long> instrumentIds = new HashMap<>();
 
     @BeforeEach
     public void setUp() throws Exception {
@@ -88,7 +92,7 @@ public abstract class AbstractMockOrderServiceTest {
         clock = mock(Clock.class);
         when(clock.currentTime()).thenReturn(currentTime);
 
-        broker = createBroker(candleStorage, instrumentStorage, orderRepository, operationRepository, clock);
+        broker = createBroker(candleStorage, uid -> java.util.OptionalLong.of(idOf(uid)), instrumentStorage, orderRepository, operationRepository, clock);
         testAccount = broker.getUserService().openAccount(
             "testAccount",
             AccountType.ORDINARY,
@@ -100,6 +104,7 @@ public abstract class AbstractMockOrderServiceTest {
 
     abstract MockBroker createBroker(
         ReadCandleRepository candleStorage,
+        com.siberalt.singularity.entity.instrument.InstrumentIdResolver instrumentIds,
         ReadInstrumentRepository instrumentStorage,
         OrderRepository orderRepository,
         OperationRepository operationRepository,
@@ -112,7 +117,7 @@ public abstract class AbstractMockOrderServiceTest {
             currentTime, 10, 15, 5, 10, 100
         );
 
-        when(candleStorage.findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1))
+        when(candleStorage.findBeforeOrEqual(idOf(config.getInstrument().getUid()), currentTime, 1))
             .thenReturn(List.of(testCandle));
 
         Money availableMoney = broker.getOperationsService()
@@ -144,7 +149,7 @@ public abstract class AbstractMockOrderServiceTest {
             currentTime, 10, 15, 5, 10, 100
         );
 
-        when(candleStorage.findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1))
+        when(candleStorage.findBeforeOrEqual(idOf(config.getInstrument().getUid()), currentTime, 1))
             .thenReturn(List.of(testCandle));
         when(clock.currentTime()).thenReturn(currentTime);
 
@@ -283,7 +288,7 @@ public abstract class AbstractMockOrderServiceTest {
         orderService.getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
         addMoney(Quotation.of(100000));
         // Whatever the broker does with the remainder, it looks for the end of the data first.
-        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1L))).thenReturn(List.of(testCandle));
+        when(candleStorage.findBeforeOrEqual(anyLong(), any(), eq(1L))).thenReturn(List.of(testCandle));
 
         PostOrderResponse response = postBuy(testCandle, OrderType.MARKET, 40, null);
 
@@ -313,7 +318,7 @@ public abstract class AbstractMockOrderServiceTest {
 
         orderService.getLiquidityModel().setInfiniteLiquidity(false).setParticipationRate(0.1);
         addMoney(Quotation.of(100000));
-        when(candleStorage.findBeforeOrEqual(any(), any(), eq(1L))).thenReturn(List.of(testCandle));
+        when(candleStorage.findBeforeOrEqual(anyLong(), any(), eq(1L))).thenReturn(List.of(testCandle));
 
         PostOrderResponse response = postBuy(testCandle, OrderType.MARKET, 40, null);
 
@@ -441,7 +446,7 @@ public abstract class AbstractMockOrderServiceTest {
             () -> postBuy(testCandle, OrderType.MARKET, 10, testCandle.open())
         );
 
-        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1);
+        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(idOf(config.getInstrument().getUid()), currentTime, 1);
     }
 
     @Test
@@ -456,7 +461,7 @@ public abstract class AbstractMockOrderServiceTest {
         // ones that are not.
         assertBuyFilled(validCandle, OrderType.LIMIT, 10, validCandle.open());
 
-        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1);
+        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(idOf(config.getInstrument().getUid()), currentTime, 1);
     }
 
     @Test
@@ -495,7 +500,7 @@ public abstract class AbstractMockOrderServiceTest {
         addMoney(validCandle.open().multiply(100));
 
         assertBuyFilled(validCandle, OrderType.BEST_PRICE, 10, Quotation.of(5));
-        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1);
+        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(idOf(config.getInstrument().getUid()), currentTime, 1);
     }
 
     @Test
@@ -516,7 +521,7 @@ public abstract class AbstractMockOrderServiceTest {
         );
 
         assertSellFilled(validCandle, OrderType.MARKET, 20, openPrice);
-        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(instrumentConfig.getUid(), currentTime, 1);
+        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(idOf(instrumentConfig.getUid()), currentTime, 1);
     }
 
     @Test
@@ -528,7 +533,7 @@ public abstract class AbstractMockOrderServiceTest {
         addInstruments(80);
 
         assertSellFilled(validCandle, OrderType.LIMIT, 10, validCandle.open());
-        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1);
+        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(idOf(config.getInstrument().getUid()), currentTime, 1);
     }
 
     @Test
@@ -540,7 +545,7 @@ public abstract class AbstractMockOrderServiceTest {
         addInstruments(100);
 
         assertSellFilled(validCandle, OrderType.BEST_PRICE, 10, Quotation.of(11));
-        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(config.getInstrument().getUid(), currentTime, 1);
+        verify(candleStorage, atLeastOnce()).findBeforeOrEqual(idOf(config.getInstrument().getUid()), currentTime, 1);
     }
 
     @Test
@@ -621,7 +626,7 @@ public abstract class AbstractMockOrderServiceTest {
     ) {
         InstrumentConfig instrumentConfig = config.getInstrument();
 
-        when(candleStorage.findBeforeOrEqual(instrumentConfig.getUid(), priceCandle.getTime(), 1))
+        when(candleStorage.findBeforeOrEqual(idOf(instrumentConfig.getUid()), priceCandle.getTime(), 1))
             .thenReturn(List.of(priceCandle));
         when(clock.currentTime()).thenReturn(priceCandle.getTime());
 
@@ -859,6 +864,11 @@ public abstract class AbstractMockOrderServiceTest {
             .setUid(config.getUid());
     }
 
+    /** Our id for the instrument the broker calls {@code uid}. */
+    protected long idOf(String uid) {
+        return instrumentIds.computeIfAbsent(uid, known -> instrumentIds.size() + 1L);
+    }
+
     protected Candle createCandle(
         Instant time,
         int closePrice,
@@ -870,7 +880,7 @@ public abstract class AbstractMockOrderServiceTest {
         var instrumentConfig = config.getInstrument();
 
         return new Candle(
-            instrumentConfig.getUid(),
+            idOf(instrumentConfig.getUid()),
             new TimePoint(time),
             Quotation.of(openPrice),
             Quotation.of(closePrice),

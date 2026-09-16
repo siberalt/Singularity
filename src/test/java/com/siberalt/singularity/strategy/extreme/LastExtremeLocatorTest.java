@@ -21,7 +21,7 @@ class LastExtremeLocatorTest {
         @Test
         @DisplayName("Должен находить подтверждённый минимум с vicinity=2")
         void shouldFindConfirmedMinimumWithVicinity2() {
-            CandleFactory candleFactory = new CandleFactory("TEST");
+            CandleFactory candleFactory = new CandleFactory(1L);
 
             // Создаём ЛОКАЛЬНЫЙ список, не трогая this.candles
             List<Candle> localCandles = List.of(
@@ -44,7 +44,7 @@ class LastExtremeLocatorTest {
         @Test
         @DisplayName("Не должен находить минимум, если не хватает подтверждений")
         void shouldNotFindUnconfirmedMinimum() {
-            CandleFactory candleFactory = new CandleFactory("TEST-PAIR");
+            CandleFactory candleFactory = new CandleFactory(2L);
             // vicinity=3, но слева от кандидата (индекс 3) только 3 свечи, а справа — 5, но нужно по 3
             var locator = new LastExtremeLocator(3, Comparator.comparing(Candle::getTypicalAsDouble));
             List<Candle> candles = List.of(
@@ -67,7 +67,7 @@ class LastExtremeLocatorTest {
         @DisplayName("С vicinity=0 должен вернуть последнюю свечу")
         void shouldReturnLastCandleWhenVicinityIsZero() {
             var locator = new LastExtremeLocator(0, Comparator.comparing(Candle::getTypicalAsDouble));
-            CandleFactory candleFactory = new CandleFactory("TEST");
+            CandleFactory candleFactory = new CandleFactory(1L);
 
             List<Candle> candles = List.of(
                 candleFactory.createCommon("2024-01-01T00:00:00Z", 100),
@@ -89,7 +89,7 @@ class LastExtremeLocatorTest {
         @Test
         @DisplayName("Должен находить подтверждённый максимум")
         void shouldFindConfirmedMaximum() {
-            CandleFactory candleFactory = new CandleFactory("TEST");
+            CandleFactory candleFactory = new CandleFactory(1L);
 
             // Искусственно сделаем максимум на индексе 5 (цена 106)
             List<Candle> localCandles = List.of(
@@ -112,7 +112,7 @@ class LastExtremeLocatorTest {
         @Test
         @DisplayName("Должен подтвердить минимум, если количество равных в окрестности в пределах maxAllowedEqualPeers=1")
         void shouldConfirmMinimumWithOneEqualPeer() {
-            CandleFactory candleFactory = new CandleFactory("TEST");
+            CandleFactory candleFactory = new CandleFactory(1L);
 
             List<Candle> testCandles = List.of(
                 candleFactory.createCommon("2024-01-01T00:00:00Z", 105),
@@ -131,7 +131,7 @@ class LastExtremeLocatorTest {
         @Test
         @DisplayName("Не должен подтверждать минимум, если равных свечей больше, чем maxAllowedEqualPeers=1")
         void shouldRejectMinimumWithTwoEqualPeersWhenMaxIsOne() {
-            CandleFactory candleFactory = new CandleFactory("TEST");
+            CandleFactory candleFactory = new CandleFactory(1L);
 
             List<Candle> testCandles = List.of(
                 candleFactory.createCommon("2024-01-01T00:00:00Z", 105),
@@ -149,7 +149,7 @@ class LastExtremeLocatorTest {
         @Test
         @DisplayName("Должен находить максимум с одной равной свечой при maxAllowedEqualPeers=1")
         void shouldConfirmMaximumWithOneEqualPeer() {
-            CandleFactory candleFactory = new CandleFactory("TEST");
+            CandleFactory candleFactory = new CandleFactory(1L);
 
             List<Candle> testCandles = List.of(
                 candleFactory.createCommon("2024-01-01T00:00:00Z", 95),
@@ -184,7 +184,7 @@ class LastExtremeLocatorTest {
         @Test
         @DisplayName("При maxAllowedEqualPeers = extremeVicinity должен принимать все равные")
         void shouldAcceptAllEqualsWhenMaxPeersEqualsVicinity() {
-            CandleFactory candleFactory = new CandleFactory("TEST");
+            CandleFactory candleFactory = new CandleFactory(1L);
 
             List<Candle> testCandles = List.of(
                 candleFactory.createCommon("2024-01-01T00:00:00Z", 100),
@@ -216,7 +216,7 @@ class LastExtremeLocatorTest {
         @Test
         @DisplayName("Должен вернуть пустой список, если свечей недостаточно для окрестности")
         void shouldReturnEmptyIfNotEnoughCandles() {
-            CandleFactory candleFactory = new CandleFactory("TEST");
+            CandleFactory candleFactory = new CandleFactory(1L);
 
             var few = List.of(
                 candleFactory.createCommon("2024-01-01T00:00:00Z", 100),
@@ -241,7 +241,7 @@ class LastExtremeLocatorTest {
         @Test
         @DisplayName("Равные значения цен не должны подтверждать экстремум")
         void shouldExcludeExtremesWithEqualNeighbors() {
-            CandleFactory candleFactory = new CandleFactory("TEST");
+            CandleFactory candleFactory = new CandleFactory(1L);
             List<Candle> candles = List.of(
                 candleFactory.createCommon("2024-01-01T00:00:00Z", 100),
                 candleFactory.createCommon("2024-01-01T01:00:00Z", 200),
@@ -266,7 +266,7 @@ class LastExtremeLocatorTest {
         @DisplayName("ofMinimums() должен использовать typicalPrice по умолчанию")
         void ofMinimumsShouldUseTypicalPrice() {
             LastExtremeLocator locator = LastExtremeLocator.ofMinimums(1, Candle::getTypicalAsDouble);
-            CandleFactory candleFactory = new CandleFactory("TEST");
+            CandleFactory candleFactory = new CandleFactory(1L);
 
             // Просто проверяем, что объект создан
             assertNotNull(locator);

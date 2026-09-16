@@ -18,42 +18,42 @@ public class CurrentTimeLimitedCandleRepository implements ReadCandleRepository 
     }
 
     @Override
-    public Optional<Candle> getAt(String instrumentUid, Instant at) {
+    public Optional<Candle> getAt(long instrumentId, Instant at) {
         if (at.isAfter(clock.currentTime())) {
             return Optional.empty();
         }
-        return delegate.getAt(instrumentUid, at);
+        return delegate.getAt(instrumentId, at);
     }
 
     @Override
-    public List<Candle> findBeforeOrEqual(String instrumentUid, Instant at, long amountBefore) {
+    public List<Candle> findBeforeOrEqual(long instrumentId, Instant at, long amountBefore) {
         if (at.isAfter(clock.currentTime())) {
             return Collections.emptyList();
         }
-        return delegate.findBeforeOrEqual(instrumentUid, at, amountBefore);
+        return delegate.findBeforeOrEqual(instrumentId, at, amountBefore);
     }
 
     @Override
-    public List<Candle> findAfterOrEqual(String instrumentUid, Instant at, long amountAfter) {
+    public List<Candle> findAfterOrEqual(long instrumentId, Instant at, long amountAfter) {
         if (at.isAfter(clock.currentTime())) {
             return Collections.emptyList();
         }
-        return delegate.findAfterOrEqual(instrumentUid, at, amountAfter);
+        return delegate.findAfterOrEqual(instrumentId, at, amountAfter);
     }
 
     @Override
-    public List<Candle> getPeriod(String instrumentUid, Instant from, Instant to) {
+    public List<Candle> getPeriod(long instrumentId, Instant from, Instant to) {
         Instant currentTime = clock.currentTime();
 
         if (from.isAfter(currentTime)) {
             return List.of();
         }
         Instant adjustedTo = to.isAfter(currentTime) ? currentTime : to;
-        return delegate.getPeriod(instrumentUid, from, adjustedTo);
+        return delegate.getPeriod(instrumentId, from, adjustedTo);
     }
 
     @Override
-    public List<Candle> findByPrice(FindPriceParams params) {
+    public List<Candle> findByPrice(long instrumentId, FindPriceParams params) {
         Instant currentTime = clock.currentTime();
 
         if (params.from().isAfter(currentTime)) {
@@ -62,17 +62,17 @@ public class CurrentTimeLimitedCandleRepository implements ReadCandleRepository 
         Instant adjustedFrom = params.from().isBefore(currentTime) ? params.from() : currentTime;
         Instant adjustedTo = params.to().isAfter(currentTime) ? currentTime : params.to();
 
-        return delegate.findByPrice(params.withRange(adjustedFrom, adjustedTo));
+        return delegate.findByPrice(instrumentId, params.withRange(adjustedFrom, adjustedTo));
     }
 
     @Override
-    public CandleRangeMetadata getRangeMetadata(String instrumentUid, Instant from, Instant to) {
+    public CandleRangeMetadata getRangeMetadata(long instrumentId, Instant from, Instant to) {
         Instant currentTime = clock.currentTime();
 
         if (from.isAfter(currentTime)) {
             return CandleRangeMetadata.EMPTY;
         }
         Instant adjustedTo = to.isAfter(currentTime) ? currentTime : to;
-        return delegate.getRangeMetadata(instrumentUid, from, adjustedTo);
+        return delegate.getRangeMetadata(instrumentId, from, adjustedTo);
     }
 }

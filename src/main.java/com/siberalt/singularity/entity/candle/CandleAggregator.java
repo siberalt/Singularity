@@ -84,7 +84,7 @@ public class CandleAggregator {
         }
 
         return new Candle(
-            first.instrumentUid(),
+            first.instrumentId(),
             first.timePoint(),
             first.open(),
             last.close(),

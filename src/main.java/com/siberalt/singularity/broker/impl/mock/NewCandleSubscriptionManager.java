@@ -5,6 +5,7 @@ import com.siberalt.singularity.broker.contract.service.event.dispatcher.subscri
 import com.siberalt.singularity.broker.shared.CandleEventMatcher;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
+import com.siberalt.singularity.entity.instrument.InstrumentIdResolver;
 import com.siberalt.singularity.event.Event;
 import com.siberalt.singularity.event.EventHandler;
 import com.siberalt.singularity.event.EventManager;
@@ -44,22 +45,34 @@ import java.util.function.Supplier;
  * executor; a simulation must not, because a strategy reacting to a candle has to have finished
  * reacting before the clock moves on. So the event manager is given an executor that runs the work
  * on the caller's thread, which keeps a run ordered and repeatable.
+ * <p>
+ * Subscriptions name instruments as the broker does, by uid, and recorded candles are kept by our
+ * instrument id, so each uid is translated once when the replay starts. An event carries both: the
+ * uid it was subscribed for, and the candle with its id.
  */
 public class NewCandleSubscriptionManager implements SubscriptionManager, EventInvoker, Initializable, TimeDependentUnit {
     private static final Logger logger = LoggerFactory.getLogger(NewCandleSubscriptionManager.class);
 
+    private record Scheduled(String instrumentUid, Candle candle) {
+    }
+
     private final ReadCandleRepository candleRepository;
+    private final InstrumentIdResolver instrumentIdResolver;
     private final Supplier<Set<String>> instrumentIdsSupplier;
     private final EventManager eventManager;
-    private final Map<Instant, List<Candle>> candlesByTime = new HashMap<>();
+    private final Map<Instant, List<Scheduled>> candlesByTime = new HashMap<>();
     private Map<String, Iterator<Candle>> candlesByInstrument;
     private Set<String> instrumentIds;
     private EventObserver eventObserver;
     private Clock clock;
     private boolean interruptOnError = true;
 
-    public NewCandleSubscriptionManager(ReadCandleRepository candleRepository, Set<String> instrumentIds) {
-        this(candleRepository, () -> instrumentIds);
+    public NewCandleSubscriptionManager(
+        ReadCandleRepository candleRepository,
+        InstrumentIdResolver instrumentIdResolver,
+        Set<String> instrumentIds
+    ) {
+        this(candleRepository, instrumentIdResolver, () -> instrumentIds);
     }
 
     /**
@@ -69,9 +82,11 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
      */
     public NewCandleSubscriptionManager(
         ReadCandleRepository candleRepository,
+        InstrumentIdResolver instrumentIdResolver,
         Supplier<Set<String>> instrumentIdsSupplier
     ) {
         this.candleRepository = candleRepository;
+        this.instrumentIdResolver = instrumentIdResolver;
         this.instrumentIdsSupplier = instrumentIdsSupplier;
         // Runnable::run - handlers run on the simulation's own thread, in order, before the clock
         // is allowed to move.
@@ -141,10 +156,15 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
         instrumentIds = instrumentIdsSupplier.get();
         candlesByInstrument = new HashMap<>();
 
-        for (String instrumentId : instrumentIds) {
+        for (String instrumentUid : instrumentIds) {
+            // An instrument the broker trades but whose candles cannot be found is a wiring error, not a
+            // quiet market: replaying nothing for it would look exactly like a strategy that never traded.
+            long instrumentId = instrumentIdResolver.idOf(instrumentUid).orElseThrow(() -> new IllegalStateException(
+                "No candle history id is known for instrument " + instrumentUid
+                    + ": the resolver this broker was given does not map it"));
             Iterator<Candle> candles = candleRepository.getPeriod(instrumentId, startTime, endTime).iterator();
-            candlesByInstrument.put(instrumentId, candles);
-            scheduleNext(instrumentId);
+            candlesByInstrument.put(instrumentUid, candles);
+            scheduleNext(instrumentUid);
         }
     }
 
@@ -155,15 +175,15 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
 
     @Override
     public void tick() {
-        List<Candle> dueCandles = candlesByTime.remove(clock.currentTime());
+        List<Scheduled> dueCandles = candlesByTime.remove(clock.currentTime());
 
         if (dueCandles == null) {
             return;
         }
 
-        for (Candle candle : dueCandles) {
-            deliver(candle);
-            scheduleNext(candle.instrumentUid());
+        for (Scheduled due : dueCandles) {
+            deliver(due.instrumentUid(), due.candle());
+            scheduleNext(due.instrumentUid());
         }
     }
 
@@ -172,9 +192,9 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
      * time the dispatch returns - that is what the caller-thread executor buys - so the failure of
      * any of them is known here rather than somewhere later.
      */
-    protected void deliver(Candle candle) {
+    protected void deliver(String instrumentUid, Candle candle) {
         try {
-            eventManager.dispatch(new NewCandleEvent(candle)).join();
+            eventManager.dispatch(new NewCandleEvent(instrumentUid, candle)).join();
         } catch (CompletionException dispatchFailed) {
             Throwable cause = dispatchFailed.getCause() != null ? dispatchFailed.getCause() : dispatchFailed;
             logger.error("Error occurred while handling event", cause);
@@ -209,7 +229,7 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
         }
 
         Candle candle = candles.next();
-        candlesByTime.computeIfAbsent(candle.getTime(), moment -> new ArrayList<>()).add(candle);
+        candlesByTime.computeIfAbsent(candle.getTime(), moment -> new ArrayList<>()).add(new Scheduled(instrumentUid, candle));
         eventObserver.scheduleEvent(
             com.siberalt.singularity.simulation.Event.create(candle.getTime(), this)
         );

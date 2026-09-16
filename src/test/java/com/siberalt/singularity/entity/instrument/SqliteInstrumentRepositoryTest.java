@@ -83,6 +83,19 @@ class SqliteInstrumentRepositoryTest {
         assertEquals(1, instruments.getAll().size());
     }
 
+    /** Обратный путь: по нашему id - то, как бумагу называет конкретный брокер, а не любой. */
+    @Test
+    void findsWhatEachBrokerCallsTheInstrumentWithOurId() {
+        listings.save(TINKOFF, share("Сбербанк", UID, "RU0009029540", 10));
+        listings.save(OTHER_BROKER, share("Sberbank", "SBER", "RU0009029540", 1));
+        long id = listings.idOf(UID).orElseThrow();
+
+        assertEquals(UID, listings.brokerInstrumentIdOf(TINKOFF, id).orElseThrow());
+        assertEquals("SBER", listings.brokerInstrumentIdOf(OTHER_BROKER, id).orElseThrow());
+        assertTrue(listings.brokerInstrumentIdOf("unknown-broker", id).isEmpty());
+        assertTrue(listings.brokerInstrumentIdOf(TINKOFF, id + 1).isEmpty());
+    }
+
     /** Одна бумага у двух брокеров - один инструмент с двумя листингами, для того ISIN и нужен. */
     @Test
     void recognisesTheSamePaperAtAnotherBrokerByItsIsin() {

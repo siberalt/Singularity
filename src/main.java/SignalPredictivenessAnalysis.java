@@ -53,7 +53,8 @@ import java.util.Map;
  * only the flow is a separate observation.
  */
 public class SignalPredictivenessAnalysis {
-    private static final String DEFAULT_INSTRUMENT = "TMOS";
+    // TMOS, by our id. An instrument may be named by its id or by the uid a broker lists it under.
+    private static final String DEFAULT_INSTRUMENT = "2";
     private static final String DEFAULT_FROM = "2021-01-01T00:00:00Z";
     private static final String DEFAULT_TO = "2024-01-01T00:00:00Z";
 
@@ -68,8 +69,23 @@ public class SignalPredictivenessAnalysis {
         CandleInterval.DAY, 250
     );
 
+    /** Our id for the instrument, given either as that id or as the uid a broker lists it under. */
+    private static long instrumentIdOf(String instrument, String dbPath) {
+        if (instrument.chars().allMatch(Character::isDigit)) {
+            return Long.parseLong(instrument);
+        }
+
+        try (java.sql.Connection connection = java.sql.DriverManager.getConnection(dbPath)) {
+            return new com.siberalt.singularity.entity.instrument.SqliteInstrumentRepository(connection)
+                .idOf(instrument)
+                .orElseThrow(() -> new IllegalArgumentException("No instrument is listed as " + instrument));
+        } catch (java.sql.SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public static void main(String[] args) throws IOException {
-        String instrumentUid = args.length > 0 ? args[0] : DEFAULT_INSTRUMENT;
+        String instrument = args.length > 0 ? args[0] : DEFAULT_INSTRUMENT;
         Instant from = Instant.parse(args.length > 1 ? args[1] : DEFAULT_FROM);
         Instant to = Instant.parse(args.length > 2 ? args[2] : DEFAULT_TO);
         List<String> intervals = args.length > 3
@@ -79,16 +95,17 @@ public class SignalPredictivenessAnalysis {
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
-        SqliteCandleRepository candleRepository = new SqliteCandleRepositoryFactory()
-            .create(ConfigFacade.of(configuration).getAsString("dbPath"));
+        String dbPath = ConfigFacade.of(configuration).getAsString("dbPath");
+        SqliteCandleRepository candleRepository = new SqliteCandleRepositoryFactory().create(dbPath);
+        long instrumentId = instrumentIdOf(instrument, dbPath);
 
-        List<Candle> minuteCandles = candleRepository.findAfterOrEqual(instrumentUid, from, Integer.MAX_VALUE)
+        List<Candle> minuteCandles = candleRepository.findAfterOrEqual(instrumentId, from, Integer.MAX_VALUE)
             .stream()
             .filter(candle -> candle.getTime().isBefore(to))
             .toList();
 
         System.out.printf("%s: %d minute bars, %s .. %s%n",
-            instrumentUid, minuteCandles.size(), from, to);
+            instrument, minuteCandles.size(), from, to);
 
         if (minuteCandles.isEmpty()) {
             return;

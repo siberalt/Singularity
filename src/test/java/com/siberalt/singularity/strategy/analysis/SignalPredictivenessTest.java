@@ -136,7 +136,7 @@ class SignalPredictivenessTest {
 
     private Candle candle(int index, double open, double close) {
         return new Candle(
-            "TEST",
+            1L,
             new TimePoint(START.plusSeconds(index * 60L)),
             Quotation.of(open),
             Quotation.of(close),

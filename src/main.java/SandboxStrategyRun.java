@@ -22,6 +22,7 @@ import com.siberalt.singularity.entity.candle.SqliteCandleRepository;
 import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.entity.operation.BrokerOperationRepository;
 import com.siberalt.singularity.entity.candle.CandleSaveEventHandler;
+import com.siberalt.singularity.entity.instrument.SqliteInstrumentRepository;
 import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.strategy.Strategy;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
@@ -37,6 +38,8 @@ import ru.ttech.piapi.core.connector.ConnectorConfiguration;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Duration;
@@ -47,15 +50,17 @@ import java.util.Set;
 public class SandboxStrategyRun {
     private static final String INSTRUMENT_UID = "55371b1f-8f7c-4c12-9d93-386fae5ec12a";
 
-    public static void main(String[] args) throws IOException, AbstractException {
+    public static void main(String[] args) throws IOException, AbstractException, SQLException {
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
 
+        String dbPath = ConfigFacade.of(configuration).getAsString("dbPath");
         SqliteCandleRepositoryFactory sqliteCandleRepositoryFactory = new SqliteCandleRepositoryFactory();
-        SqliteCandleRepository candleRepository = sqliteCandleRepositoryFactory.create(
-            ConfigFacade.of(configuration).getAsString("dbPath")
-        );
+        SqliteCandleRepository candleRepository = sqliteCandleRepositoryFactory.create(dbPath);
+        // Live candles arrive named by uid and are saved and read by our id - without the listings
+        // every streamed candle would be dropped.
+        SqliteInstrumentRepository instruments = new SqliteInstrumentRepository(DriverManager.getConnection(dbPath));
 
         configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/test/resources/broker/tinkoff/test-settings.yaml"))
@@ -65,7 +70,7 @@ public class SandboxStrategyRun {
         properties.setProperty("sandbox.enabled", "true");
         var broker = TinkoffSandboxBrokerFactory.create(
             ConnectorConfiguration.loadFromProperties(properties),
-            new TinkoffServicesFactory().orderServiceFactory(
+            new TinkoffServicesFactory().instrumentIds(instruments).orderServiceFactory(
                 new DecoratingServiceFactory<>(new TinkoffOrderServiceFactory(), LoggingOrderService::new)
             )
         );
@@ -130,6 +135,7 @@ public class SandboxStrategyRun {
     ) {
         PositionRiskManagerUpsideCalculator riskManagerUpsideCalculator = new PositionRiskManagerUpsideCalculator(
             accountId,
+            INSTRUMENT_UID,
             new BaseEntryPriceCalculator(new BrokerOperationRepository(broker.getOperationsService())),
             ATRVolatilityCalculator.ofMultiplier(2)
         );
