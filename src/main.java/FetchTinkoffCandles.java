@@ -15,6 +15,7 @@ import com.siberalt.singularity.entity.instrument.SqliteInstrumentRepository;
 import com.siberalt.singularity.runtime.progress.ConsoleProgressTrackerFactory;
 import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.utils.entity.CandleMigrationCheckpointRepository;
+import com.siberalt.singularity.utils.entity.CandleMigrationResult;
 import com.siberalt.singularity.utils.entity.CandleMigrationService;
 import com.siberalt.singularity.utils.entity.SqliteCandleMigrationCheckpointRepository;
 import ru.ttech.piapi.core.connector.ConnectorConfiguration;
@@ -27,6 +28,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
@@ -42,6 +44,12 @@ import java.util.Properties;
  * instrument, so there has to be one; and a broker knows the name, ISIN, lot and currency that a row
  * created by a migration could only guess at, so saving it here is also what fills in the
  * placeholders the migration had to invent for history already on disk.
+ * <p>
+ * One instrument failing does not stop the others: the network to T-Bank drops for minutes at a
+ * time, and a run of many instruments that dies on the first drop leaves every later one unloaded.
+ * What did not load - an instrument that could not be looked up, or chunks that could not be
+ * fetched - is listed at the end, and the process exits with a non-zero code, so a script re-running
+ * it can tell a finished load from one with holes. The checkpoint makes the re-run fetch only those.
  */
 public class FetchTinkoffCandles {
     private static final String DEFAULT_INSTRUMENT = "TMOS";
@@ -73,8 +81,9 @@ public class FetchTinkoffCandles {
 
         String dbPath = ConfigFacade.of(appConfig).getAsString("dbPath");
 
-        try (Connection connection = DriverManager.getConnection(dbPath))
-        {
+        List<String> incomplete = new ArrayList<>();
+
+        try (Connection connection = DriverManager.getConnection(dbPath)) {
             SqliteCandleRepository candleRepository = new SqliteCandleRepository(connection);
             InstrumentService instrumentService = new TinkoffInstrumentServiceFactory().create(serviceStubFactory);
             MarketDataService marketDataService = new TinkoffMarketDataServiceFactory().create(serviceStubFactory);
@@ -97,23 +106,46 @@ public class FetchTinkoffCandles {
                 .build();
 
             for (String query : queries) {
-                Instrument instrument = instrumentService.get(GetRequest.of(query)).getInstrument();
+                try {
+                    Instrument instrument = instrumentService.get(GetRequest.of(query)).getInstrument();
 
-                if (instrument == null) {
-                    throw new IllegalStateException("Instrument not found: " + query);
+                    if (instrument == null) {
+                        incomplete.add(query + ": not found at T-Bank");
+                        continue;
+                    }
+
+                    instruments.save(AbstractTinkoffBroker.ID, instrument);
+                    long instrumentId = instruments.idOf(instrument.getUid()).orElseThrow();
+
+                    System.out.printf("%n%s (%s, %s), instrument %d, lot %d %s%n",
+                        instrument.getName(), instrument.getUid(), instrument.getIsin(),
+                        instrumentId, instrument.getLot(), instrument.getCurrency());
+
+                    CandleMigrationResult result = migrationService.migrateInstrument(instrumentId, FROM, TO);
+
+                    System.out.printf("%n%s: %d candles saved, %d of %d chunks already done, %d failed%n",
+                        instrument.getName(), result.savedCandles(), result.skippedChunks(),
+                        result.totalChunks(), result.failedChunks().size());
+
+                    if (!result.isComplete()) {
+                        incomplete.add(String.format("%s (%s): %d chunks failed, first from %s",
+                            instrument.getName(), query, result.failedChunks().size(),
+                            result.failedChunks().getFirst().from()));
+                    }
+                } catch (AbstractException | RuntimeException e) {
+                    // Usually the network to T-Bank dropping; the next instrument may well get through.
+                    System.err.printf("%n%s: %s%n", query, e.getMessage());
+                    incomplete.add(query + ": " + e.getClass().getSimpleName());
                 }
-
-                instruments.save(AbstractTinkoffBroker.ID, instrument);
-                long instrumentId = instruments.idOf(instrument.getUid()).orElseThrow();
-
-                System.out.printf("%n%s (%s, %s), instrument %d, lot %d %s%n",
-                    instrument.getName(), instrument.getUid(), instrument.getIsin(),
-                    instrumentId, instrument.getLot(), instrument.getCurrency());
-
-                migrationService.migrateInstrument(instrumentId, FROM, TO);
             }
         } finally {
             serviceStubFactory.getChannel().shutdown();
+        }
+
+        if (!incomplete.isEmpty()) {
+            System.err.printf("%nNot fully loaded - run again to fetch what is missing:%n");
+            incomplete.forEach(line -> System.err.println("  " + line));
+            System.exit(1);
         }
     }
 }

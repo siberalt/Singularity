@@ -14,10 +14,14 @@ import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -146,8 +150,9 @@ public class CandleMigrationService {
      * @param instrumentIds  список идентификаторов инструментов
      * @param from           начало интервала (включительно)
      * @param to             конец интервала (исключительно)
+     * @return итог миграции каждого инструмента, в том числе чанки, которые не удалось получить
      */
-    public void migrateInstruments(List<Long> instrumentIds, Instant from, Instant to) {
+    public Map<Long, CandleMigrationResult> migrateInstruments(List<Long> instrumentIds, Instant from, Instant to) {
         log.info("Starting migration for {} instruments from {} to {}", instrumentIds.size(), from, to);
 
         // Предварительный расчёт всех чанков для всех инструментов (без учёта чекпойнта -
@@ -175,12 +180,12 @@ public class CandleMigrationService {
             );
         }
 
+        Map<Long, CandleMigrationResult> results = new ConcurrentHashMap<>();
         List<CompletableFuture<Void>> futures = instrumentIds.stream()
                 .map(uid -> CompletableFuture.runAsync(() -> {
+                    List<MigrationChunk> all = instrumentAllChunks.get(uid);
                     List<MigrationChunk> chunks = instrumentPendingChunks.get(uid);
-                    if (!chunks.isEmpty()) {
-                        migrateInstrumentChunks(uid, chunks, progressTracker);
-                    }
+                    results.put(uid, migrateInstrumentChunks(uid, all.size(), chunks, progressTracker));
                 }, executor))
                 .toList();
 
@@ -192,6 +197,8 @@ public class CandleMigrationService {
         }
 
         log.info("Migration completed for all instruments.");
+
+        return results;
     }
 
     /**
@@ -203,13 +210,15 @@ public class CandleMigrationService {
      * @param instrumentId идентификатор инструмента
      * @param from          начало интервала
      * @param to            конец интервала
+     * @return итог миграции, в том числе чанки, которые не удалось получить и которые докачает
+     *         следующий запуск
      */
-    public void migrateInstrument(long instrumentId, Instant from, Instant to) {
+    public CandleMigrationResult migrateInstrument(long instrumentId, Instant from, Instant to) {
         log.info("Processing instrument: {}", instrumentId);
         List<MigrationChunk> allChunks = computeChunks(instrumentId, from, to);
         ProgressTracker progressTracker = progressTrackerFactory.create(allChunks.size());
         List<MigrationChunk> pendingChunks = filterNotDone(instrumentId, allChunks, progressTracker);
-        migrateInstrumentChunks(instrumentId, pendingChunks, progressTracker);
+        return migrateInstrumentChunks(instrumentId, allChunks.size(), pendingChunks, progressTracker);
     }
 
     /**
@@ -223,19 +232,27 @@ public class CandleMigrationService {
      * {@link CandleIndexNormalizer}, индексы свечей инструмента пересчитываются
      * начиная с самого раннего из обработанных в этом вызове чанков.
      */
-    private void migrateInstrumentChunks(long instrumentId, List<MigrationChunk> chunks, ProgressTracker progressTracker) {
+    private CandleMigrationResult migrateInstrumentChunks(
+        long instrumentId,
+        int totalChunks,
+        List<MigrationChunk> chunks,
+        ProgressTracker progressTracker
+    ) {
+        int skippedChunks = totalChunks - chunks.size();
+
         if (chunks.isEmpty()) {
             log.info("Nothing to migrate for instrument {}", instrumentId);
-            return;
+            return new CandleMigrationResult(totalChunks, skippedChunks, 0, List.of());
         }
 
         AtomicInteger totalSaved = new AtomicInteger(0);
+        Queue<MigrationChunk> failed = new ConcurrentLinkedQueue<>();
         ExecutorService chunkExecutor = Executors.newFixedThreadPool(Math.max(1, chunkParallelism));
 
         try {
             List<CompletableFuture<Void>> futures = chunks.stream()
                 .map(chunk -> CompletableFuture.runAsync(
-                    () -> processChunk(instrumentId, chunk, progressTracker, totalSaved),
+                    () -> processChunk(instrumentId, chunk, progressTracker, totalSaved, failed),
                     chunkExecutor
                 ))
                 .toList();
@@ -251,10 +268,22 @@ public class CandleMigrationService {
             normalizer.normalizeIndex(instrumentId, earliestProcessed);
         }
 
-        log.info("Finished instrument {}: total {} candles saved", instrumentId, totalSaved.get());
+        log.info("Finished instrument {}: total {} candles saved, {} chunks failed", instrumentId, totalSaved.get(), failed.size());
+
+        List<MigrationChunk> failedInOrder = failed.stream()
+            .sorted(Comparator.comparing(MigrationChunk::from))
+            .toList();
+
+        return new CandleMigrationResult(totalChunks, skippedChunks, totalSaved.get(), failedInOrder);
     }
 
-    private void processChunk(long instrumentId, MigrationChunk chunk, ProgressTracker progressTracker, AtomicInteger totalSaved) {
+    private void processChunk(
+        long instrumentId,
+        MigrationChunk chunk,
+        ProgressTracker progressTracker,
+        AtomicInteger totalSaved,
+        Queue<MigrationChunk> failed
+    ) {
         Instant chunkFrom = chunk.from();
         Instant chunkTo = chunk.to();
 
@@ -266,6 +295,7 @@ public class CandleMigrationService {
             candles = source.getPeriod(instrumentId, chunkFrom, chunkTo);
         } catch (Exception e) {
             log.error("Error fetching chunk for {} from {} to {}", instrumentId, chunkFrom, chunkTo, e);
+            failed.add(chunk);
             return;
         }
 

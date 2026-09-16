@@ -1,6 +1,7 @@
 package com.siberalt.singularity.entity.candle;
 
 import com.siberalt.singularity.utils.entity.CandleMigrationCheckpointRepository;
+import com.siberalt.singularity.utils.entity.CandleMigrationResult;
 import com.siberalt.singularity.utils.entity.CandleMigrationService;
 import com.siberalt.singularity.runtime.progress.NullProgressTrackerFactory;
 import com.siberalt.singularity.shared.TimePointRange;
@@ -290,9 +291,12 @@ class CandleMigrationServiceTest {
             when(source.getPeriod(eq(instrumentId), any(), any())).thenReturn(List.of(candle));
 
             // when
-            service.migrateInstrument(instrumentId, from, to);
+            CandleMigrationResult result = service.migrateInstrument(instrumentId, from, to);
 
             // then
+            Assertions.assertTrue(result.isComplete());
+            Assertions.assertEquals(1, result.totalChunks());
+            Assertions.assertEquals(1, result.savedCandles());
             verify(source).getRangeMetadata(eq(instrumentId), any(), any());
             verify(source).getPeriod(eq(instrumentId), any(), any());
             verify(target).saveBatch(List.of(candle));
@@ -344,9 +348,15 @@ class CandleMigrationServiceTest {
                 .thenThrow(new RuntimeException("Error chunk"));
 
             // when
-            service.migrateInstrument(instrumentId, from, to);
+            CandleMigrationResult result = service.migrateInstrument(instrumentId, from, to);
 
             // then
+            // The failed chunk is not an exception to the caller - it is reported, so the caller can
+            // tell a load with a hole from a complete one and run again for what is missing.
+            Assertions.assertFalse(result.isComplete());
+            Assertions.assertEquals(2, result.totalChunks());
+            Assertions.assertEquals(1, result.failedChunks().size());
+            Assertions.assertEquals(1, result.savedCandles());
             verify(source).getRangeMetadata(eq(instrumentId), any(), any());
             verify(source, times(2)).getPeriod(eq(instrumentId), any(), any());
             verify(target).saveBatch(List.of(candle1));
@@ -372,8 +382,11 @@ class CandleMigrationServiceTest {
                 .checkpoint(checkpoint)
                 .build();
 
-            serviceWithCheckpoint.migrateInstrument(instrumentId, from, to);
+            CandleMigrationResult result = serviceWithCheckpoint.migrateInstrument(instrumentId, from, to);
 
+            Assertions.assertTrue(result.isComplete());
+            Assertions.assertEquals(1, result.skippedChunks());
+            Assertions.assertEquals(0, result.savedCandles());
             verify(source).getRangeMetadata(eq(instrumentId), any(), any());
             verify(checkpoint).isDone(eq(instrumentId), any());
             verifyNoMoreInteractions(source);
