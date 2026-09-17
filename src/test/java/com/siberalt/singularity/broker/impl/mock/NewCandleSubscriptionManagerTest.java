@@ -15,13 +15,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -221,6 +224,64 @@ public class NewCandleSubscriptionManagerTest {
         // Verify that the subscription is still active despite the exception
         assertTrue(subscription.isActive());
         assertFalse(subscription.getErrors().isEmpty());
+    }
+
+    /**
+     * The history is read a chunk at a time, and the chunks meet at an instant a candle can sit on.
+     * Every candle has to arrive once and in order whether the repository counts a period's end in
+     * or leaves it out - and no single read may reach further than a chunk, or nothing was saved.
+     */
+    @Test
+    void replaysEveryCandleOnceAcrossChunkBoundariesWhenThePeriodEndIsIncluded() {
+        replaysEveryCandleOnceAcrossChunkBoundaries(true);
+    }
+
+    @Test
+    void replaysEveryCandleOnceAcrossChunkBoundariesWhenThePeriodEndIsExcluded() {
+        replaysEveryCandleOnceAcrossChunkBoundaries(false);
+    }
+
+    private void replaysEveryCandleOnceAcrossChunkBoundaries(boolean endIncluded) {
+        Instant start = Instant.parse("2020-12-01T00:00:00Z");
+        Instant end = start.plus(10, ChronoUnit.DAYS);
+        List<Candle> history = new ArrayList<>();
+
+        // Every six hours, so a candle sits exactly on each daily chunk boundary.
+        for (Instant time = start; time.isBefore(end); time = time.plus(6, ChronoUnit.HOURS)) {
+            history.add(Candle.of(time, 1L, 1000 + history.size(), 12));
+        }
+
+        List<Duration> reads = new ArrayList<>();
+
+        when(candleRepository.getPeriod(eq(1L), any(), any())).thenAnswer(invocation -> {
+            Instant from = invocation.getArgument(1);
+            Instant to = invocation.getArgument(2);
+            reads.add(Duration.between(from, to));
+
+            return history.stream()
+                .filter(candle -> !candle.getTime().isBefore(from))
+                .filter(candle -> endIncluded ? !candle.getTime().isAfter(to) : candle.getTime().isBefore(to))
+                .toList();
+        });
+        when(candleRepository.getPeriod(eq(2L), any(), any())).thenReturn(Collections.emptyList());
+
+        List<Candle> replayed = new ArrayList<>();
+        subscriptionManager.setReplayChunk(Duration.ofDays(1));
+        subscriptionManager.subscribe(
+            new NewCandleSubscriptionSpec(Set.of("instrument1")),
+            (event, subscription) -> replayed.add(event.getCandle())
+        );
+
+        eventSimulator.run(start, end);
+
+        assertEquals(history, replayed);
+        assertTrue(reads.size() >= 10, "read in chunks, got " + reads.size() + " reads");
+        assertTrue(reads.stream().allMatch(read -> read.compareTo(Duration.ofDays(1)) <= 0), "a read spanned " + reads);
+    }
+
+    @Test
+    void refusesAReplayChunkThatSpansNoTime() {
+        assertThrows(IllegalArgumentException.class, () -> subscriptionManager.setReplayChunk(Duration.ZERO));
     }
 
     /**

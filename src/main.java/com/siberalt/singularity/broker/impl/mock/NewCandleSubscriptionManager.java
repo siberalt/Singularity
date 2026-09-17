@@ -20,13 +20,16 @@ import com.siberalt.singularity.strategy.context.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.CompletionException;
 import java.util.function.Supplier;
@@ -66,6 +69,7 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
     private EventObserver eventObserver;
     private Clock clock;
     private boolean interruptOnError = true;
+    private Duration replayChunk = Duration.ofDays(7);
 
     public NewCandleSubscriptionManager(
         ReadCandleRepository candleRepository,
@@ -92,6 +96,31 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
         // is allowed to move.
         this.eventManager = new EventManager(Runnable::run, Set.of(NewCandleEvent.class));
         this.eventManager.setEventMatcher(new CandleEventMatcher());
+    }
+
+    public Duration getReplayChunk() {
+        return replayChunk;
+    }
+
+    /**
+     * How much of the history is read from the repository at a time. A week by default.
+     * <p>
+     * The replay used to read the whole simulated period up front and walk it, which holds every
+     * candle of the run in memory until the run ends - about a hundred and fifty megabytes for two
+     * years of minutes, and that times however many runs share a process. Read a chunk at a time,
+     * a run holds a week of candles whatever its length.
+     * <p>
+     * Reading lazily means the repository is asked while the simulation runs rather than before it,
+     * so it must not itself be limited to the simulated present: a chunk cut short at the clock
+     * would be taken as all there is up to the chunk's end, and the rest of it never replayed.
+     */
+    public NewCandleSubscriptionManager setReplayChunk(Duration replayChunk) {
+        if (replayChunk == null || replayChunk.isZero() || replayChunk.isNegative()) {
+            throw new IllegalArgumentException("A replay chunk has to span some time, got " + replayChunk);
+        }
+
+        this.replayChunk = replayChunk;
+        return this;
     }
 
     public boolean isInterruptOnError() {
@@ -162,8 +191,7 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
             long instrumentId = instrumentIdResolver.idOf(instrumentUid).orElseThrow(() -> new IllegalStateException(
                 "No candle history id is known for instrument " + instrumentUid
                     + ": the resolver this broker was given does not map it"));
-            Iterator<Candle> candles = candleRepository.getPeriod(instrumentId, startTime, endTime).iterator();
-            candlesByInstrument.put(instrumentUid, candles);
+            candlesByInstrument.put(instrumentUid, new ChunkedCandles(instrumentId, startTime, endTime));
             scheduleNext(instrumentUid);
         }
     }
@@ -233,6 +261,84 @@ public class NewCandleSubscriptionManager implements SubscriptionManager, EventI
         eventObserver.scheduleEvent(
             com.siberalt.singularity.simulation.Event.create(candle.getTime(), this)
         );
+    }
+
+    /**
+     * One instrument's candles between two instants, oldest first, read from the repository a chunk
+     * at a time as the replay reaches them.
+     * <p>
+     * Consecutive chunks share their boundary instant, and whatever the boundary returns twice is
+     * dropped by time. That keeps the replay whole under either reading of a period's end: a
+     * repository counting the end in returns the boundary candle twice, one leaving it out returns
+     * it once, from the next chunk. The last chunk ends exactly where the whole period did, so what
+     * the replay covers is what a single read of the period would have.
+     */
+    private class ChunkedCandles implements Iterator<Candle> {
+        private final long instrumentId;
+        private final Instant end;
+        private Instant cursor;
+        private Iterator<Candle> chunk = Collections.emptyIterator();
+        private boolean readToEnd;
+        private Candle next;
+        private Instant lastTime;
+
+        ChunkedCandles(long instrumentId, Instant start, Instant end) {
+            this.instrumentId = instrumentId;
+            this.cursor = start;
+            this.end = end;
+            advance();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return next != null;
+        }
+
+        @Override
+        public Candle next() {
+            if (next == null) {
+                throw new NoSuchElementException("The replay of instrument " + instrumentId + " has ended");
+            }
+
+            Candle candle = next;
+            advance();
+
+            return candle;
+        }
+
+        private void advance() {
+            next = null;
+
+            while (true) {
+                while (chunk.hasNext()) {
+                    Candle candle = chunk.next();
+
+                    if (lastTime == null || candle.getTime().isAfter(lastTime)) {
+                        lastTime = candle.getTime();
+                        next = candle;
+
+                        return;
+                    }
+                }
+
+                if (readToEnd) {
+                    // Let go of the last chunk's list along with the replay.
+                    chunk = Collections.emptyIterator();
+
+                    return;
+                }
+
+                Instant chunkEnd = cursor.plus(replayChunk);
+
+                if (!chunkEnd.isBefore(end)) {
+                    chunkEnd = end;
+                    readToEnd = true;
+                }
+
+                chunk = candleRepository.getPeriod(instrumentId, cursor, chunkEnd).iterator();
+                cursor = chunkEnd;
+            }
+        }
     }
 
     private Set<String> getInstrumentIds() {
