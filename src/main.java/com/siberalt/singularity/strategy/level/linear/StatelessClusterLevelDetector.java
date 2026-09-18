@@ -14,7 +14,18 @@ import java.util.function.Function;
 
 public class StatelessClusterLevelDetector implements LevelDetector {
     private static final int MAX_LEVELS = 30;
-    private static final Map<Double, Function<Double, Double>> functionsCache = new WeakHashMap<>();
+    /**
+     * One flat function per price, shared by every detector in the process - and therefore reached
+     * from every thread that detects levels.
+     * <p>
+     * The map behind it is a {@link WeakHashMap}, which is not thread-safe, and two threads writing
+     * to it at once can leave a chain in its table pointing at itself. A reader that walks into that
+     * chain never comes out: sixteen threads detecting levels in parallel put five of them into an
+     * endless loop inside {@code computeIfAbsent}, where they sat for eighty minutes of a run that
+     * needed a minute. Guarded, the weak keys still let a price that is no longer referenced go.
+     */
+    private static final Map<Double, Function<Double, Double>> functionsCache =
+        Collections.synchronizedMap(new WeakHashMap<>());
     private StrengthCalculator strengthCalculator = new SimpleStrengthCalculator();
     private final ClusterAggregator clusterAggregator;
 

@@ -6,7 +6,11 @@ import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -14,6 +18,41 @@ import static org.mockito.Mockito.*;
 
 class StatelessClusterLevelDetectorTest {
     private final CandleFactory candleFactory = new CandleFactory(1L);
+
+    /**
+     * Levels are detected from several threads at once whenever a measurement sweeps instruments in
+     * parallel, and every one of them reaches the same static cache of flat functions. Unguarded, two
+     * writers can leave a chain in its table pointing at itself, and a reader that walks into it never
+     * returns: sixteen threads put five of themselves into an endless loop for eighty minutes.
+     */
+    @Test
+    void functionsAreCachedSafelyWhenManyThreadsDetectAtOnce() {
+        assertTimeoutPreemptively(Duration.ofSeconds(30), () -> {
+            int threads = 16;
+            ExecutorService pool = Executors.newFixedThreadPool(threads);
+            List<Future<?>> work = new ArrayList<>();
+
+            for (int thread = 0; thread < threads; thread++) {
+                int first = thread * 5000;
+
+                work.add(pool.submit(() -> {
+                    for (int at = first; at < first + 5000; at++) {
+                        double price = at / 100.0;
+
+                        assertEquals(price, StatelessClusterLevelDetector.createFunction(price).apply(0.0));
+                    }
+
+                    return null;
+                }));
+            }
+
+            for (Future<?> future : work) {
+                future.get();
+            }
+
+            pool.shutdown();
+        });
+    }
 
     @Test
     void detectReturnsEmptyListWhenCandlesIsNull() {
