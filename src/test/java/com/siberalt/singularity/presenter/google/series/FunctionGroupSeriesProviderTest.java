@@ -19,7 +19,7 @@ class FunctionGroupSeriesProviderTest {
         provider.addFunction(0, 50, func1);
         provider.addFunction(0, 100, func2);
 
-        Optional<SeriesChunk> result = provider.provide(0, 100, 10);
+        Optional<SeriesChunk> result = provider.provide(Bars.minutes(101), 10);
 
         assertTrue(result.isPresent());
         SeriesChunk chunk = result.get();
@@ -39,20 +39,14 @@ class FunctionGroupSeriesProviderTest {
     @Test
     void provideReturnsEmptyWhenNoFunctionsAdded() {
         FunctionGroupSeriesProvider provider = new FunctionGroupSeriesProvider("Test Series");
-        Optional<SeriesChunk> result = provider.provide(0, 100, 10);
+        Optional<SeriesChunk> result = provider.provide(Bars.minutes(101), 10);
         assertTrue(result.isEmpty());
-    }
-
-    @Test
-    void provideThrowsExceptionWhenStartGreaterThanEnd() {
-        FunctionGroupSeriesProvider provider = new FunctionGroupSeriesProvider("Test Series");
-        assertThrows(IllegalArgumentException.class, () -> provider.provide(100, 50, 10));
     }
 
     @Test
     void provideThrowsExceptionWhenStepIntervalIsZero() {
         FunctionGroupSeriesProvider provider = new FunctionGroupSeriesProvider("Test Series");
-        assertThrows(IllegalArgumentException.class, () -> provider.provide(0, 100, 0));
+        assertThrows(IllegalArgumentException.class, () -> provider.provide(Bars.minutes(101), 0));
     }
 
     @Test
@@ -70,7 +64,7 @@ class FunctionGroupSeriesProviderTest {
         provider.addFunction(function1);
         provider.addFunction(function2);
 
-        Optional<SeriesChunk> result = provider.provide(0, 100, 10);
+        Optional<SeriesChunk> result = provider.provide(Bars.minutes(101), 10);
         assertTrue(result.isPresent());
         assertEquals(1, result.get().columns().size());
     }
@@ -83,7 +77,7 @@ class FunctionGroupSeriesProviderTest {
         provider.addFunction(20, 80, func);
         provider.addFunction(0, 100, func);
 
-        Optional<SeriesChunk> result = provider.provide(0, 100, 10);
+        Optional<SeriesChunk> result = provider.provide(Bars.minutes(101), 10);
         assertTrue(result.isPresent());
         assertEquals(1, result.get().columns().size());
     }
@@ -93,7 +87,7 @@ class FunctionGroupSeriesProviderTest {
         FunctionGroupSeriesProvider provider = new FunctionGroupSeriesProvider("Test Series");
 
         provider.addFunction(0, 100, x -> x * 2);
-        Optional<SeriesChunk> result = provider.provide(0, 100, 10);
+        Optional<SeriesChunk> result = provider.provide(Bars.minutes(101), 10);
 
         assertTrue(result.isPresent());
         SeriesChunk chunk = result.get();
@@ -111,7 +105,7 @@ class FunctionGroupSeriesProviderTest {
             .build();
 
         provider.addFunction(function);
-        Optional<SeriesChunk> result = provider.provide(0, 100, 10);
+        Optional<SeriesChunk> result = provider.provide(Bars.minutes(101), 10);
 
         assertTrue(result.isPresent());
         SeriesChunk chunk = result.get();
@@ -136,7 +130,7 @@ class FunctionGroupSeriesProviderTest {
         provider.addFunction(function1);
         provider.addFunction(function2);
 
-        Optional<SeriesChunk> result = provider.provide(0, 100, 10);
+        Optional<SeriesChunk> result = provider.provide(Bars.minutes(101), 10);
 
         assertTrue(result.isPresent());
         SeriesChunk chunk = result.get();
@@ -163,7 +157,7 @@ class FunctionGroupSeriesProviderTest {
         provider.addFunction(function1);
         provider.addFunction(50, 100, func2);
 
-        Optional<SeriesChunk> result = provider.provide(0, 100, 10);
+        Optional<SeriesChunk> result = provider.provide(Bars.minutes(101), 10);
 
         assertTrue(result.isPresent());
         SeriesChunk chunk = result.get();

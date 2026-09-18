@@ -12,12 +12,7 @@ public class SeriesDataAggregator implements SeriesProvider {
         return this;
     }
 
-    public Optional<SeriesChunk> provide(long start, long end, long stepInterval) {
-        return merge((int) ((end - start) / stepInterval + 1), provider -> provider.provide(start, end, stepInterval));
-    }
-
     /** Every series on the same axis, so that a row means the same bar in all of them. */
-    @Override
     public Optional<SeriesChunk> provide(BarAxis axis, long stepInterval) {
         if (axis.isEmpty()) {
             return Optional.empty();

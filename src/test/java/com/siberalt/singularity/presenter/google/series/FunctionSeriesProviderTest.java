@@ -11,21 +11,26 @@ class FunctionSeriesProviderTest {
     void provideHandlesEmptyLinesAndAnnotations() {
         FunctionSeriesProvider provider = new FunctionSeriesProvider("Empty Test");
 
-        Optional<SeriesChunk> series = provider.provide(0, 10, 1);
+        Optional<SeriesChunk> series = provider.provide(Bars.minutes(11), 1);
 
         assertFalse(series.isPresent());
     }
 
     @Test
-    void provideHandlesSinglePointRange() {
-        FunctionSeriesProvider provider = new FunctionSeriesProvider("Single Point Test");
+    void provideDrawsOnlyTheRowsTheSegmentCovers() {
+        FunctionSeriesProvider provider = new FunctionSeriesProvider("Partly Covered Test");
         provider.addFunction(5, 15, x -> x * 2);
 
-        Optional<SeriesChunk> series = provider.provide(10, 10, 1);
+        // The axis ends at index 10, so the segment is drawn from its own start to the last bar.
+        Optional<SeriesChunk> series = provider.provide(Bars.minutes(11), 1);
 
         assertTrue(series.isPresent());
-        assertEquals(1, series.get().data().length);
-        assertEquals(20.0, series.get().data()[0][0]);
+        Object[][] data = series.get().data();
+
+        assertEquals(11, data.length);
+        assertNull(data[4][0]);
+        assertEquals(10.0, data[5][0]);
+        assertEquals(20.0, data[10][0]);
     }
 
     @Test
@@ -33,7 +38,7 @@ class FunctionSeriesProviderTest {
         FunctionSeriesProvider provider = new FunctionSeriesProvider("Large Step Interval Test");
         provider.addFunction(0, 20, x -> x + 1);
 
-        Optional<SeriesChunk> series = provider.provide(0, 10, 15);
+        Optional<SeriesChunk> series = provider.provide(Bars.minutes(11), 15);
 
         assertTrue(series.isPresent());
         assertEquals(1, series.get().data().length);
@@ -45,7 +50,7 @@ class FunctionSeriesProviderTest {
         FunctionSeriesProvider provider = new FunctionSeriesProvider("Annotations Only Test");
         provider.addAnnotation(5, new Annotation("Label", "Text"));
 
-        Optional<SeriesChunk> series = provider.provide(0, 10, 1);
+        Optional<SeriesChunk> series = provider.provide(Bars.minutes(11), 1);
 
         assertFalse(series.isPresent());
     }
@@ -56,7 +61,7 @@ class FunctionSeriesProviderTest {
         provider.addAnnotation(15, new Annotation("Out of Range"));
         provider.addFunction(0, 10, x -> x); // Line: y = x
 
-        Optional<SeriesChunk> series = provider.provide(0, 10, 1);
+        Optional<SeriesChunk> series = provider.provide(Bars.minutes(11), 1);
 
         assertTrue(series.isPresent());
         assertEquals(11, series.get().data().length);
@@ -72,7 +77,7 @@ class FunctionSeriesProviderTest {
         provider.addFunction(0, 10, x -> x * 2); // Line: y = 2x
         provider.addAnnotation(5, new Annotation("Midpoint", "This is the midpoint"));
 
-        Optional<SeriesChunk> series = provider.provide(0, 10, 1);
+        Optional<SeriesChunk> series = provider.provide(Bars.minutes(11), 1);
 
         assertTrue(series.isPresent());
         Object[][] data = series.get().data();
@@ -96,7 +101,7 @@ class FunctionSeriesProviderTest {
         provider.addFunction(0, 20, x -> x + 1); // Line: y = x + 1
         provider.addAnnotation(10, new Annotation("Annotation", "At x = 10"));
 
-        Optional<SeriesChunk> series = provider.provide(0, 20, 5);
+        Optional<SeriesChunk> series = provider.provide(Bars.minutes(21), 5);
 
         assertTrue(series.isPresent());
         Object[][] data = series.get().data();
@@ -126,7 +131,7 @@ class FunctionSeriesProviderTest {
         provider.addFunction(0, 10, x -> x * 2); // Line 1: y = 2x
         provider.addFunction(15, 25, x -> x + 5); // Line 2: y = x + 5
 
-        Optional<SeriesChunk> series = provider.provide(0, 25, 5);
+        Optional<SeriesChunk> series = provider.provide(Bars.minutes(26), 5);
 
         assertTrue(series.isPresent());
         Object[][] data = series.get().data();

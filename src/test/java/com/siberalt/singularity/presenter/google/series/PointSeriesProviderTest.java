@@ -13,18 +13,18 @@ public class PointSeriesProviderTest {
     void provideReturnsEmptyWhenNoPointsAdded() {
         PointSeriesProvider provider = new PointSeriesProvider("Empty Points Test");
 
-        Optional<SeriesChunk> series = provider.provide(0, 10, 1);
+        Optional<SeriesChunk> series = provider.provide(Bars.minutes(11), 1);
 
         assertTrue(series.isEmpty());
     }
 
     @Test
-    void provideFiltersPointsOutsideRange() {
+    void provideFiltersPointsOutsideTheAxis() {
         PointSeriesProvider provider = new PointSeriesProvider("Range Filter Test");
         provider.addPoint(5, 10.0);
         provider.addPoint(15, 20.0);
 
-        Optional<SeriesChunk> series = provider.provide(0, 10, 1);
+        Optional<SeriesChunk> series = provider.provide(Bars.minutes(11), 1);
 
         assertTrue(series.isPresent());
         Object[][] data = series.get().data();
@@ -41,23 +41,23 @@ public class PointSeriesProviderTest {
         provider.addPoint(2, 5.0);
         provider.addPoint(7, 10.0);
 
-        Optional<SeriesChunk> series = provider.provide(0, 10, 5);
+        Optional<SeriesChunk> series = provider.provide(Bars.minutes(11), 5);
 
         assertTrue(series.isPresent());
         Object[][] data = series.get().data();
 
         assertEquals(3, data.length);
-        assertEquals(5.0, data[0][0]); // Adjusted to x = 0
-        assertEquals(10.0, data[1][0]); // Adjusted to x = 5
-        assertNull(data[2][0]); // No point at x = 10
+        assertEquals(5.0, data[0][0]); // The bar of index 2 is drawn at the row of index 0
+        assertEquals(10.0, data[1][0]); // And the bar of index 7 at the row of index 5
+        assertNull(data[2][0]);
     }
 
     @Test
-    void provideHandlesEmptyRange() {
-        PointSeriesProvider provider = new PointSeriesProvider("Empty Range Test");
+    void provideHandlesAnEmptyAxis() {
+        PointSeriesProvider provider = new PointSeriesProvider("Empty Axis Test");
         provider.addPoint(5, 10.0);
 
-        Optional<SeriesChunk> series = provider.provide(10, 5, 1);
+        Optional<SeriesChunk> series = provider.provide(Bars.minutes(0), 1);
 
         assertTrue(series.isEmpty());
     }
@@ -68,7 +68,7 @@ public class PointSeriesProviderTest {
         provider.addPoint(5, 10.0);
         provider.setColor("#FF0000").setSize(10).setShape(Shape.SQUARE);
 
-        Optional<SeriesChunk> series = provider.provide(0, 10, 1);
+        Optional<SeriesChunk> series = provider.provide(Bars.minutes(11), 1);
 
         assertTrue(series.isPresent());
         List<Map<String, Object>> optionsList = series.get().options();

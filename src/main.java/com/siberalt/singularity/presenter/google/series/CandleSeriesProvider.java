@@ -1,7 +1,6 @@
 package com.siberalt.singularity.presenter.google.series;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.shared.RangeLong;
 
 import java.util.Collections;
 import java.util.List;
@@ -73,56 +72,6 @@ public class CandleSeriesProvider implements SeriesProvider {
     public CandleSeriesProvider(List<Candle> candles, Function<Candle, Double> priceExtractor) {
         this.candles = candles;
         this.priceExtractor = priceExtractor;
-    }
-
-    @Override
-    public Optional<SeriesChunk> provide(long start, long end, long stepInterval) {
-        if (candles.isEmpty()) {
-            return Optional.empty(); // No data to provide
-        }
-
-        // 1. Найти первую и последнюю свечу в диапазоне
-        long firstIndex = candles.get(0).getIndex();
-        long lastIndex = candles.get(candles.size() - 1).getIndex();
-
-        if (end < firstIndex || start > lastIndex) {
-            return Optional.empty();
-        }
-
-        List<Column> columns = List.of(
-            new Column(ColumnType.DATE, ColumnRole.DOMAIN, xAxisTitle),
-            new Column(ColumnType.NUMBER, ColumnRole.DATA, yAxisTitle)
-        );
-
-        long index = 0;
-        Object[][] data = new Object[(int) ((end - start) / stepInterval + 1)][columns.size()];
-
-        if (data.length == 0) {
-            return Optional.empty(); // No data to provide
-        }
-
-        for (Candle candle : candles) {
-            if (!RangeLong.belongsTo(start, end, candle.getIndex())) {
-                continue;
-            }
-
-            int intervalIndex = (int) (index / stepInterval);
-
-            if (intervalIndex >= data.length) {
-                break; // Prevents ArrayIndexOutOfBoundsException
-            }
-
-            if (index % stepInterval == 0) {
-                data[intervalIndex] = new Object[]{
-                    candle.getTime().toString(),
-                    priceExtractor.apply(candle)
-                };
-            }
-
-            index++;
-        }
-
-        return Optional.of(new SeriesChunk(columns, data, options()));
     }
 
     /**

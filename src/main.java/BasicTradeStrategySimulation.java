@@ -342,7 +342,7 @@ public class BasicTradeStrategySimulation {
     ) {
         List<Candle> candles = candleRepository.getPeriod(instrumentId, startTime, endTime);
 
-        OrderSeriesProvider orderSeriesProvider = new OrderSeriesProvider(ordersOperations, candles)
+        OrderSeriesProvider orderSeriesProvider = new OrderSeriesProvider(ordersOperations)
             .setBuyPointsSize(4)
             .setSellPointsSize(4)
             .setIncludeOutOfRangeOrders(true);

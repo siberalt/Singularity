@@ -1,13 +1,9 @@
 package com.siberalt.singularity.presenter.google.series;
 
-import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.operation.Operation;
 
-import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.TreeMap;
 
 public class OrderSeriesProvider implements SeriesProvider {
     private final List<Operation> ordersOperations;
@@ -19,15 +15,10 @@ public class OrderSeriesProvider implements SeriesProvider {
     private String sellOrdersColor = "#FF0000";
     private int buyPointsSize = 5;
     private int sellPointsSize = 5;
-    private final TreeMap<Instant, Long> indexesByTime = new TreeMap<>();
     private boolean includeOutOfRangeOrders = false;
 
-    public OrderSeriesProvider(List<Operation> orders, List<Candle> candles) {
+    public OrderSeriesProvider(List<Operation> orders) {
         this.ordersOperations = orders;
-
-        for (int i = 0; i < candles.size(); i++) {
-            indexesByTime.put(candles.get(i).getTime(), (long) i);
-        }
     }
 
     public int getBuyPointsSize() {
@@ -83,64 +74,6 @@ public class OrderSeriesProvider implements SeriesProvider {
         return this;
     }
 
-    @Override
-    public Optional<SeriesChunk> provide(long start, long end, long stepInterval) {
-        if (ordersOperations == null || ordersOperations.isEmpty() || indexesByTime.isEmpty()) {
-            return Optional.empty();
-        }
-
-        PointSeriesProvider buyPoints = new PointSeriesProvider(buyOrdersTitle)
-            .setSize(buyPointsSize)
-            .setColor(buyOrdersColor)
-            .setShape(buyOrderShape);
-
-        PointSeriesProvider sellPoints = new PointSeriesProvider(sellOrdersTitle)
-            .setSize(sellPointsSize)
-            .setColor(sellOrdersColor)
-            .setShape(sellOrderShape);
-
-        for (Operation order : ordersOperations) {
-            Instant orderTime = order.date();
-            double orderPrice = order.price().toDouble();
-
-            Map.Entry<Instant, Long> floorEntry = indexesByTime.floorEntry(orderTime);
-            Map.Entry<Instant, Long> ceilingEntry = indexesByTime.ceilingEntry(orderTime);
-
-            if (floorEntry == null || ceilingEntry == null) {
-                if (includeOutOfRangeOrders) {
-                    long edgeIndex = floorEntry == null
-                        ? indexesByTime.firstEntry().getValue()
-                        : indexesByTime.lastEntry().getValue();
-
-                    if (order.direction().isBuy()) {
-                        buyPoints.addPoint(edgeIndex + start, orderPrice);
-                    } else {
-                        sellPoints.addPoint(edgeIndex + start, orderPrice);
-                    }
-                }
-                continue; // Skip orders outside the range if the flag is not set
-            }
-
-            long floorDiff = Math.abs(orderTime.toEpochMilli() - floorEntry.getKey().toEpochMilli());
-            long ceilingDiff = Math.abs(orderTime.toEpochMilli() - ceilingEntry.getKey().toEpochMilli());
-            Map.Entry<Instant, Long> closestEntry = floorDiff <= ceilingDiff ? floorEntry : ceilingEntry;
-
-            long timeOrderIndex = closestEntry.getValue();
-
-            if (order.direction().isBuy()) {
-                buyPoints.addPoint(timeOrderIndex + start, orderPrice);
-            } else {
-                sellPoints.addPoint(timeOrderIndex + start, orderPrice);
-            }
-        }
-
-        SeriesDataAggregator aggregator = new SeriesDataAggregator()
-            .addSeriesProvider(buyPoints)
-            .addSeriesProvider(sellPoints);
-
-        return aggregator.provide(start, end, stepInterval);
-    }
-
     /**
      * Each order in the row of the bar it was executed during, found by time. Not the nearest bar:
      * an order at ten to eleven belongs to the ten o'clock hour, not to eleven. Orders before the
@@ -173,14 +106,13 @@ public class OrderSeriesProvider implements SeriesProvider {
                 row = row < 0 ? 0 : axis.size() - 1;
             }
 
-            (order.direction().isBuy() ? buyPoints : sellPoints).addPoint(row, order.price().toDouble());
+            // Points are placed by index, so a row is named by the index of the bar standing on it.
+            (order.direction().isBuy() ? buyPoints : sellPoints).addPoint(axis.indexAt(row), order.price().toDouble());
         }
 
-        // The points are rows already, so they are laid out over the range of rows rather than
-        // through the axis a second time.
         return new SeriesDataAggregator()
             .addSeriesProvider(buyPoints)
             .addSeriesProvider(sellPoints)
-            .provide(0, axis.size() - 1, stepInterval);
+            .provide(axis, stepInterval);
     }
 }

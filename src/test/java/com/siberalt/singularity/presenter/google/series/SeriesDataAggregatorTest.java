@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -16,8 +17,16 @@ public class SeriesDataAggregatorTest {
     @Test
     void aggregateReturnsEmptyDataWhenNoProviders() {
         SeriesDataAggregator aggregator = new SeriesDataAggregator();
-        Optional<SeriesChunk> result = aggregator.provide(0, 1000, 100);
+        Optional<SeriesChunk> result = aggregator.provide(Bars.minutes(10), 1);
         assertFalse(result.isPresent());
+    }
+
+    @Test
+    void aggregateReturnsEmptyDataForAnEmptyAxis() {
+        SeriesProvider provider = mock(SeriesProvider.class);
+        SeriesDataAggregator aggregator = new SeriesDataAggregator().addSeriesProvider(provider);
+
+        assertFalse(aggregator.provide(Bars.minutes(0), 1).isPresent());
     }
 
     @Test
@@ -32,10 +41,10 @@ public class SeriesDataAggregatorTest {
             List.of(Map.of("key1", "value1"))
         );
 
-        when(mockProvider.provide(anyLong(), anyLong(), anyLong())).thenReturn(Optional.of(realChunk));
+        when(mockProvider.provide(any(BarAxis.class), anyLong())).thenReturn(Optional.of(realChunk));
         SeriesDataAggregator aggregator = new SeriesDataAggregator().addSeriesProvider(mockProvider);
 
-        assertThrows(IllegalStateException.class, () -> aggregator.provide(0, 400, 100));
+        assertThrows(IllegalStateException.class, () -> aggregator.provide(Bars.minutes(3), 1));
     }
 
     @Test
@@ -61,14 +70,16 @@ public class SeriesDataAggregatorTest {
             List.of(Map.of("key2", "value2"))
         );
 
-        when(provider1.provide(0, 100, 50)).thenReturn(Optional.of(chunk1));
-        when(provider2.provide(0, 100, 50)).thenReturn(Optional.of(chunk2));
+        BarAxis axis = Bars.minutes(3);
+
+        when(provider1.provide(axis, 1L)).thenReturn(Optional.of(chunk1));
+        when(provider2.provide(axis, 1L)).thenReturn(Optional.of(chunk2));
 
         SeriesDataAggregator aggregator = new SeriesDataAggregator()
             .addSeriesProvider(provider1)
             .addSeriesProvider(provider2);
 
-        Optional<SeriesChunk> result = aggregator.provide(0, 100, 50);
+        Optional<SeriesChunk> result = aggregator.provide(axis, 1);
         assertTrue(result.isPresent());
         SeriesChunk chunk = result.get();
 
@@ -96,14 +107,14 @@ public class SeriesDataAggregatorTest {
             List.of(Map.of("key1", "value1"))
         );
 
-        when(provider1.provide(anyLong(), anyLong(), anyLong())).thenReturn(Optional.of(chunk1));
-        when(provider2.provide(anyLong(), anyLong(), anyLong())).thenReturn(Optional.empty());
+        when(provider1.provide(any(BarAxis.class), anyLong())).thenReturn(Optional.of(chunk1));
+        when(provider2.provide(any(BarAxis.class), anyLong())).thenReturn(Optional.empty());
 
         SeriesDataAggregator aggregator = new SeriesDataAggregator()
             .addSeriesProvider(provider1)
             .addSeriesProvider(provider2);
 
-        Optional<SeriesChunk> result = aggregator.provide(0, 100, 50);
+        Optional<SeriesChunk> result = aggregator.provide(Bars.minutes(3), 1);
         assertTrue(result.isPresent());
         SeriesChunk chunk = result.get();
 

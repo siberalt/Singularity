@@ -1,6 +1,5 @@
 package com.siberalt.singularity.presenter.google.series;
 
-import com.siberalt.singularity.presenter.google.PriceChart;
 
 import java.util.*;
 import java.util.function.Function;
@@ -116,76 +115,6 @@ public class FunctionGroupSeriesProvider implements SeriesProvider {
     public FunctionGroupSeriesProvider setLineWidth(int lineWidth) {
         this.lineWidth = lineWidth;
         return this;
-    }
-
-    @Override
-    public Optional<SeriesChunk> provide(long start, long end, long stepInterval) {
-        if (start > end) {
-            throw new IllegalArgumentException("Start must be less than end");
-        }
-
-        if (stepInterval <= 0) {
-            throw new IllegalArgumentException("Step interval must be greater than zero");
-        }
-
-        if (functionDetails.isEmpty()) {
-            return Optional.empty(); // No lines to provide
-        }
-
-        List<Map<String, Object>> optionsList = new ArrayList<>();
-
-        List<FunctionDetails> functions = this.functionDetails.values().stream()
-            .flatMap(List::stream)
-            .sorted(Comparator.comparingInt(FunctionDetails::getOrder)) // Sort by order of addition
-            .toList();
-
-        List<Column> allColumns = functions.stream()
-            .flatMap(fd -> fd.columns.stream())
-            .toList();
-
-        for (Column column : allColumns) {
-            if (column.role().equals(ColumnRole.DATA)) {
-                Map<String, Object> options = new HashMap<>();
-                options.put("color", color);
-                options.put("lineWidth", lineWidth);
-                optionsList.add(options);
-            } else {
-                optionsList.add(Collections.emptyMap());
-            }
-        }
-
-        Object[][] data = new Object[(int) ((end - start) / stepInterval + 1)][allColumns.size()];
-        int columnOffset = 0;
-
-        for (FunctionDetails functionDetails : functions) {
-            if (functionDetails.x2 < start || functionDetails.x1 > end) {
-                continue; // Skip segments outside the requested range
-            }
-
-            long effectiveStart = Math.max(PriceChart.adjustToStepInterval(functionDetails.x1, stepInterval), start);
-            long effectiveEnd = Math.min(PriceChart.adjustToStepInterval(functionDetails.x2, stepInterval), end);
-            Function<Double, Double> function = functionDetails.function;
-
-            for (long x = effectiveStart; x <= effectiveEnd; x += stepInterval) {
-                int rowIndex = (int) ((x - start) / stepInterval);
-
-                data[rowIndex][columnOffset] = function.apply((double) x);
-
-                if (functionDetails.annotations.containsKey(x)) {
-                    var annotation = functionDetails.annotations.get(x);
-
-                    data[rowIndex][columnOffset + 1] = annotation.label();
-                    data[rowIndex][columnOffset + 2] = annotation.text();
-                } else if (!functionDetails.annotations.isEmpty()) {
-                    data[rowIndex][columnOffset + 1] = null; // Annotation label
-                    data[rowIndex][columnOffset + 2] = null; // Annotation text
-                }
-            }
-
-            columnOffset += functionDetails.columns.size();
-        }
-
-        return Optional.of(new SeriesChunk(allColumns, data, optionsList));
     }
 
     /**

@@ -103,9 +103,4 @@ public class PriceChart {
 
         return aggregator.provide(axis, stepInterval).orElseThrow();
     }
-
-    public static long adjustToStepInterval(long value, long stepInterval) {
-        long remainder = value % stepInterval;
-        return remainder <= (stepInterval / 2) ? value - remainder : value - remainder + stepInterval;
-    }
 }

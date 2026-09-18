@@ -39,7 +39,7 @@ class PriceChartTest {
         OrderSeriesProvider orders = new OrderSeriesProvider(List.of(
             order(OPEN.plusSeconds(3600 + 50 * 60), OperationType.BUY, 5.0),  // 08:50, a quiet minute of the second hour
             order(OPEN.plusSeconds(7200 + 59 * 60), OperationType.SELL, 6.0)  // 09:59
-        ), minutes);
+        ));
 
         FunctionGroupSeriesProvider levels = new FunctionGroupSeriesProvider("Level");
         levels.addFunction(index + 70, index + 200, x -> x); // from inside the second hour into the third
@@ -94,11 +94,11 @@ class PriceChartTest {
     }
 
     /**
-     * Drawn minute by minute, the axis is the old layout: a bar's row is its index less the first
-     * one's. The charts every other simulation draws must come out the same as before.
+     * Drawn minute by minute, a bar's row is its index less the first one's - the layout every other
+     * simulation here draws against, and the one the levels and extremes they add are addressed in.
      */
     @Test
-    void minuteChartsComeOutAsTheyDidBefore() {
+    void minuteChartsPlaceABarPerRowFromItsIndex() {
         List<Candle> minutes = risingMinutes();
 
         PointSeriesProvider points = new PointSeriesProvider("Points");
@@ -107,50 +107,46 @@ class PriceChartTest {
 
         FunctionGroupSeriesProvider lines = new FunctionGroupSeriesProvider("Lines");
         lines.addFunction(505, 520, x -> x / 2);
-        lines.addFunction(525, 539, x -> -x);
 
-        SeriesChunk expected = new SeriesDataAggregator()
-            .addSeriesProvider(new CandleSeriesProvider(minutes, Candle::getCloseAsDouble))
-            .addSeriesProvider(points)
-            .addSeriesProvider(lines)
-            .provide(500, 539, 1)
-            .orElseThrow();
-        SeriesChunk actual = new PriceChart(Candle::getCloseAsDouble)
+        Object[][] data = new PriceChart(Candle::getCloseAsDouble)
             .setStepInterval(1)
             .addSeriesProvider(points)
             .addSeriesProvider(lines)
-            .chunkOf(minutes);
+            .chunkOf(minutes)
+            .data();
 
-        assertEquals(expected.columns(), actual.columns());
-        assertArrayEquals(expected.data(), actual.data());
+        // columns: time, price, points, line
+        assertEquals(40, data.length);
+        assertEquals(100.0, data[0][1]);
+        assertEquals(139.0, data[39][1]);
+        assertEquals(1.0, data[7][2]);
+        assertEquals(2.0, data[31][2]);
+        assertNull(data[4][3]);
+        assertEquals(252.5, data[5][3]);
+        assertEquals(260.0, data[20][3]);
+        assertNull(data[21][3]);
     }
 
-    /**
-     * At a wider step the price and the points are thinned as before. Lines are not compared: the
-     * old layout rounded a segment's ends to the step on the raw index, which drew a line a row
-     * before it began and read it outside its own range.
-     */
+    /** At a wider step every step-th bar is a row, and a point moves to the nearest row drawn. */
     @Test
-    void thinnedMinuteChartsComeOutAsTheyDidBefore() {
+    void aWiderStepThinsTheChart() {
         List<Candle> minutes = risingMinutes();
 
-        for (int step : new int[]{3, 10}) {
-            PointSeriesProvider points = new PointSeriesProvider("Points");
-            points.addPoint(507, 1.0);
-            points.addPoint(531, 2.0);
+        PointSeriesProvider points = new PointSeriesProvider("Points");
+        points.addPoint(507, 1.0);
+        points.addPoint(531, 2.0);
 
-            SeriesChunk expected = new SeriesDataAggregator()
-                .addSeriesProvider(new CandleSeriesProvider(minutes, Candle::getCloseAsDouble))
-                .addSeriesProvider(points)
-                .provide(500, 539, step)
-                .orElseThrow();
-            SeriesChunk actual = new PriceChart(Candle::getCloseAsDouble)
-                .setStepInterval(step)
-                .addSeriesProvider(points)
-                .chunkOf(minutes);
+        Object[][] data = new PriceChart(Candle::getCloseAsDouble)
+            .setStepInterval(10)
+            .addSeriesProvider(points)
+            .chunkOf(minutes)
+            .data();
 
-            assertArrayEquals(expected.data(), actual.data(), "step " + step);
-        }
+        assertEquals(4, data.length);
+        assertEquals(100.0, data[0][1]);
+        assertEquals(110.0, data[1][1]);
+        assertEquals(1.0, data[1][2]);  // the bar of index 507 is drawn on the row of index 510
+        assertEquals(2.0, data[3][2]);  // and 531 on the row of index 530
     }
 
     private static List<Candle> risingMinutes() {
@@ -170,6 +166,11 @@ class PriceChartTest {
     }
 
     private static Operation order(Instant time, OperationType direction, double price) {
-        return Operation.builder().date(time).direction(direction).price(Quotation.of(price)).build();
+        return Operation.builder()
+            .date(time)
+            .executedDate(time)
+            .direction(direction)
+            .price(Quotation.of(price))
+            .build();
     }
 }

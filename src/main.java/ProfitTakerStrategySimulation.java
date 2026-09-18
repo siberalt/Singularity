@@ -158,7 +158,7 @@ public class ProfitTakerStrategySimulation {
         Instant endTime
     ) {
         List<Candle> candles = candleRepository.getPeriod(instrumentId, startTime, endTime);
-        OrderSeriesProvider orderSeriesProvider = new OrderSeriesProvider(orders, candles)
+        OrderSeriesProvider orderSeriesProvider = new OrderSeriesProvider(orders)
             .setIncludeOutOfRangeOrders(true);
 
         PriceChart priceChart = new PriceChart(
