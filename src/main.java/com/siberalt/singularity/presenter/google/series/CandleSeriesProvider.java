@@ -122,13 +122,50 @@ public class CandleSeriesProvider implements SeriesProvider {
             index++;
         }
 
-        List<Map<String, Object>> options = List.of(
+        return Optional.of(new SeriesChunk(columns, data, options()));
+    }
+
+    /**
+     * Each candle in the row of the bar it falls in by time, every {@code stepInterval}-th bar
+     * drawn. Normally the candles are the axis's own bars, one to a row; candles of another width
+     * still land where they belong, the last of them winning a row they share.
+     */
+    @Override
+    public Optional<SeriesChunk> provide(BarAxis axis, long stepInterval) {
+        if (candles.isEmpty() || axis.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Object[][] data = new Object[axis.rowsAt(stepInterval)][2];
+        boolean any = false;
+
+        for (Candle candle : candles) {
+            int row = axis.rowOfTime(candle.getTime());
+
+            if (row < 0 || row >= axis.size() || row % stepInterval != 0) {
+                continue;
+            }
+
+            data[(int) (row / stepInterval)] = new Object[]{candle.getTime().toString(), priceExtractor.apply(candle)};
+            any = true;
+        }
+
+        return any ? Optional.of(new SeriesChunk(columns(), data, options())) : Optional.empty();
+    }
+
+    private List<Column> columns() {
+        return List.of(
+            new Column(ColumnType.DATE, ColumnRole.DOMAIN, xAxisTitle),
+            new Column(ColumnType.NUMBER, ColumnRole.DATA, yAxisTitle)
+        );
+    }
+
+    private List<Map<String, Object>> options() {
+        return List.of(
             xAxisOptions,
             null == yAxisOptions
                 ? Map.of("color", priceLineColor, "lineWidth", priceLineWidth)
                 : yAxisOptions
         );
-
-        return Optional.of(new SeriesChunk(columns, data, options));
     }
 }

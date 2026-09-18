@@ -52,7 +52,7 @@ import java.util.Properties;
  * it can tell a finished load from one with holes. The checkpoint makes the re-run fetch only those.
  */
 public class FetchTinkoffCandles {
-    private static final String DEFAULT_INSTRUMENT = "TMOS";
+    private static final String DEFAULT_INSTRUMENT = "55371b1f-8f7c-4c12-9d93-386fae5ec12a";
     private static final CandleInterval INTERVAL = CandleInterval.MIN_1;
     // Лимит Tinkoff API для минутных свечей — до 1 дня за один запрос
     // (https://developer.tbank.ru/invest/services/quotes/faq_marketdata)
@@ -61,7 +61,7 @@ public class FetchTinkoffCandles {
     // не сам Tinkoff API; консервативное значение, чтобы не упереться в rate limit)
     private static final int CHUNK_PARALLELISM = 5;
     private static final Instant FROM = Instant.parse("2021-01-01T00:00:00Z");
-    private static final Instant TO = Instant.parse("2027-01-01T00:00:00Z");
+    private static final Instant TO = Instant.parse("2022-01-01T00:00:00Z");
 
     public static void main(String[] args) throws IOException, AbstractException, SQLException {
         List<String> queries = args.length == 0 ? List.of(DEFAULT_INSTRUMENT) : List.of(args);

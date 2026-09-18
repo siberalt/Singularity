@@ -119,4 +119,63 @@ public class FunctionSeriesProvider implements SeriesProvider {
 
         return Optional.of(new SeriesChunk(columns, data, List.of(options)));
     }
+
+    /**
+     * Each segment over the rows of the bars its candle indices cover, read at the index of each
+     * bar's first candle kept inside the segment - see {@link FunctionGroupSeriesProvider}.
+     */
+    @Override
+    public Optional<SeriesChunk> provide(BarAxis axis, long stepInterval) {
+        if (stepInterval <= 0) {
+            throw new IllegalArgumentException("Step interval must be greater than zero");
+        }
+
+        if (lines.isEmpty() || axis.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<Column> columns = new ArrayList<>(List.of(new Column(ColumnType.NUMBER, ColumnRole.DATA, title)));
+
+        if (!annotations.isEmpty()) {
+            columns.add(new Column(ColumnType.STRING, ColumnRole.ANNOTATION));
+            columns.add(new Column(ColumnType.STRING, ColumnRole.ANNOTATION_TEXT));
+        }
+
+        Map<Integer, Annotation> annotationsByRow = new HashMap<>();
+        annotations.forEach((x, annotation) -> annotationsByRow.put(axis.rowOfIndex(x), annotation));
+
+        Object[][] data = new Object[axis.rowsAt(stepInterval)][columns.size()];
+
+        for (Map.Entry<Segment, Function<Double, Double>> line : lines.entrySet()) {
+            Segment segment = line.getKey();
+            int firstRow = axis.rowOfIndex(segment.x1);
+            int lastRow = axis.rowOfIndex(segment.x2);
+
+            if (lastRow < 0 || firstRow >= axis.size()) {
+                continue;
+            }
+
+            firstRow = Math.max(0, firstRow);
+            lastRow = Math.min(axis.size() - 1, lastRow);
+
+            for (int row = (int) (Math.ceilDiv(firstRow, stepInterval) * stepInterval); row <= lastRow; row += (int) stepInterval) {
+                int dataRow = (int) (row / stepInterval);
+                long x = Math.clamp(axis.indexAt(row), segment.x1, segment.x2);
+
+                data[dataRow][0] = line.getValue().apply((double) x);
+
+                if (!annotations.isEmpty()) {
+                    Annotation annotation = annotationsByRow.get(row);
+                    data[dataRow][1] = annotation == null ? null : annotation.label();
+                    data[dataRow][2] = annotation == null ? null : annotation.text();
+                }
+            }
+        }
+
+        Map<String, Object> options = new HashMap<>();
+        options.put("color", color);
+        options.put("lineWidth", lineWidth);
+
+        return Optional.of(new SeriesChunk(columns, data, List.of(options)));
+    }
 }

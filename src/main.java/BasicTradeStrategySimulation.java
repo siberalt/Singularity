@@ -1,15 +1,13 @@
 import com.siberalt.singularity.broker.contract.execution.EventSubscriptionBroker;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.instrument.common.InstrumentType;
+import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.impl.decorator.PositionRiskManagerUpsideCalculator;
 import com.siberalt.singularity.broker.impl.mock.EventMockBroker;
 import com.siberalt.singularity.configuration.ConfigInterface;
 import com.siberalt.singularity.configuration.YamlConfig;
-import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.entity.candle.ReadCandleRepository;
-import com.siberalt.singularity.entity.candle.SqliteCandleRepository;
-import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
+import com.siberalt.singularity.entity.candle.*;
 import com.siberalt.singularity.entity.instrument.InstrumentIdResolver;
 import com.siberalt.singularity.entity.instrument.SqliteInstrumentRepository;
 import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
@@ -53,6 +51,7 @@ import com.siberalt.singularity.strategy.upside.level.adaptive.AdaptiveUpsideCal
 import com.siberalt.singularity.strategy.upside.subrange.CalendarPeriodFilterDecorator;
 import com.siberalt.singularity.strategy.upside.volume.VWAPUpsideCalculator;
 import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
+import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 
 import java.awt.*;
 import java.io.IOException;
@@ -68,8 +67,8 @@ public class BasicTradeStrategySimulation {
     private final static String INSTRUMENT_ID = "55371b1f-8f7c-4c12-9d93-386fae5ec12a";
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
-        Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
-        Instant endTime = Instant.parse("2022-01-01T00:00:00Z");
+        Instant startTime = Instant.parse("2023-01-01T00:00:00Z");
+        Instant endTime = Instant.parse("2023-02-01T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
@@ -253,16 +252,33 @@ public class BasicTradeStrategySimulation {
             )
         );
 
+        // The stop is checked on every minute, but measured in hourly volatility: four hourly ATRs, as
+        // when it sat behind the aggregator. Four minute ATRs would be a far tighter stop.
+        VolatilityCalculator hourlyAtr = ATRVolatilityCalculator.ofMultiplier(4);
         PositionRiskManagerUpsideCalculator riskManagerUpsideCalculator = new PositionRiskManagerUpsideCalculator(
             accountId,
             INSTRUMENT_ID,
             new BaseEntryPriceCalculator(readOperationRepository),
-            ATRVolatilityCalculator.ofMultiplier(4)
+            candles -> hourlyAtr.calculate(new CandleAggregator().aggregate(candles, CandleInterval.HOUR))
         );
-        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(4);
+        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(2);
 
+        // The aggregator hands on one closed hour at a time, so the window of hours sits behind it.
+        AggregatingUpsideCalculator hourlySignal = new AggregatingUpsideCalculator(
+            CandleInterval.HOUR,
+            new WindowUpsideCalculator(
+                new UpsideSignalAmplifier(slopeUpsideCalculator, 0.9, 0.9),
+                12
+            )
+        );
+
+        // The hourly signal wins when it has something to say; in the minutes between hours it is
+        // neutral, and the risk manager reads the last day of minutes. The window of minutes sits in
+        // front of the switch rather than behind its second branch, which is asked only when the
+        // signal is quiet and would miss the minutes it was not asked on; the aggregator skips the
+        // minutes it has already seen, so handing it the whole window costs it nothing.
         ThresholdSwitchUpsideCalculator switcherUpsideCalculator = new ThresholdSwitchUpsideCalculator(
-            new UpsideSignalAmplifier(slopeUpsideCalculator, 0.9, 0.9),
+            hourlySignal,
             riskManagerUpsideCalculator,
             0.8,
             -0.8
@@ -325,6 +341,7 @@ public class BasicTradeStrategySimulation {
         List<LevelPairsSnapshot> levelPairsSnapshots
     ) {
         List<Candle> candles = candleRepository.getPeriod(instrumentId, startTime, endTime);
+
         OrderSeriesProvider orderSeriesProvider = new OrderSeriesProvider(ordersOperations, candles)
             .setBuyPointsSize(4)
             .setSellPointsSize(4)
@@ -360,8 +377,10 @@ public class BasicTradeStrategySimulation {
             "#CC8400"
         );
         priceChart.setStepInterval(1);
+        priceChart.setInterval(CandleInterval.MIN_1);
         priceChart.render(candles);
         VolumeChart volumeChart = new VolumeChart(1);
+        volumeChart.setInterval(CandleInterval.MIN_1);
         volumeChart.render(candles);
         Toolkit.getDefaultToolkit().beep();
     }

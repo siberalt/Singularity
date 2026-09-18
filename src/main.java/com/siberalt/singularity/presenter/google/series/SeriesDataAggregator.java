@@ -1,6 +1,7 @@
 package com.siberalt.singularity.presenter.google.series;
 
 import java.util.*;
+import java.util.function.Function;
 
 public class SeriesDataAggregator implements SeriesProvider {
 
@@ -12,14 +13,26 @@ public class SeriesDataAggregator implements SeriesProvider {
     }
 
     public Optional<SeriesChunk> provide(long start, long end, long stepInterval) {
-        // Calculate the expected number of rows
-        int expectedRows = (int) ((end - start) / stepInterval + 1);
+        return merge((int) ((end - start) / stepInterval + 1), provider -> provider.provide(start, end, stepInterval));
+    }
+
+    /** Every series on the same axis, so that a row means the same bar in all of them. */
+    @Override
+    public Optional<SeriesChunk> provide(BarAxis axis, long stepInterval) {
+        if (axis.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return merge(axis.rowsAt(stepInterval), provider -> provider.provide(axis, stepInterval));
+    }
+
+    private Optional<SeriesChunk> merge(int expectedRows, Function<SeriesProvider, Optional<SeriesChunk>> provide) {
         List<Column> columns = new ArrayList<>();
         List<Map<String, Object>> options = new ArrayList<>();
         List<SeriesChunk> seriesChunks = new ArrayList<>();
 
         for (SeriesProvider seriesProvider : seriesProviders) {
-            Optional<SeriesChunk> seriesOptional = seriesProvider.provide(start, end, stepInterval);
+            Optional<SeriesChunk> seriesOptional = provide.apply(seriesProvider);
 
             if (seriesOptional.isEmpty()) {
                 continue;

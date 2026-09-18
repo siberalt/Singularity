@@ -188,6 +188,80 @@ public class FunctionGroupSeriesProvider implements SeriesProvider {
         return Optional.of(new SeriesChunk(allColumns, data, optionsList));
     }
 
+    /**
+     * Each function drawn over the rows of the bars its range of candle indices covers, and read at
+     * the index of each bar's first candle - kept inside the function's own range, so a line that
+     * starts in the middle of a bar starts at its own first value. The functions keep speaking in
+     * the indices they were fitted on, which is what lets a level found on minute candles lie over
+     * an hourly chart.
+     */
+    @Override
+    public Optional<SeriesChunk> provide(BarAxis axis, long stepInterval) {
+        if (stepInterval <= 0) {
+            throw new IllegalArgumentException("Step interval must be greater than zero");
+        }
+
+        if (functionDetails.isEmpty() || axis.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<FunctionDetails> functions = this.functionDetails.values().stream()
+            .flatMap(List::stream)
+            .sorted(Comparator.comparingInt(FunctionDetails::getOrder))
+            .toList();
+
+        List<Column> allColumns = functions.stream()
+            .flatMap(fd -> fd.columns.stream())
+            .toList();
+
+        List<Map<String, Object>> optionsList = new ArrayList<>();
+
+        for (Column column : allColumns) {
+            if (column.role().equals(ColumnRole.DATA)) {
+                Map<String, Object> options = new HashMap<>();
+                options.put("color", color);
+                options.put("lineWidth", lineWidth);
+                optionsList.add(options);
+            } else {
+                optionsList.add(Collections.emptyMap());
+            }
+        }
+
+        Object[][] data = new Object[axis.rowsAt(stepInterval)][allColumns.size()];
+        int columnOffset = 0;
+
+        for (FunctionDetails details : functions) {
+            int firstRow = axis.rowOfIndex(details.x1);
+            int lastRow = axis.rowOfIndex(details.x2);
+
+            if (lastRow >= 0 && firstRow < axis.size()) {
+                Map<Integer, Annotation> annotationsByRow = new HashMap<>();
+                details.annotations.forEach((x, annotation) -> annotationsByRow.put(axis.rowOfIndex(x), annotation));
+
+                firstRow = Math.max(0, firstRow);
+                lastRow = Math.min(axis.size() - 1, lastRow);
+                int row = (int) (Math.ceilDiv(firstRow, stepInterval) * stepInterval);
+
+                for (; row <= lastRow; row += (int) stepInterval) {
+                    int dataRow = (int) (row / stepInterval);
+                    long x = Math.clamp(axis.indexAt(row), details.x1, details.x2);
+
+                    data[dataRow][columnOffset] = details.function.apply((double) x);
+
+                    if (!details.annotations.isEmpty()) {
+                        Annotation annotation = annotationsByRow.get(row);
+                        data[dataRow][columnOffset + 1] = annotation == null ? null : annotation.label();
+                        data[dataRow][columnOffset + 2] = annotation == null ? null : annotation.text();
+                    }
+                }
+            }
+
+            columnOffset += details.columns.size();
+        }
+
+        return Optional.of(new SeriesChunk(allColumns, data, optionsList));
+    }
+
     public static FunctionDetailsBuilder newFunctionBuilder(long x1, long x2, Function<Double, Double> function) {
         return new FunctionDetailsBuilder(x1, x2, function);
     }
