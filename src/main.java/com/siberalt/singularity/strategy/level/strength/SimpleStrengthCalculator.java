@@ -38,8 +38,10 @@ public class SimpleStrengthCalculator implements StrengthCalculator {
     public double calculate(Level<Double> level, List<Candle> candles) {
         Objects.requireNonNull(level);
 
+        long step = indexStepOf(candles);
+
         // 1. Базовая сила: касания * вес длительности периода (от pointFrom до pointTo)
-        long duration = level.indexTo() - level.indexFrom() + 1;
+        long duration = (level.indexTo() - level.indexFrom()) / step + 1;
         if (duration <= 0) return level.touchesCount();
         double durationWeight = Math.log(duration + 1);
         double baseStrength = level.touchesCount() * durationWeight;
@@ -60,9 +62,32 @@ public class SimpleStrengthCalculator implements StrengthCalculator {
 
         // 3. Временная близость: как давно было последнее касание (pointTo)
         long lastTouchIndex = level.indexTo();
-        long barsSinceLastTouch = currentIndex - lastTouchIndex;
+        double barsSinceLastTouch = (double) (currentIndex - lastTouchIndex) / step;
         double timeFactor = Math.exp(-barsSinceLastTouch / timeDecay);
 
         return baseStrength * priceFactor * timeFactor;
+    }
+
+    /**
+     * Сколько индексов приходится на один бар переданного окна.
+     * <p>
+     * Обе половины формулы - длительность уровня и давность последнего касания - считаются в барах,
+     * а в индексах они равны барам только у свечей исходного интервала. Часовой бар несёт индекс
+     * минуты, на которой открылся, поэтому соседние бары отличаются примерно на шестьдесят, и
+     * давность касания в тридцать баров читалась как тысяча восемьсот: {@code exp(-1800/30)}
+     * обнуляло силу всех уровней разом, и сравнивать их между собой становилось нечем.
+     * <p>
+     * Шаг усреднён по окну, потому что он неровный: час на краю сессии содержит меньше минут, чем
+     * час в середине. Для точности этого достаточно - обе величины идут в логарифм и в экспоненту,
+     * где бар туда или обратно ничего не решает.
+     */
+    protected long indexStepOf(List<Candle> candles) {
+        if (candles == null || candles.size() < 2) {
+            return 1;
+        }
+
+        long span = candles.getLast().getIndex() - candles.getFirst().getIndex();
+
+        return Math.max(1, span / (candles.size() - 1));
     }
 }

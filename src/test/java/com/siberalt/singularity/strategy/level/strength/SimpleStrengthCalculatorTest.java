@@ -66,6 +66,52 @@ class SimpleStrengthCalculatorTest {
     }
 
     @Nested
+    @DisplayName("Ширина бара")
+    class BarWidth {
+
+        /**
+         * Один и тот же уровень на одном и том же ряду не может быть сильнее или слабее оттого, что
+         * ряд свернули в часовые бары. Индексы у них идут через шестьдесят, и сила, посчитанная по
+         * индексам, обнулялась экспонентой.
+         */
+        @Test
+        @DisplayName("Сила не зависит от того, минутные бары или часовые")
+        void strengthDoesNotDependOnHowWideTheBarsAre() {
+            SimpleStrengthCalculator calc = new SimpleStrengthCalculator(10.0, 30.0);
+
+            List<Candle> minutes = new ArrayList<>();
+            List<Candle> hours = new ArrayList<>();
+
+            for (int bar = 0; bar <= 25; bar++) {
+                minutes.add(candle(bar, 100.0));
+                hours.add(candle(60L * bar, 100.0));
+            }
+
+            double onMinutes = calc.calculate(level(10, 20, 3, 100.0), minutes);
+            double onHours = calc.calculate(level(600, 1200, 3, 100.0), hours);
+
+            assertTrue(onMinutes > 0);
+            assertEquals(onMinutes, onHours, 0.001);
+        }
+
+        @Test
+        @DisplayName("На часовых барах сила не обнуляется")
+        void strengthSurvivesOnHourlyBars() {
+            SimpleStrengthCalculator calc = new SimpleStrengthCalculator(10.0, 30.0);
+            List<Candle> hours = new ArrayList<>();
+
+            for (int bar = 0; bar <= 40; bar++) {
+                hours.add(candle(60L * bar, 100.0));
+            }
+
+            // Последнее касание десять баров назад: ослабление есть, но далеко не в ноль.
+            double strength = calc.calculate(level(60 * 5, 60 * 30, 4, 100.0), hours);
+
+            assertEquals(4 * Math.log(26 + 1) * Math.exp(-10.0 / 30.0), strength, 0.001);
+        }
+    }
+
+    @Nested
     @DisplayName("Ценовая близость")
     class PriceProximity {
 
