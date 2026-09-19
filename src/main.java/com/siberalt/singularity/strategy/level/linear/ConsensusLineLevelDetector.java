@@ -1,0 +1,275 @@
+package com.siberalt.singularity.strategy.level.linear;
+
+import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.TimePoint;
+import com.siberalt.singularity.math.ArithmeticOperations;
+import com.siberalt.singularity.math.LinearFunction2D;
+import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
+import com.siberalt.singularity.strategy.level.Level;
+import com.siberalt.singularity.strategy.level.LevelDetector;
+import com.siberalt.singularity.strategy.level.strength.SimpleStrengthCalculator;
+import com.siberalt.singularity.strategy.level.strength.StrengthCalculator;
+import com.siberalt.singularity.strategy.market.PriceExtractor;
+import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
+import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+
+/**
+ * Наклонный уровень как прямая, вокруг которой собралось больше всего экстремумов окна.
+ * <p>
+ * Зачем он нужен рядом с {@link LinearLevelDetector}: тот работает инкрементно. Первые два экстремума
+ * задают направление прямой, а каждый следующий только проверяется на попадание в допуск, и если не
+ * попал - уровень обрывается и начинается новый. Значит направление уровня решают две точки, выбранные
+ * не за то, что они лучшие, а за то, что они первые: два выброса подряд - и прямая уходит в сторону,
+ * а все настоящие касания оказываются вне допуска. Полного пересчёта по окну там нет вовсе.
+ * <p>
+ * Здесь пересчёт полный, как у {@link StatelessClusterLevelDetector}: ничего не переносится между
+ * вызовами, и прямая выбирается по всем экстремумам сразу. Через каждую пару экстремумов проводится
+ * прямая, у неё считаются согласные - экстремумы в пределах допуска по вертикали, - затем по одним
+ * согласным прямая пересчитывается методом наименьших квадратов и согласные пересчитываются ещё раз.
+ * Побеждает прямая с наибольшим числом согласных; её точки изымаются, и поиск повторяется на
+ * оставшихся, пока согласных хватает на уровень. Перебор пар - это {@code O(n^2)} по числу экстремумов,
+ * которых в окне десятки, а не тысячи, и он полный: результат не зависит от случайных выборок, в
+ * отличие от RANSAC.
+ * <p>
+ * Допуск задаётся в волатильностях, а не в доле цены - см. {@link #setVolatilityTolerance}: сколько
+ * стоит промах, решает рынок, а не цена бумаги.
+ */
+public class ConsensusLineLevelDetector implements LevelDetector {
+    public static final int DEFAULT_MIN_POINTS = 3;
+    public static final double DEFAULT_VOLATILITIES = 1.0;
+    public static final int DEFAULT_MAX_LEVELS = 10;
+
+    private final ExtremeLocator extremeLocator;
+    private PriceExtractor priceExtractor = Candle::low;
+    private VolatilityCalculator volatilityCalculator = new ATRVolatilityCalculator(14);
+    private StrengthCalculator strengthCalculator = new SimpleStrengthCalculator();
+    private double volatilities = DEFAULT_VOLATILITIES;
+    private int minPoints = DEFAULT_MIN_POINTS;
+    private int maxLevels = DEFAULT_MAX_LEVELS;
+
+    public ConsensusLineLevelDetector(ExtremeLocator extremeLocator) {
+        this.extremeLocator = Objects.requireNonNull(extremeLocator);
+    }
+
+    /** Какую цену экстремума считать точкой уровня: для поддержки - низ бара, для сопротивления - верх. */
+    public ConsensusLineLevelDetector setPriceExtractor(PriceExtractor priceExtractor) {
+        this.priceExtractor = Objects.requireNonNull(priceExtractor);
+        return this;
+    }
+
+    /**
+     * Насколько далеко от прямой может лежать экстремум, чтобы считаться её касанием - в волатильностях
+     * окна.
+     */
+    public ConsensusLineLevelDetector setVolatilityTolerance(VolatilityCalculator volatilityCalculator, double volatilities) {
+        if (volatilities <= 0) {
+            throw new IllegalArgumentException("Допуск должен быть положительным, получено " + volatilities);
+        }
+
+        this.volatilityCalculator = Objects.requireNonNull(volatilityCalculator);
+        this.volatilities = volatilities;
+        return this;
+    }
+
+    /** Сколько согласных экстремумов делают прямую уровнем. Меньше трёх - это просто прямая через точки. */
+    public ConsensusLineLevelDetector setMinPoints(int minPoints) {
+        if (minPoints < 2) {
+            throw new IllegalArgumentException("Уровень нужно подтвердить хотя бы двумя точками, получено " + minPoints);
+        }
+
+        this.minPoints = minPoints;
+        return this;
+    }
+
+    public ConsensusLineLevelDetector setMaxLevels(int maxLevels) {
+        if (maxLevels < 1) {
+            throw new IllegalArgumentException("Уровней должно быть хотя бы один, получено " + maxLevels);
+        }
+
+        this.maxLevels = maxLevels;
+        return this;
+    }
+
+    public ConsensusLineLevelDetector setStrengthCalculator(StrengthCalculator strengthCalculator) {
+        this.strengthCalculator = Objects.requireNonNull(strengthCalculator);
+        return this;
+    }
+
+    @Override
+    public List<Level<Double>> detect(List<Candle> candles) {
+        if (candles == null || candles.isEmpty()) {
+            return List.of();
+        }
+
+        List<Candle> extremes = new ArrayList<>(extremeLocator.locate(candles));
+
+        if (extremes.size() < minPoints) {
+            return List.of();
+        }
+
+        double tolerance = toleranceOf(candles);
+        List<Level<Double>> levels = new ArrayList<>();
+
+        while (levels.size() < maxLevels && extremes.size() >= minPoints) {
+            Line best = bestLine(extremes, tolerance);
+
+            if (best == null) {
+                break;
+            }
+
+            levels.add(levelOf(best, candles));
+            extremes.removeAll(best.points);
+        }
+
+        levels.sort(Comparator.comparingDouble(Level<Double>::strength).reversed());
+
+        return List.copyOf(levels);
+    }
+
+    /** Прямая, у которой в допуске оказалось больше всего экстремумов; при равенстве - та, что шире. */
+    protected Line bestLine(List<Candle> extremes, double tolerance) {
+        Line best = null;
+
+        for (int first = 0; first < extremes.size(); first++) {
+            for (int second = first + 1; second < extremes.size(); second++) {
+                Line candidate = consensusAround(extremes, extremes.get(first), extremes.get(second), tolerance);
+
+                if (candidate == null || candidate.points.size() < minPoints) {
+                    continue;
+                }
+
+                if (best == null
+                    || candidate.points.size() > best.points.size()
+                    || (candidate.points.size() == best.points.size() && candidate.span() > best.span())) {
+                    best = candidate;
+                }
+            }
+        }
+
+        return best;
+    }
+
+    /**
+     * Согласные вокруг прямой через две точки, а затем вокруг той же прямой, пересчитанной по одним
+     * согласным. Второй проход - это и есть отличие от инкрементного поиска: направление определяют не
+     * две выбранные точки, а все, кто к ним присоединился.
+     */
+    private Line consensusAround(List<Candle> extremes, Candle first, Candle second, double tolerance) {
+        if (first.getIndex() == second.getIndex()) {
+            return null;
+        }
+
+        double slope = (priceOf(second) - priceOf(first)) / (double) (second.getIndex() - first.getIndex());
+        double intercept = priceOf(first) - slope * first.getIndex();
+        List<Candle> agreeing = agreeing(extremes, slope, intercept, tolerance);
+
+        if (agreeing.size() < minPoints) {
+            return null;
+        }
+
+        double[] refitted = leastSquares(agreeing);
+
+        return new Line(refitted[0], refitted[1], agreeing(extremes, refitted[0], refitted[1], tolerance));
+    }
+
+    private List<Candle> agreeing(List<Candle> extremes, double slope, double intercept, double tolerance) {
+        List<Candle> agreeing = new ArrayList<>();
+
+        for (Candle extreme : extremes) {
+            if (Math.abs(priceOf(extreme) - (slope * extreme.getIndex() + intercept)) <= tolerance) {
+                agreeing.add(extreme);
+            }
+        }
+
+        return agreeing;
+    }
+
+    /** Прямая наименьших квадратов по точкам; при совпадающих индексах - горизонталь через их среднее. */
+    protected double[] leastSquares(List<Candle> points) {
+        double sumX = 0;
+        double sumY = 0;
+        double sumXY = 0;
+        double sumXX = 0;
+
+        for (Candle point : points) {
+            double x = point.getIndex();
+            double y = priceOf(point);
+
+            sumX += x;
+            sumY += y;
+            sumXY += x * y;
+            sumXX += x * x;
+        }
+
+        int count = points.size();
+        double denominator = count * sumXX - sumX * sumX;
+
+        if (Math.abs(denominator) < 1e-9) {
+            return new double[]{0, sumY / count};
+        }
+
+        double slope = (count * sumXY - sumX * sumY) / denominator;
+
+        return new double[]{slope, (sumY - slope * sumX) / count};
+    }
+
+    /** Допуск в цене: столько волатильностей окна, сколько задано. */
+    protected double toleranceOf(List<Candle> candles) {
+        double volatility = volatilityCalculator.calculate(candles);
+
+        if (volatility > 0) {
+            return volatilities * volatility;
+        }
+
+        // Волатильность не посчиталась - окно короче её периода; тогда мерка берётся из самого окна,
+        // чтобы допуск не оказался нулевым и уровень не выродился в точное совпадение цен.
+        double high = candles.stream().mapToDouble(Candle::getHighAsDouble).max().orElse(0);
+        double low = candles.stream().mapToDouble(Candle::getLowAsDouble).min().orElse(0);
+
+        return volatilities * Math.max(1e-9, (high - low) / candles.size());
+    }
+
+    private Level<Double> levelOf(Line line, List<Candle> candles) {
+        Candle first = line.points.getFirst();
+        Candle last = line.points.getLast();
+        Level<Double> level = new Level<>(
+            new TimePoint(first.getIndex(), first.getTime()),
+            new TimePoint(last.getIndex(), last.getTime()),
+            new LinearFunction2D<>(line.slope, line.intercept, ArithmeticOperations.DOUBLE),
+            0,
+            line.points.size()
+        );
+
+        return level.withStrength(strengthCalculator.calculate(level, candles));
+    }
+
+    private double priceOf(Candle candle) {
+        return priceExtractor.extract(candle).toDouble();
+    }
+
+    /** Прямая и экстремумы, которые её подтвердили, по возрастанию индекса. */
+    protected record Line(double slope, double intercept, List<Candle> points) {
+        protected Line {
+            points = points.stream().sorted(Comparator.comparingLong(Candle::getIndex)).toList();
+        }
+
+        long span() {
+            return points.getLast().getIndex() - points.getFirst().getIndex();
+        }
+    }
+
+    /** Поддержка: прямая под ценой, проведённая по низам найденных минимумов. */
+    public static ConsensusLineLevelDetector createSupport(ExtremeLocator minimumLocator) {
+        return new ConsensusLineLevelDetector(minimumLocator).setPriceExtractor(Candle::low);
+    }
+
+    /** Сопротивление: прямая над ценой, по верхам найденных максимумов. */
+    public static ConsensusLineLevelDetector createResistance(ExtremeLocator maximumLocator) {
+        return new ConsensusLineLevelDetector(maximumLocator).setPriceExtractor(Candle::high);
+    }
+}

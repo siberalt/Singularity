@@ -11,7 +11,11 @@ import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
+import com.siberalt.singularity.strategy.level.linear.ConsensusLineLevelDetector;
+import com.siberalt.singularity.strategy.level.linear.LinearLevelDetector;
 import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetector;
+import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
+import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -37,7 +41,8 @@ public class LevelDetectorSimulation {
         List<Candle> candles = candleRepository.getPeriod(TMOS, startTime, endTime);
         ExtremeLocator minExtremeLocator = PivotPointExtremeLocator.ofMinimums(50);
         //ExtremeLocator maxExtremeLocator = PivotPointExtremeLocator.ofMaximums(50);
-        LevelDetector supportDetector = StatelessClusterLevelDetector.createDefault(1.4, minExtremeLocator);
+        VolatilityCalculator volatilityCalculator = new ATRVolatilityCalculator();
+        LevelDetector supportDetector = new ConsensusLineLevelDetector(minExtremeLocator).setVolatilityTolerance(volatilityCalculator, 2);
         //LevelDetector resistanceDetector = StatelessClusterLevelDetector.createDefault(1.4, maxExtremeLocator);
         var supportLevels = supportDetector.detect(candles);
         //var resistanceLevels = resistanceDetector.detect(candles);

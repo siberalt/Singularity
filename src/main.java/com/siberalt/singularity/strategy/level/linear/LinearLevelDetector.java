@@ -37,6 +37,11 @@ public class LinearLevelDetector implements LevelDetector {
         this.extremeLocator = extremeLocator;
     }
 
+    public LinearLevelDetector(ExtremeLocator extremeLocator) {
+        this.extremeLocator = extremeLocator;
+        this.neighbourhoodRatio = 0.05;
+    }
+
     /**
      * Насколько далеко от прямой может лежать экстремум, чтобы уровень продолжался - в волатильностях
      * вместо доли цены.
