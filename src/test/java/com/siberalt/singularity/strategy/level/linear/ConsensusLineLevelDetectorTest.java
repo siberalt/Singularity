@@ -128,6 +128,57 @@ class ConsensusLineLevelDetectorTest {
         assertTrue(detector(candles).detect(null).isEmpty());
     }
 
+    /**
+     * A least-squares line runs through the middle of the lows, so half of them sit below it - that is
+     * an axis of symmetry, not a support, and on a rising series it can even point down. Asked for an
+     * envelope, the detector has to put the line under its own points.
+     */
+    @Test
+    void anEnvelopeRestsUnderItsLowsInsteadOfRunningThroughTheMiddleOfThem() {
+        List<Candle> candles = candles(
+            low(0, 100.0), low(10, 109.5), low(20, 120.5), low(30, 129.5), low(40, 140.5)
+        );
+
+        Level<Double> middle = detector(candles).detect(candles).getFirst();
+        Level<Double> resting = detector(candles).setEnvelope(true).detect(candles).getFirst();
+
+        // The middle line has the tolerance on both sides of it; the envelope has it on one, so at the
+        // same tolerance it accepts less - here four of the five lows, the fifth being 1.1 above.
+        assertEquals(5, middle.touchesCount());
+        assertEquals(4, resting.touchesCount());
+
+        for (Candle candle : candles) {
+            double distance = candle.getLowAsDouble() - resting.function().apply((double) candle.getIndex());
+
+            assertTrue(distance >= -1e-9, "a low sits " + distance + " below the envelope");
+        }
+
+        // The middle line has lows on both sides of it; the envelope touches its lowest one.
+        assertTrue(candles.stream().anyMatch(candle ->
+            candle.getLowAsDouble() < middle.function().apply((double) candle.getIndex()) - 1e-9));
+        assertEquals(0.0, candles.stream()
+            .mapToDouble(candle -> candle.getLowAsDouble() - resting.function().apply((double) candle.getIndex()))
+            .min()
+            .orElseThrow(), 1e-9);
+    }
+
+    /**
+     * The point of the envelope: a line that has to lie under rising lows cannot itself fall, because on
+     * the right there would be nothing holding it up.
+     */
+    @Test
+    void anEnvelopeCannotPointAgainstTheLowsItRestsOn() {
+        // Lows rising by one a bar, with two early ones low enough that a middle line could tilt down.
+        List<Candle> candles = candles(
+            low(0, 101.0), low(5, 100.0), low(10, 110.0), low(20, 120.0), low(30, 130.0), low(40, 140.0)
+        );
+
+        Level<Double> resting = detector(candles).setEnvelope(true).detect(candles).getFirst();
+
+        assertTrue(((LinearFunction<Double>) resting.function()).getSlope() > 0,
+            "the envelope slopes " + ((LinearFunction<Double>) resting.function()).getSlope());
+    }
+
     @Test
     void refusesSettingsThatCannotMeanAnything() {
         ConsensusLineLevelDetector detector = ConsensusLineLevelDetector.createSupport(candles -> List.of());

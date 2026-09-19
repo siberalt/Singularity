@@ -44,6 +44,9 @@ public class ConsensusLineLevelDetector implements LevelDetector {
     public static final double DEFAULT_VOLATILITIES = 1.0;
     public static final int DEFAULT_MAX_LEVELS = 10;
 
+    /** Насколько ниже огибающей точка всё ещё считается лежащей на ней: запас на округление. */
+    private static final double TOUCHING = 1e-9;
+
     private final ExtremeLocator extremeLocator;
     private PriceExtractor priceExtractor = Candle::low;
     private VolatilityCalculator volatilityCalculator = new ATRVolatilityCalculator(14);
@@ -51,6 +54,7 @@ public class ConsensusLineLevelDetector implements LevelDetector {
     private double volatilities = DEFAULT_VOLATILITIES;
     private int minPoints = DEFAULT_MIN_POINTS;
     private int maxLevels = DEFAULT_MAX_LEVELS;
+    private boolean envelope;
 
     public ConsensusLineLevelDetector(ExtremeLocator extremeLocator) {
         this.extremeLocator = Objects.requireNonNull(extremeLocator);
@@ -97,6 +101,26 @@ public class ConsensusLineLevelDetector implements LevelDetector {
 
     public ConsensusLineLevelDetector setStrengthCalculator(StrengthCalculator strengthCalculator) {
         this.strengthCalculator = Objects.requireNonNull(strengthCalculator);
+        return this;
+    }
+
+    /**
+     * Держать уровень под своими точками, а не посередине них.
+     * <p>
+     * Прямая наименьших квадратов проходит через середину облака экстремумов: примерно половина
+     * минимумов оказывается под ней, и это уже не поддержка, а ось симметрии низов. Направление такой
+     * прямой задаёт то, какое подмножество лоёв многочисленнее, поэтому на растущем ряду она может
+     * идти вниз - что и было видно на графике: три линии из шести шли против цены.
+     * <p>
+     * С огибающей прямая после подгонки опускается параллельно себе до самого низкого своего минимума,
+     * и согласными считаются только те, кто лежит в допуске над ней. Уровень получает опору снизу, и
+     * против растущих лоёв он идти уже не может - справа ему не на что опереться.
+     * <p>
+     * Выключено по умолчанию: это другой смысл уровня, и включать его задним числом для уже сделанных
+     * замеров нельзя.
+     */
+    public ConsensusLineLevelDetector setEnvelope(boolean envelope) {
+        this.envelope = envelope;
         return this;
     }
 
@@ -173,15 +197,36 @@ public class ConsensusLineLevelDetector implements LevelDetector {
         }
 
         double[] refitted = leastSquares(agreeing);
+        double refittedIntercept = envelope ? restingIntercept(agreeing, refitted[0]) : refitted[1];
 
-        return new Line(refitted[0], refitted[1], agreeing(extremes, refitted[0], refitted[1], tolerance));
+        return new Line(refitted[0], refittedIntercept, agreeing(extremes, refitted[0], refittedIntercept, tolerance));
     }
 
+    /**
+     * Свободный член прямой того же наклона, опущенной до самой низкой из точек - линия ложится на них
+     * снизу, касаясь ближайшей.
+     */
+    protected double restingIntercept(List<Candle> points, double slope) {
+        double lowest = Double.POSITIVE_INFINITY;
+
+        for (Candle point : points) {
+            lowest = Math.min(lowest, priceOf(point) - slope * point.getIndex());
+        }
+
+        return lowest;
+    }
+
+    /**
+     * Экстремумы в допуске от прямой. С огибающей допуск односторонний: точка под линией её нарушает,
+     * а не подтверждает, - иначе уровень снова оказался бы посередине.
+     */
     private List<Candle> agreeing(List<Candle> extremes, double slope, double intercept, double tolerance) {
         List<Candle> agreeing = new ArrayList<>();
 
         for (Candle extreme : extremes) {
-            if (Math.abs(priceOf(extreme) - (slope * extreme.getIndex() + intercept)) <= tolerance) {
+            double distance = priceOf(extreme) - (slope * extreme.getIndex() + intercept);
+
+            if (envelope ? distance >= -TOUCHING && distance <= tolerance : Math.abs(distance) <= tolerance) {
                 agreeing.add(extreme);
             }
         }
