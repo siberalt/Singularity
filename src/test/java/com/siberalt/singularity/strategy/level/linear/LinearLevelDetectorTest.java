@@ -6,6 +6,8 @@ import com.siberalt.singularity.math.ArithmeticOperations;
 import com.siberalt.singularity.math.LinearFunction2D;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.strength.StrengthCalculator;
+import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
+import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -18,6 +20,72 @@ import static org.mockito.Mockito.*;
 class LinearLevelDetectorTest {
     private final StrengthCalculator strengthCalculator = mock(StrengthCalculator.class);
     private final CandleFactory candleFactory = new CandleFactory(1L);
+
+    /**
+     * The tolerance that decides whether an extreme still belongs to a level is a share of the price
+     * by default, and a share of the price is not what a miss is measured in: the same 0.2 per cent is
+     * noise on one instrument and a broken level on another. Asked for volatility instead, the detector
+     * has to answer in whatever the volatility of the window is.
+     */
+    @Test
+    void toleranceIsMeasuredInVolatilityWhenAskedFor() {
+        List<Candle> candles = risingCandles(40, 0.5, 0.004);
+        LinearLevelDetector detector = LinearLevelDetector.createSupport(5, 0.002, Candle::getCloseAsDouble);
+
+        assertEquals(0.002, detector.toleranceOf(candles), 1e-12);
+
+        VolatilityCalculator volatility = new ATRVolatilityCalculator(14);
+        detector.setVolatilityTolerance(volatility, 2);
+
+        double expected = 2 * volatility.calculate(candles) / candles.get(candles.size() - 1).getTypicalAsDouble();
+
+        assertEquals(expected, detector.toleranceOf(candles), 1e-12);
+        assertTrue(expected > 0);
+    }
+
+    /**
+     * The same setting on a series that moves four times as much has to allow four times as much
+     * distance from the line. A share of the price does not: it stays where it was, so the same
+     * detector is loose on a quiet instrument and torn apart on a lively one.
+     */
+    @Test
+    void toleranceGrowsWithTheVolatilityOfTheSeriesWhileAShareOfPriceDoesNot() {
+        LinearLevelDetector detector = LinearLevelDetector.createSupport(5, 0.002, Candle::getCloseAsDouble);
+
+        assertEquals(0.002, detector.toleranceOf(risingCandles(60, 0.5, 0.002)), 1e-12);
+        assertEquals(0.002, detector.toleranceOf(risingCandles(60, 0.5, 0.008)), 1e-12);
+
+        detector.setVolatilityTolerance(new ATRVolatilityCalculator(14), 2);
+
+        double quiet = detector.toleranceOf(risingCandles(60, 0.5, 0.002));
+        double lively = detector.toleranceOf(risingCandles(60, 0.5, 0.008));
+
+        assertTrue(lively > 2 * quiet, "tolerance on the quiet series " + quiet + ", on the lively one " + lively);
+    }
+
+    /**
+     * A rising line of prices, each one up to a per cent off it in a repeating pattern, so that the
+     * lows a frame picks out do not sit on a straight line either.
+     */
+    private List<Candle> risingCandles(int count, double step, double noise) {
+        List<Candle> candles = new java.util.ArrayList<>();
+
+        for (int bar = 0; bar < count; bar++) {
+            double line = 100 + step * bar;
+            // A period of seven against a frame of five, so the lows the frames pick are not the same
+            // point of the pattern every time and do not line up by themselves.
+            double deviation = noise * ((bar * 13) % 7 - 3);
+
+            // Not the shared factory: it keeps one candle per instant, and these series differ only in
+            // the prices they put on the same instants.
+            candles.add(Candle.of(
+                new com.siberalt.singularity.entity.candle.TimePoint(
+                    bar, Instant.parse("2023-01-01T00:00:00Z").plusSeconds(60L * bar)),
+                line * (1 + deviation)));
+        }
+
+        return candles;
+    }
 
     @Test
     void calculatesSupportLevelsCorrectly() {

@@ -11,6 +11,7 @@ import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.strength.BasicStrengthCalculator;
 import com.siberalt.singularity.strategy.level.strength.StrengthCalculator;
+import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -25,6 +26,8 @@ public class LinearLevelDetector implements LevelDetector {
     private final double neighbourhoodRatio; // Default neighborhood percentage for support level calculation
     private StrengthCalculator strengthCalculator = new BasicStrengthCalculator();
     private final ExtremeLocator extremeLocator;
+    private VolatilityCalculator volatilityCalculator;
+    private double volatilities = 1;
 
     public LinearLevelDetector(
         double neighbourhoodRatio,
@@ -32,6 +35,29 @@ public class LinearLevelDetector implements LevelDetector {
     ) {
         this.neighbourhoodRatio = neighbourhoodRatio;
         this.extremeLocator = extremeLocator;
+    }
+
+    /**
+     * Насколько далеко от прямой может лежать экстремум, чтобы уровень продолжался - в волатильностях
+     * вместо доли цены.
+     * <p>
+     * Доля цены - не то, чем измеряется промах. Бумага, которая ходит на процент в час, и бумага,
+     * которая ходит на десятую процента, при одном и том же {@code neighbourhoodRatio} получают
+     * несравнимые уровни: у первой в допуск попадает что угодно и прямая тянется через шум, у второй
+     * не попадает ничего и уровень рвётся на каждом экстремуме. Волатильность приводит обе к одной
+     * мерке, и допуск пересчитывается на каждом вызове - рынок меняется, прямая остаётся.
+     *
+     * @param volatilityCalculator чем мерить волатильность окна; {@code null} возвращает к доле цены
+     * @param volatilities         сколько волатильностей составляют допуск
+     */
+    public LinearLevelDetector setVolatilityTolerance(VolatilityCalculator volatilityCalculator, double volatilities) {
+        if (volatilities <= 0) {
+            throw new IllegalArgumentException("Допуск должен быть положительным, получено " + volatilities);
+        }
+
+        this.volatilityCalculator = volatilityCalculator;
+        this.volatilities = volatilities;
+        return this;
     }
 
     public List<Level<Double>> detect(List<Candle> candles) {
@@ -45,13 +71,15 @@ public class LinearLevelDetector implements LevelDetector {
             startLevelIndex = 0;
         }
 
+        linearModel.setThreshold(toleranceOf(candles));
+
         // Initialize variables to track the lowest price and its timestamp
         ArrayList<Level<Double>> levels = new ArrayList<>();
         Point2D<Double> lastPoint = null;
         Instant lastTime = null;
 
         if (startLevelTime == null) {
-            startLevelTime = candles.get(0).getTime();
+            startLevelTime = candles.getFirst().getTime();
         }
 
         List<Candle> extremes = extremeLocator.locate(candles);
@@ -131,6 +159,22 @@ public class LinearLevelDetector implements LevelDetector {
         double strength = strengthCalculator.calculate(level, candles);
 
         return level.withStrength(strength);
+    }
+
+    /**
+     * Допуск для этого окна: столько волатильностей, сколько задано, выраженные долей от цены -
+     * {@link IncrementalLinearRegression} принимает точку по относительной ошибке. Без калькулятора
+     * волатильности остаётся заданная доля цены.
+     */
+    protected double toleranceOf(List<Candle> candles) {
+        if (volatilityCalculator == null || candles.isEmpty()) {
+            return neighbourhoodRatio;
+        }
+
+        double volatility = volatilityCalculator.calculate(candles);
+        double price = candles.getLast().getTypicalAsDouble();
+
+        return price <= 0 || volatility <= 0 ? neighbourhoodRatio : volatilities * volatility / price;
     }
 
     public LinearLevelDetector setStrengthCalculator(StrengthCalculator strengthCalculator) {

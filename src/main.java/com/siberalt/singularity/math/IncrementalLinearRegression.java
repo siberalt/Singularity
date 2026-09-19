@@ -7,7 +7,7 @@ public class IncrementalLinearRegression {
     private final List<Point2D<Double>> inliers = new ArrayList<>();
     private double slope;
     private double intercept;
-    private final double threshold;
+    private double threshold;
     private boolean modelValid = false;
 
     // Статистические суммы для инкрементальных вычислений
@@ -19,6 +19,28 @@ public class IncrementalLinearRegression {
 
     public IncrementalLinearRegression(double threshold) {
         this.threshold = threshold;
+    }
+
+    public double getThreshold() {
+        return threshold;
+    }
+
+    /**
+     * Насколько далеко от прямой может лежать точка, чтобы всё ещё считаться её частью, - долей от
+     * своего значения.
+     * <p>
+     * Меняется по ходу, потому что это расстояние обычно не свойство модели, а свойство рынка: то,
+     * что на спокойной бумаге промах, на дёрганой - обычный разброс. Вызывающий пересчитывает допуск
+     * из волатильности, а уже накопленные точки и сама прямая при этом остаются - меняется только
+     * условие приёма следующих.
+     */
+    public IncrementalLinearRegression setThreshold(double threshold) {
+        if (threshold < 0) {
+            throw new IllegalArgumentException("Допуск не может быть отрицательным, получено " + threshold);
+        }
+
+        this.threshold = threshold;
+        return this;
     }
 
     public boolean addPoint(Point2D<Double> p) {
