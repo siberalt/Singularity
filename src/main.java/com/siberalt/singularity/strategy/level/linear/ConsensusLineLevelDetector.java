@@ -1,5 +1,6 @@
 package com.siberalt.singularity.strategy.level.linear;
 
+import com.siberalt.singularity.entity.candle.BarSpacing;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.math.ArithmeticOperations;
@@ -55,6 +56,7 @@ public class ConsensusLineLevelDetector implements LevelDetector {
     private int minPoints = DEFAULT_MIN_POINTS;
     private int maxLevels = DEFAULT_MAX_LEVELS;
     private boolean envelope;
+    private long freshTouchWithin;
 
     public ConsensusLineLevelDetector(ExtremeLocator extremeLocator) {
         this.extremeLocator = Objects.requireNonNull(extremeLocator);
@@ -124,6 +126,28 @@ public class ConsensusLineLevelDetector implements LevelDetector {
         return this;
     }
 
+    /**
+     * Требовать, чтобы уровень опирался на свежую точку: его последнее касание не старше столька баров
+     * от конца окна. Ноль - не требовать ничего, как и было.
+     * <p>
+     * Зачем. Наклон прямой задаёт то подмножество экстремумов, которое её подтвердило, и подмножество
+     * может целиком лежать в прошлом окна: линия честно проходит под старыми лоями и при этом идёт вниз,
+     * пока цена растёт - на графике таких было три из шести. Это не ошибка подгонки, это уровень,
+     * говорящий о прошлом. Уровень, обязанный держаться за недавний лой, через растущие лои вниз идти не
+     * может: справа ему не на что опереться.
+     * <p>
+     * Срок считается в барах окна, а не в индексах: часовой бар несёт индекс минуты, так что сто баров -
+     * это шесть тысяч единиц индекса, и путать их значит не фильтровать вовсе.
+     */
+    public ConsensusLineLevelDetector setFreshTouchWithin(long bars) {
+        if (bars < 0) {
+            throw new IllegalArgumentException("Срок свежести не может быть отрицательным, получено " + bars);
+        }
+
+        this.freshTouchWithin = bars;
+        return this;
+    }
+
     @Override
     public List<Level<Double>> detect(List<Candle> candles) {
         if (candles == null || candles.isEmpty()) {
@@ -137,10 +161,11 @@ public class ConsensusLineLevelDetector implements LevelDetector {
         }
 
         double tolerance = toleranceOf(candles);
+        long freshFrom = freshFrom(candles);
         List<Level<Double>> levels = new ArrayList<>();
 
         while (levels.size() < maxLevels && extremes.size() >= minPoints) {
-            Line best = bestLine(extremes, tolerance);
+            Line best = bestLine(extremes, tolerance, freshFrom);
 
             if (best == null) {
                 break;
@@ -156,7 +181,7 @@ public class ConsensusLineLevelDetector implements LevelDetector {
     }
 
     /** Прямая, у которой в допуске оказалось больше всего экстремумов; при равенстве - та, что шире. */
-    protected Line bestLine(List<Candle> extremes, double tolerance) {
+    protected Line bestLine(List<Candle> extremes, double tolerance, long freshFrom) {
         Line best = null;
 
         for (int first = 0; first < extremes.size(); first++) {
@@ -164,6 +189,12 @@ public class ConsensusLineLevelDetector implements LevelDetector {
                 Line candidate = consensusAround(extremes, extremes.get(first), extremes.get(second), tolerance);
 
                 if (candidate == null || candidate.points.size() < minPoints) {
+                    continue;
+                }
+
+                // Уровень, чьё последнее касание слишком старое, уступает место другому: он не
+                // отбрасывается в конце, а просто не участвует в соревновании.
+                if (candidate.points.getLast().getIndex() < freshFrom) {
                     continue;
                 }
 
@@ -261,6 +292,19 @@ public class ConsensusLineLevelDetector implements LevelDetector {
         double slope = (count * sumXY - sumX * sumY) / denominator;
 
         return new double[]{slope, (sumY - slope * sumX) / count};
+    }
+
+    /**
+     * Индекс, раньше которого касание считается несвежим: конец окна минус заданный срок в барах,
+     * переведённый в единицы индекса по среднему шагу окна. Без требования свежести - минус
+     * бесконечность, то есть никакого порога.
+     */
+    protected long freshFrom(List<Candle> candles) {
+        if (freshTouchWithin <= 0 || candles.size() < 2) {
+            return Long.MIN_VALUE;
+        }
+
+        return candles.getLast().getIndex() - BarSpacing.unitsOf(candles, freshTouchWithin);
     }
 
     /** Допуск в цене: столько волатильностей окна, сколько задано. */

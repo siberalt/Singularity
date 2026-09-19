@@ -1,5 +1,6 @@
 package com.siberalt.singularity.strategy.level.strength;
 
+import com.siberalt.singularity.entity.candle.BarSpacing;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.level.Level;
 
@@ -82,12 +83,6 @@ public class SimpleStrengthCalculator implements StrengthCalculator {
      * где бар туда или обратно ничего не решает.
      */
     protected long indexStepOf(List<Candle> candles) {
-        if (candles == null || candles.size() < 2) {
-            return 1;
-        }
-
-        long span = candles.getLast().getIndex() - candles.getFirst().getIndex();
-
-        return Math.max(1, span / (candles.size() - 1));
+        return BarSpacing.stepOf(candles);
     }
 }

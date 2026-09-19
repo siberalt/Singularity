@@ -1,5 +1,6 @@
 package com.siberalt.singularity.strategy.extreme;
 
+import com.siberalt.singularity.entity.candle.BarSpacing;
 import com.siberalt.singularity.entity.candle.Candle;
 
 import java.util.ArrayList;
@@ -67,7 +68,7 @@ public class ProximityGroupingExtremeLocator implements ExtremeLocator {
             return extremes;
         }
 
-        double reach = area * indexStepOf(candles);
+        double reach = area * BarSpacing.of(candles);
         List<Candle> kept = new ArrayList<>();
         Candle best = extremes.getFirst();
 
@@ -87,12 +88,4 @@ public class ProximityGroupingExtremeLocator implements ExtremeLocator {
         return kept;
     }
 
-    /** How many index units one bar of these candles spans, on average. */
-    private static double indexStepOf(List<Candle> candles) {
-        if (candles.size() < 2) {
-            return 1;
-        }
-
-        return (double) (candles.getLast().getIndex() - candles.getFirst().getIndex()) / (candles.size() - 1);
-    }
 }

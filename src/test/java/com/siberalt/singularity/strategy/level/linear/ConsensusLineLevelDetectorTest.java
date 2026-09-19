@@ -179,6 +179,64 @@ class ConsensusLineLevelDetectorTest {
             "the envelope slopes " + ((LinearFunction<Double>) resting.function()).getSlope());
     }
 
+    /**
+     * A line can be held up entirely by lows from the far side of the window: it passes under them
+     * honestly and still points the wrong way for today. Asked for a fresh touch, the detector has to
+     * prefer the line that something recent stands on.
+     */
+    @Test
+    void prefersTheLineWithARecentTouch() {
+        // Five old lows falling, four recent ones rising, so the old line wins on points alone; the
+        // window ends at bar 70.
+        List<Candle> candles = candles(
+            low(0, 140.0), low(5, 130.0), low(10, 120.0), low(15, 110.0), low(20, 100.0),
+            low(40, 100.0), low(50, 110.0), low(60, 120.0), low(70, 130.0)
+        );
+
+        List<Level<Double>> without = detector(candles).setEnvelope(true).detect(candles);
+        List<Level<Double>> with = detector(candles).setEnvelope(true).setFreshTouchWithin(5).detect(candles);
+
+        // Both lines are real and both are reported: the falling one has the most points, the rising one
+        // the most strength, which is why it is first either way.
+        assertEquals(2, without.size());
+        assertEquals(-2.0, slopeOf(without.get(1)), 1e-6);
+
+        // Asked for a fresh touch, the line whose newest low is fifty bars old stops being a level.
+        assertEquals(1, with.size());
+        assertEquals(1.0, slopeOf(with), 1e-6);
+        assertTrue(with.getFirst().indexTo() >= 40);
+    }
+
+    /** Bars, not index units: an hourly bar carries the index of its minute, sixty apart from the next. */
+    @Test
+    void freshnessIsCountedInBarsWhateverTheIndicesAre() {
+        List<Candle> minutes = candles(
+            low(0, 140.0), low(5, 130.0), low(10, 120.0), low(15, 110.0), low(20, 100.0),
+            low(40, 100.0), low(50, 110.0), low(60, 120.0), low(70, 130.0)
+        );
+        List<Candle> hours = candles(
+            low(0, 140.0), low(300, 130.0), low(600, 120.0), low(900, 110.0), low(1200, 100.0),
+            low(2400, 100.0), low(3000, 110.0), low(3600, 120.0), low(4200, 130.0)
+        );
+
+        List<Level<Double>> onMinutes = detector(minutes).setEnvelope(true).setFreshTouchWithin(5).detect(minutes);
+        List<Level<Double>> onHours = detector(hours).setEnvelope(true).setFreshTouchWithin(5).detect(hours);
+
+        // The same nine bars, sixty index units apart instead of one: the same level is dropped as stale
+        // and the same one survives, its slope stretched by the spacing.
+        assertEquals(1, onMinutes.size());
+        assertEquals(1, onHours.size());
+        assertEquals(slopeOf(onMinutes), slopeOf(onHours) * 60, 1e-6);
+    }
+
+    private static double slopeOf(List<Level<Double>> levels) {
+        return slopeOf(levels.getFirst());
+    }
+
+    private static double slopeOf(Level<Double> level) {
+        return ((LinearFunction<Double>) level.function()).getSlope();
+    }
+
     @Test
     void refusesSettingsThatCannotMeanAnything() {
         ConsensusLineLevelDetector detector = ConsensusLineLevelDetector.createSupport(candles -> List.of());
