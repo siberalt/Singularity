@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -360,6 +361,111 @@ class CandleMigrationServiceTest {
             verify(source).getRangeMetadata(eq(instrumentId), any(), any());
             verify(source, times(2)).getPeriod(eq(instrumentId), any(), any());
             verify(target).saveBatch(List.of(candle1));
+        }
+    }
+
+    /**
+     * Сеть до брокера пропадает на секунды, а лимит запросов выдаётся на окно времени: и то и другое
+     * проходит само, если немного подождать и попросить ещё раз. Без повторов такой чанк доставался
+     * следующему запуску целиком - а их бывает по полторы тысячи на инструмент.
+     */
+    @Nested
+    class MigrateInstrumentWithRetries {
+
+        @Test
+        void takesTheChunkOnTheSecondTry() {
+            long instrumentId = 1;
+            Candle candle = Candle.of(LONG_AGO, 100, 100.0);
+
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
+                .thenReturn(new CandleRangeMetadata(new TimePointRange(LONG_AGO, LONG_AGO_PLUS_8_DAYS), 1));
+            when(source.getPeriod(eq(instrumentId), any(), any()))
+                .thenThrow(new RuntimeException("network blinked"))
+                .thenReturn(List.of(candle));
+
+            CandleMigrationResult result = retrying(2).migrateInstrument(instrumentId, LONG_AGO, LONG_AGO_PLUS_8_DAYS);
+
+            Assertions.assertTrue(result.isComplete());
+            Assertions.assertEquals(1, result.savedCandles());
+            verify(source, times(2)).getPeriod(eq(instrumentId), any(), any());
+            verify(target).saveBatch(List.of(candle));
+        }
+
+        @Test
+        void givesUpAfterTheLastAttemptAndSaysSo() {
+            long instrumentId = 1;
+
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
+                .thenReturn(new CandleRangeMetadata(new TimePointRange(LONG_AGO, LONG_AGO_PLUS_8_DAYS), 1));
+            when(source.getPeriod(eq(instrumentId), any(), any()))
+                .thenThrow(new RuntimeException("still down"));
+
+            CandleMigrationResult result = retrying(2).migrateInstrument(instrumentId, LONG_AGO, LONG_AGO_PLUS_8_DAYS);
+
+            // Three attempts: the first one and the two retries it was allowed.
+            Assertions.assertFalse(result.isComplete());
+            Assertions.assertEquals(1, result.failedChunks().size());
+            verify(source, times(3)).getPeriod(eq(instrumentId), any(), any());
+            verify(target, never()).saveBatch(any());
+        }
+
+        @Test
+        void withoutRetriesItBehavesAsBefore() {
+            long instrumentId = 1;
+
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
+                .thenReturn(new CandleRangeMetadata(new TimePointRange(LONG_AGO, LONG_AGO_PLUS_8_DAYS), 1));
+            when(source.getPeriod(eq(instrumentId), any(), any()))
+                .thenThrow(new RuntimeException("down"));
+
+            CandleMigrationResult result = retrying(0).migrateInstrument(instrumentId, LONG_AGO, LONG_AGO_PLUS_8_DAYS);
+
+            Assertions.assertEquals(1, result.failedChunks().size());
+            verify(source, times(1)).getPeriod(eq(instrumentId), any(), any());
+        }
+
+        /**
+         * A refusal sets a pause, and the next attempt waits it out. What the pause cannot do is call
+         * back a request already on its way - the chunks that were in flight when the quota ran out
+         * still get their answer - so the guarantee is about attempts that have not started yet.
+         */
+        @Test
+        void waitsOutThePauseBeforeAskingAgain() {
+            long instrumentId = 1;
+            List<Instant> attempts = Collections.synchronizedList(new java.util.ArrayList<>());
+
+            when(source.getRangeMetadata(eq(instrumentId), any(), any()))
+                .thenReturn(new CandleRangeMetadata(new TimePointRange(LONG_AGO, LONG_AGO_PLUS_8_DAYS), 1));
+            when(source.getPeriod(eq(instrumentId), any(), any())).thenAnswer(invocation -> {
+                attempts.add(Instant.now());
+
+                if (attempts.size() == 1) {
+                    throw new RuntimeException("quota gone");
+                }
+
+                return List.of();
+            });
+
+            CandleMigrationService service = CandleMigrationService.builder(source, target)
+                .progressTrackerFactory(new NullProgressTrackerFactory())
+                .chunkSizeDays(8)
+                .retries(1)
+                .retryBackoff(Duration.ofMillis(300))
+                .build();
+
+            Assertions.assertTrue(service.migrateInstrument(instrumentId, LONG_AGO, LONG_AGO_PLUS_8_DAYS).isComplete());
+            Assertions.assertEquals(2, attempts.size());
+            Assertions.assertFalse(attempts.get(1).isBefore(attempts.get(0).plusMillis(250)),
+                "the retry came " + Duration.between(attempts.get(0), attempts.get(1)) + " after the refusal");
+        }
+
+        private CandleMigrationService retrying(int retries) {
+            return CandleMigrationService.builder(source, target)
+                .progressTrackerFactory(new NullProgressTrackerFactory())
+                .chunkSizeDays(8)
+                .retries(retries)
+                .retryBackoff(Duration.ofMillis(1))
+                .build();
         }
     }
 

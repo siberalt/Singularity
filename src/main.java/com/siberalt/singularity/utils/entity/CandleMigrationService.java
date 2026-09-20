@@ -11,6 +11,7 @@ import com.siberalt.singularity.runtime.progress.ProgressTrackerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -26,6 +27,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Сервис для миграции свечей из одного репозитория в другой.
@@ -48,6 +50,9 @@ public class CandleMigrationService {
 
     private static final Logger log = LoggerFactory.getLogger(CandleMigrationService.class);
 
+    /** Сколько раз пауза перед повтором успевает удвоиться, прежде чем перестаёт расти. */
+    private static final int MAX_DOUBLINGS = 3;
+
     private final MigrationCandleSource source;
     private final WriteCandleRepository target;
     private final ExecutorService executor;
@@ -55,6 +60,11 @@ public class CandleMigrationService {
     private final int chunkParallelism; // количество параллельных потоков на чанки одного инструмента
     private final ProgressTrackerFactory progressTrackerFactory;
     private final CandleMigrationCheckpointRepository checkpoint;
+    private final int retries; // сколько раз повторять чанк, не получившийся с первого раза
+    private final Duration retryBackoff; // пауза перед первым повтором; каждая следующая вдвое длиннее
+    // Лимит запросов принадлежит источнику, а не инструменту: одна пауза на сервис, а значит и на все
+    // инструменты, которые он переносит через один и тот же клиент.
+    private final Pause pause = new Pause();
     private final Object writeLock = new Object();
 
     /**
@@ -74,7 +84,11 @@ public class CandleMigrationService {
                                    int parallelism,
                                    int chunkSizeDays,
                                    CandleMigrationCheckpointRepository checkpoint,
-                                   int chunkParallelism) {
+                                   int chunkParallelism,
+                                   int retries,
+                                   Duration retryBackoff) {
+        this.retries = retries;
+        this.retryBackoff = retryBackoff;
         this.progressTrackerFactory = progressTrackerFactory;
         this.chunkSizeDays = chunkSizeDays;
         this.chunkParallelism = chunkParallelism;
@@ -96,6 +110,8 @@ public class CandleMigrationService {
         private int parallelism = 1;
         private int chunkSizeDays = 1;
         private int chunkParallelism = 1;
+        private int retries;
+        private Duration retryBackoff = Duration.ofSeconds(30);
 
         private Builder(MigrationCandleSource source, WriteCandleRepository target) {
             this.source = source;
@@ -135,9 +151,37 @@ public class CandleMigrationService {
             return this;
         }
 
+        /**
+         * Сколько раз повторять чанк, который не получился с первого раза. Ноль, по умолчанию, -
+         * не повторять вовсе: чанк просто не помечается обработанным и достаётся следующему запуску.
+         */
+        public Builder retries(int retries) {
+            if (retries < 0) {
+                throw new IllegalArgumentException("Повторов не может быть меньше нуля, получено " + retries);
+            }
+
+            this.retries = retries;
+            return this;
+        }
+
+        /**
+         * Пауза перед первым повтором; каждая следующая вдвое длиннее. Пауза общая на инструмент -
+         * лимит запросов выдаётся на окно времени, и ждать его восстановления всем потокам сразу
+         * дешевле, чем каждому по отдельности.
+         */
+        public Builder retryBackoff(Duration retryBackoff) {
+            if (retryBackoff.isNegative()) {
+                throw new IllegalArgumentException("Пауза не может быть отрицательной, получено " + retryBackoff);
+            }
+
+            this.retryBackoff = retryBackoff;
+            return this;
+        }
+
         public CandleMigrationService build() {
             return new CandleMigrationService(
-                progressTrackerFactory, source, target, parallelism, chunkSizeDays, checkpoint, chunkParallelism
+                progressTrackerFactory, source, target, parallelism, chunkSizeDays, checkpoint, chunkParallelism,
+                retries, retryBackoff
             );
         }
     }
@@ -287,14 +331,9 @@ public class CandleMigrationService {
         Instant chunkFrom = chunk.from();
         Instant chunkTo = chunk.to();
 
-        List<Candle> candles;
-        try {
-            // Чтение свечей за чанк - не синхронизировано, безопасно выполнять параллельно.
-            // Ошибки здесь ожидаемы (сеть, временная недоступность брокера) - чанк просто
-            // не помечается обработанным и будет повторён при следующем запуске.
-            candles = source.getPeriod(instrumentId, chunkFrom, chunkTo);
-        } catch (Exception e) {
-            log.error("Error fetching chunk for {} from {} to {}", instrumentId, chunkFrom, chunkTo, e);
+        List<Candle> candles = fetch(instrumentId, chunk);
+
+        if (candles == null) {
             failed.add(chunk);
             return;
         }
@@ -313,6 +352,78 @@ public class CandleMigrationService {
         }
 
         log.debug("Saved {} candles for {} in chunk {} – {}", candles.size(), instrumentId, chunkFrom, chunkTo);
+    }
+
+    /**
+     * Свечи чанка, с повторами. {@code null} - не получилось и после них, чанк остаётся на следующий
+     * запуск.
+     * <p>
+     * Ошибки здесь ожидаемы и бывают двух родов. Сеть до брокера пропадает на секунды, и такой чанк
+     * берётся со второй попытки. Но чаще упирается лимит запросов: он выдаётся на окно времени, и когда
+     * он исчерпан, падают разом все чанки, которые в этот момент в работе. Повторять их немедленно
+     * бессмысленно - лимит от этого не восстановится, - поэтому пауза общая: наткнувшийся на отказ
+     * поток отодвигает её для всех, и остальные ждут вместе с ним, вместо того чтобы по очереди
+     * тратить попытки в закрытое окно.
+     * <p>
+     * Ждём перед попыткой, а не после отказа. Чанк, который только подошёл к очереди, о закрытом окне
+     * не знает, и если не спросить паузу заранее, он потратит попытку впустую - а попыток у него
+     * столько же, сколько у остальных.
+     */
+    private List<Candle> fetch(long instrumentId, MigrationChunk chunk) {
+        for (int attempt = 0; ; attempt++) {
+            try {
+                pause.await();
+
+                // Чтение свечей за чанк - не синхронизировано, безопасно выполнять параллельно.
+                return source.getPeriod(instrumentId, chunk.from(), chunk.to());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("Interrupted while fetching chunk for {} from {}", instrumentId, chunk.from());
+
+                return null;
+            } catch (Exception e) {
+                if (attempt >= retries) {
+                    log.error("Error fetching chunk for {} from {} to {}, giving up after {} attempts",
+                        instrumentId, chunk.from(), chunk.to(), attempt + 1, e);
+
+                    return null;
+                }
+
+                // Каждая следующая пауза вдвое длиннее: короткой хватает на моргнувшую сеть, длинная
+                // нужна, чтобы дождаться нового окна лимита. Дальше восьмикратной расти незачем - окно
+                // лимита конечно, и ждать дольше него значит просто простаивать.
+                Duration wait = retryBackoff.multipliedBy(1L << Math.min(attempt, MAX_DOUBLINGS));
+
+                log.warn("Error fetching chunk for {} from {}, attempt {} of {}, waiting {}",
+                    instrumentId, chunk.from(), attempt + 1, retries + 1, wait, e);
+                pause.hold(wait);
+            }
+        }
+    }
+
+    /**
+     * Запрет ходить к источнику до определённого момента, общий для всех, кто через этот источник
+     * ходит. Поток, получивший отказ, отодвигает момент, остальные ждут его перед своей попыткой.
+     */
+    static class Pause {
+        /**
+         * Момент, до которого никто не ходит к источнику. Именно момент, а не остаток: сроки задают
+         * разные потоки в разное время, и складывать их длительности значило бы ждать сумму пауз
+         * вместо самой поздней из них.
+         */
+        private final AtomicLong until = new AtomicLong();
+
+        void hold(Duration wait) {
+            until.accumulateAndGet(System.currentTimeMillis() + wait.toMillis(), Math::max);
+        }
+
+        void await() throws InterruptedException {
+            long wait = until.get() - System.currentTimeMillis();
+
+            if (wait > 0) {
+                Thread.sleep(wait);
+            }
+        }
     }
 
     /**

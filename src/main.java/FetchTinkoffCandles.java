@@ -27,6 +27,7 @@ import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -60,8 +61,13 @@ public class FetchTinkoffCandles {
     // Сколько чанков одного инструмента запрашивать параллельно (сеть - узкое место,
     // не сам Tinkoff API; консервативное значение, чтобы не упереться в rate limit)
     private static final int CHUNK_PARALLELISM = 5;
+    // Лимит запросов выдаётся на окно времени: за проход успевает пройти около шестисот чанков, дальше
+    // отказы идут пачкой. Повторы внутри миграции ждут нового окна сами - шести хватает на пять лет
+    // минуток, которые без них приходилось добирать перезапусками процесса.
+    private static final int RETRIES = 6;
+    private static final Duration RETRY_BACKOFF = Duration.ofSeconds(15);
     private static final Instant FROM = Instant.parse("2021-01-01T00:00:00Z");
-    private static final Instant TO = Instant.parse("2022-01-01T00:00:00Z");
+    private static final Instant TO = Instant.parse("2026-09-21T00:00:00Z");
 
     public static void main(String[] args) throws IOException, AbstractException, SQLException {
         List<String> queries = args.length == 0 ? List.of(DEFAULT_INSTRUMENT) : List.of(args);
@@ -103,6 +109,8 @@ public class FetchTinkoffCandles {
                 .chunkSizeDays(CHUNK_SIZE_DAYS)
                 .checkpoint(checkpoint)
                 .chunkParallelism(CHUNK_PARALLELISM)
+                .retries(RETRIES)
+                .retryBackoff(RETRY_BACKOFF)
                 .build();
 
             for (String query : queries) {
