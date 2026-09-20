@@ -56,18 +56,23 @@ public class LevelDetectorSimulation {
     /** The bars the detector sees. The contest measured hourly; minutes were never tested. */
     private static final CandleInterval INTERVAL = CandleInterval.HOUR;
     /** How far to either side a bar has to be the lowest to count as a pivot, in bars of INTERVAL. */
-    private static final int PIVOT_VICINITY = 10;
+    private static final int PIVOT_VICINITY = 14;
     /** How deep the ground around a pivot has to fall away from it, in volatilities. */
-    private static final double PROMINENCE = 3;
+    private static final double PROMINENCE = 0.5;
     /** A level is only kept if something touched it within this many bars of the end. */
     private static final long FRESH_BARS = 200;
     /** How far from the line a low may sit and still be a touch of it, in volatilities. */
-    private static final double TOLERANCE = 5;
+    private static final double TOLERANCE = 1;
     /** How many touches make a level. The pictures looked cleaner at 4 or 5, at the cost of coverage. */
     private static final int MIN_TOUCHES = 3;
     private static final int MAX_LEVELS = 10;
-    /** The search window, in bars of INTERVAL: half a year of trading hours. */
-    private static final int WINDOW = 1760;
+    /**
+     * The search window, in bars of INTERVAL. Nine hundred - about three and a half months of trading
+     * hours - is what the sweep settled on: against 1760 it caught more of the future lows in thirteen
+     * of sixteen detectors, and the advantage held at every freshness, so it is the window itself that
+     * matters and not the age of the last touch.
+     */
+    private static final int WINDOW = 900;
     /** How far the window moves from one frame to the next. */
     private static final int STEP = 100;
     /** Bars drawn past the window's end - the future the levels of that frame did not see. */
