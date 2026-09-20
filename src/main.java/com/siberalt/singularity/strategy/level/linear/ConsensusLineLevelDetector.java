@@ -16,7 +16,9 @@ import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -160,7 +162,7 @@ public class ConsensusLineLevelDetector implements LevelDetector {
             return List.of();
         }
 
-        double tolerance = toleranceOf(candles);
+        Tolerances tolerance = tolerancesOf(candles);
         long freshFrom = freshFrom(candles);
         List<Level<Double>> levels = new ArrayList<>();
 
@@ -181,7 +183,7 @@ public class ConsensusLineLevelDetector implements LevelDetector {
     }
 
     /** Прямая, у которой в допуске оказалось больше всего экстремумов; при равенстве - та, что шире. */
-    protected Line bestLine(List<Candle> extremes, double tolerance, long freshFrom) {
+    protected Line bestLine(List<Candle> extremes, Tolerances tolerance, long freshFrom) {
         Line best = null;
 
         for (int first = 0; first < extremes.size(); first++) {
@@ -214,7 +216,7 @@ public class ConsensusLineLevelDetector implements LevelDetector {
      * согласным. Второй проход - это и есть отличие от инкрементного поиска: направление определяют не
      * две выбранные точки, а все, кто к ним присоединился.
      */
-    private Line consensusAround(List<Candle> extremes, Candle first, Candle second, double tolerance) {
+    private Line consensusAround(List<Candle> extremes, Candle first, Candle second, Tolerances tolerance) {
         if (first.getIndex() == second.getIndex()) {
             return null;
         }
@@ -250,14 +252,18 @@ public class ConsensusLineLevelDetector implements LevelDetector {
     /**
      * Экстремумы в допуске от прямой. С огибающей допуск односторонний: точка под линией её нарушает,
      * а не подтверждает, - иначе уровень снова оказался бы посередине.
+     * <p>
+     * Допуск у каждой точки свой: промах меряется волатильностью её собственного времени, поэтому
+     * минимум из тихого месяца не обязан попадать в мерку, взятую с буйного.
      */
-    private List<Candle> agreeing(List<Candle> extremes, double slope, double intercept, double tolerance) {
+    private List<Candle> agreeing(List<Candle> extremes, double slope, double intercept, Tolerances tolerance) {
         List<Candle> agreeing = new ArrayList<>();
 
         for (Candle extreme : extremes) {
             double distance = priceOf(extreme) - (slope * extreme.getIndex() + intercept);
+            double allowed = tolerance.at(extreme);
 
-            if (envelope ? distance >= -TOUCHING && distance <= tolerance : Math.abs(distance) <= tolerance) {
+            if (envelope ? distance >= -TOUCHING && distance <= allowed : Math.abs(distance) <= allowed) {
                 agreeing.add(extreme);
             }
         }
@@ -307,6 +313,23 @@ public class ConsensusLineLevelDetector implements LevelDetector {
         return candles.getLast().getIndex() - BarSpacing.unitsOf(candles, freshTouchWithin);
     }
 
+    /**
+     * Допуск у каждого бара окна: столько волатильностей его собственного времени, сколько задано.
+     * Барам, у которых волатильность не посчиталась, достаётся допуск по всему окну - тот же, что был
+     * до появления локальной меры.
+     */
+    protected Tolerances tolerancesOf(List<Candle> candles) {
+        double[] volatility = volatilityCalculator.profile(candles);
+        double fallback = toleranceOf(candles);
+        Map<Long, Double> byIndex = new HashMap<>(candles.size());
+
+        for (int at = 0; at < candles.size(); at++) {
+            byIndex.put(candles.get(at).getIndex(), volatility[at] > 0 ? volatilities * volatility[at] : fallback);
+        }
+
+        return new Tolerances(byIndex, fallback);
+    }
+
     /** Допуск в цене: столько волатильностей окна, сколько задано. */
     protected double toleranceOf(List<Candle> candles) {
         double volatility = volatilityCalculator.calculate(candles);
@@ -349,6 +372,17 @@ public class ConsensusLineLevelDetector implements LevelDetector {
 
         long span() {
             return points.getLast().getIndex() - points.getFirst().getIndex();
+        }
+    }
+
+    /**
+     * Сколько цене позволено отстоять от прямой у каждого бара окна. Бар, которого в окне не было,
+     * меряется допуском по всему окну: такого не бывает, пока экстремумы приходят из того же окна, но
+     * молча выдать ноль было бы хуже.
+     */
+    protected record Tolerances(Map<Long, Double> byIndex, double fallback) {
+        double at(Candle candle) {
+            return byIndex.getOrDefault(candle.getIndex(), fallback);
         }
     }
 

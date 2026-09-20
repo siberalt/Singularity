@@ -3,6 +3,7 @@ package com.siberalt.singularity.strategy.extreme;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.TimePoint;
+import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -115,6 +116,52 @@ class ProminentExtremeLocatorTest {
             ALL, window -> 2, 1, Candle::close, Candle::close);
 
         assertEquals(List.of(2L), byClose.locate(candles).stream().map(Candle::getIndex).toList());
+    }
+
+    /**
+     * The yardstick belongs to the dip, not to the window. A window that ends in a storm has a storm's
+     * volatility as its single number, and a dip from a calm stretch months earlier is then judged by
+     * it - which is how real dips of a quiet market disappear from the levels built on them.
+     */
+    @Test
+    void judgesEachDipByTheVolatilityAroundIt() {
+        List<Candle> candles = new ArrayList<>();
+
+        // Twenty calm bars a unit wide, a dip of three among them, then twenty bars twenty units wide.
+        calm(candles, 10);
+        candles.add(bar(candles.size(), 100, 97, 97));
+        calm(candles, 10);
+        storm(candles, 20);
+
+        ExtremeLocator locator = ProminentExtremeLocator.ofMinimums(ALL, new ATRVolatilityCalculator(3), 1);
+
+        assertTrue(new ATRVolatilityCalculator(3).calculate(candles) > 10,
+            "the window as a whole has to look stormy, or the test proves nothing");
+        assertTrue(locator.locate(candles).stream().anyMatch(candle -> candle.getIndex() == 10L),
+            "a three-deep dip in a stretch a unit wide is deep, whatever the end of the window did");
+
+        // The same dip against a single number taken from the storm: gone.
+        assertTrue(ProminentExtremeLocator.ofMinimums(ALL, window -> 20, 1)
+            .locate(candles)
+            .stream()
+            .noneMatch(candle -> candle.getIndex() == 10L));
+    }
+
+    private static void calm(List<Candle> candles, int count) {
+        for (int at = 0; at < count; at++) {
+            candles.add(bar(candles.size(), 100.5, 99.5, 100));
+        }
+    }
+
+    private static void storm(List<Candle> candles, int count) {
+        for (int at = 0; at < count; at++) {
+            candles.add(bar(candles.size(), 110, 90, 100));
+        }
+    }
+
+    private static Candle bar(long index, double high, double low, double close) {
+        return new Candle(1, new TimePoint(index, START.plusSeconds(3600L * index)),
+            Quotation.of(close), Quotation.of(close), Quotation.of(high), Quotation.of(low), 1);
     }
 
     @Test

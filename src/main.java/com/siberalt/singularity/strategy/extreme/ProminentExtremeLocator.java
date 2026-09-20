@@ -27,6 +27,11 @@ import java.util.Map;
  * она в волатильностях, поэтому порог переносится между бумагами и таймфреймами, в отличие от
  * окрестности, которую приходится подбирать под интервал.
  * <p>
+ * Линейка у каждого экстремума своя - волатильность его собственного времени, а не всего окна. Окно
+ * поиска уровней - это полгода, и одно число на полгода судило бы январскую яму мартовской меркой:
+ * стоило рынку успокоиться к правому краю, как старые мелкие колебания становились бы выпуклыми, а
+ * стоило разойтись - настоящие ямы прошлого переставали бы считаться.
+ * <p>
  * Если с какой-то стороны яма глубже так и не нашлась до края окна, в зачёт идёт подъём, набранный до
  * края. Это осторожнее, чем считать такую сторону бесконечно высокой: свежий минимум у правого края
  * окна ещё не показал, что он глубокий, и заслуживать места среди сильных экстремумов ему рано.
@@ -115,15 +120,10 @@ public class ProminentExtremeLocator implements ExtremeLocator {
             return extremes;
         }
 
-        double volatility = volatilityCalculator.calculate(candles);
-
-        if (volatility <= 0) {
-            // Мерить нечем - окно короче периода волатильности; фильтровать наугад хуже, чем не
-            // фильтровать вовсе.
-            return extremes;
-        }
-
-        double threshold = volatilities * volatility;
+        // Волатильность у каждого бара, а не одна на всё окно: яма в тихом январе и яма той же глубины
+        // в буйном марте - разные ямы, и мерить их одной линейкой значит оставить одни и выбросить
+        // другие по причине, не имеющей отношения к их глубине.
+        double[] volatility = volatilityCalculator.profile(candles);
         Map<Long, Integer> positions = new HashMap<>();
 
         for (int at = 0; at < candles.size(); at++) {
@@ -135,7 +135,14 @@ public class ProminentExtremeLocator implements ExtremeLocator {
         for (Candle extreme : extremes) {
             Integer position = positions.get(extreme.getIndex());
 
-            if (position != null && prominenceOf(candles, position) >= threshold) {
+            if (position == null) {
+                continue;
+            }
+
+            // Мерить нечем - окно короче периода волатильности; фильтровать наугад хуже, чем не
+            // фильтровать вовсе.
+            if (volatility[position] <= 0
+                || prominenceOf(candles, position) >= volatilities * volatility[position]) {
                 prominent.add(extreme);
             }
         }

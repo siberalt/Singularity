@@ -193,6 +193,81 @@ class ATRVolatilityCalculatorTest {
     }
 
 
+    @Nested
+    @DisplayName("Профиль: волатильность у каждого бара")
+    class Profile {
+
+        private final ATRVolatilityCalculator shortPeriod = new ATRVolatilityCalculator(3);
+
+        @Test
+        @DisplayName("Длина профиля равна числу свечей, а последнее значение - обычному расчёту")
+        void shouldEndWhereTheWholeWindowCalculationDoes() {
+            List<Candle> candles = stretch(10, 1);
+
+            double[] profile = shortPeriod.profile(candles);
+
+            assertEquals(candles.size(), profile.length);
+            assertEquals(shortPeriod.calculate(candles), profile[profile.length - 1], 1e-9);
+        }
+
+        @Test
+        @DisplayName("Тихий участок меряется тихо, даже если окно кончается бурей")
+        void shouldStayLocal() {
+            List<Candle> candles = new ArrayList<>(stretch(20, 1));
+            candles.addAll(stretch(20, 20));
+
+            double[] profile = shortPeriod.profile(candles);
+
+            // В тихой половине бар шириной в единицу, в бурной - в двадцать; одно число на окно
+            // объявило бы тихие бары такими же, как бурные.
+            assertEquals(1, profile[15], 0.2);
+            assertTrue(profile[profile.length - 1] > 10, "буря должна мериться бурей: " + profile[profile.length - 1]);
+        }
+
+        @Test
+        @DisplayName("Барам до набора периода достаётся первое посчитанное значение")
+        void shouldFillTheBarsBeforeTheFirstMeasurement() {
+            double[] profile = shortPeriod.profile(stretch(10, 1));
+
+            assertEquals(profile[3], profile[0], 1e-9);
+            assertEquals(profile[3], profile[2], 1e-9);
+            assertTrue(profile[3] > 0);
+        }
+
+        @Test
+        @DisplayName("Окно короче периода мерить нечем - профиль нулевой")
+        void shouldSayNothingWhenTheWindowIsTooShort() {
+            double[] profile = shortPeriod.profile(stretch(2, 1));
+
+            assertEquals(2, profile.length);
+            assertArrayEquals(new double[]{0, 0}, profile, 1e-9);
+            assertEquals(0, shortPeriod.profile(List.of()).length);
+        }
+
+        @Test
+        @DisplayName("Множитель применяется у каждого бара")
+        void shouldCarryTheMultiplierThroughTheProfile() {
+            List<Candle> candles = stretch(10, 1);
+            double[] plain = shortPeriod.profile(candles);
+            double[] doubled = new MultiplierVolatilityCalculator(shortPeriod, 2).profile(candles);
+
+            for (int at = 0; at < plain.length; at++) {
+                assertEquals(2 * plain[at], doubled[at], 1e-9);
+            }
+        }
+
+        /** Свечи шириной {@code width} вокруг сотни: чем шире, тем волатильнее участок. */
+        private List<Candle> stretch(int count, double width) {
+            List<Candle> candles = new ArrayList<>();
+
+            for (int at = 0; at < count; at++) {
+                candles.add(candle(100 + width / 2, 100 - width / 2, 100));
+            }
+
+            return candles;
+        }
+    }
+
     private double calculateTrueRange(Candle current, Candle previous) {
         double highLow = current.getHighAsDouble() - current.getLowAsDouble();
         double highPrevClose = Math.abs(current.getHighAsDouble() - previous.getCloseAsDouble());

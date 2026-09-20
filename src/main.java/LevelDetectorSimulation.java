@@ -69,7 +69,7 @@ public class LevelDetectorSimulation {
     /** The search window, in bars of INTERVAL: half a year of trading hours. */
     private static final int WINDOW = 1760;
     /** How far the window moves from one frame to the next. */
-    private static final int STEP = 120;
+    private static final int STEP = 100;
     /** Bars drawn past the window's end - the future the levels of that frame did not see. */
     private static final int LOOKAHEAD = 440;
     /** How near a projected level a later low must fall to count as caught, in volatilities. */

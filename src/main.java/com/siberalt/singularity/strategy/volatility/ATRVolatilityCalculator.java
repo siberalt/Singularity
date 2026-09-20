@@ -10,35 +10,56 @@ public record ATRVolatilityCalculator(int period) implements VolatilityCalculato
         this(14);
     }
 
+    /** Волатильность на конце окна: сглаживание Уайлдера ведёт к ней все предыдущие бары. */
     @Override
     public double calculate(List<Candle> candles) {
         if (candles == null || candles.size() < period + 1) {
             return 0.0;
         }
 
-        double[] tr = new double[candles.size()];
-        for (int i = 1; i < candles.size(); i++) {
-            Candle curr = candles.get(i);
-            Candle prev = candles.get(i - 1);
-            double hl = curr.getHighAsDouble() - curr.getLowAsDouble();
-            double hc = Math.abs(curr.getHighAsDouble() - prev.getCloseAsDouble());
-            double lc = Math.abs(curr.getLowAsDouble() - prev.getCloseAsDouble());
-            tr[i] = Math.max(hl, Math.max(hc, lc));
+        IncrementalATR atr = new IncrementalATR(period);
+
+        for (Candle candle : candles) {
+            atr.add(candle);
         }
 
-        // Первое ATR – простое среднее первых period значений TR
-        double sum = 0.0;
-        for (int i = 1; i <= period; i++) {
-            sum += tr[i];
-        }
-        double atr = sum / period;
+        return atr.value();
+    }
 
-        // Сглаживание по Уайлдеру для остальных значений
-        for (int i = period + 1; i < tr.length; i++) {
-            atr = (atr * (period - 1) + tr[i]) / period;
+    /**
+     * Волатильность у каждого бара - та, что была у рынка к его моменту.
+     * <p>
+     * Смотрит только назад: экстремум и так становится известен лишь через свою окрестность баров, и
+     * заглядывать дальше неё ради его же линейки - значит мерить прошлое будущим.
+     * <p>
+     * Пока не набрался период, мерить нечем; таким барам достаётся первое посчитанное значение -
+     * ближайшее из того, что вообще известно. Если окно короче периода, весь профиль нулевой, и
+     * вызывающий сам решает, что делать без меры.
+     */
+    @Override
+    public double[] profile(List<Candle> candles) {
+        double[] profile = new double[candles == null ? 0 : candles.size()];
+
+        if (profile.length == 0) {
+            return profile;
         }
 
-        return atr;
+        IncrementalATR atr = new IncrementalATR(period);
+        int first = -1;
+
+        for (int at = 0; at < candles.size(); at++) {
+            profile[at] = atr.add(candles.get(at));
+
+            if (first < 0 && profile[at] > 0) {
+                first = at;
+            }
+        }
+
+        for (int at = 0; at < first; at++) {
+            profile[at] = profile[first];
+        }
+
+        return profile;
     }
 
     public static VolatilityCalculator ofMultiplier(double multiplier, int period) {

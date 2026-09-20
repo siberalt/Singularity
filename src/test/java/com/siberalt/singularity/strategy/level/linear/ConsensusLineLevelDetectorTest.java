@@ -6,10 +6,12 @@ import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.math.LinearFunction;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
+import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -235,6 +237,49 @@ class ConsensusLineLevelDetectorTest {
 
     private static double slopeOf(Level<Double> level) {
         return ((LinearFunction<Double>) level.function()).getSlope();
+    }
+
+    /**
+     * The tolerance belongs to the bar, not to the window: a low is allowed to miss the line by as much
+     * as its own time was volatile. Here every bar but the last is measured tightly, and the last one
+     * loosely - the same three-unit miss is an outlier in the first case and a touch in the second.
+     */
+    @Test
+    void judgesEveryLowByTheVolatilityOfItsOwnTime() {
+        // The odd low sits in the middle of the others, where no tilt of the line can reach it without
+        // losing both ends - so whether it belongs is decided by its tolerance and nothing else.
+        List<Candle> candles = candles(
+            low(0, 100.0), low(10, 100.0), low(20, 100.0), low(30, 100.0), low(40, 100.0), low(25, 98.5));
+
+        Level<Double> tight = detector(candles).detect(candles).getFirst();
+
+        assertEquals(5, tight.touchesCount(), "a miss of one and a half is not a touch when a volatility is one");
+
+        ConsensusLineLevelDetector local = ConsensusLineLevelDetector.createSupport(window -> window)
+            .setVolatilityTolerance(looseOnTheLastBar(), 1);
+
+        assertEquals(6, local.detect(candles).getFirst().touchesCount(),
+            "the same miss is a touch when that bar's own volatility is five");
+    }
+
+    /** A window whose bars are all worth one volatility, except the last, which is worth five. */
+    private static VolatilityCalculator looseOnTheLastBar() {
+        return new VolatilityCalculator() {
+            @Override
+            public double calculate(List<Candle> candles) {
+                return 1;
+            }
+
+            @Override
+            public double[] profile(List<Candle> candles) {
+                double[] profile = new double[candles.size()];
+
+                Arrays.fill(profile, 1);
+                profile[profile.length - 1] = 5;
+
+                return profile;
+            }
+        };
     }
 
     @Test
