@@ -1,10 +1,70 @@
-<html>
+﻿<html lang="ru">
 <head>
+    <meta charset="utf-8">
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script type="text/javascript" src="priceChart.js"></script>
+    <style>
+        body {
+            font: 13px/1.4 -apple-system, "Segoe UI", Arial, sans-serif;
+            margin: 0 12px;
+        }
+
+        #stepper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        #stepper button {
+            font-size: 16px;
+            width: 36px;
+            height: 28px;
+            cursor: pointer;
+        }
+
+        #slider {
+            flex: 1 1 280px;
+            min-width: 200px;
+        }
+
+        #caption {
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
+        #legend span {
+            margin-right: 10px;
+            white-space: nowrap;
+        }
+
+        .swatch {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            margin-right: 3px;
+            vertical-align: middle;
+        }
+
+        .hint {
+            color: #5f6368;
+        }
+    </style>
 </head>
 <body>
-<div id="price_chart" style="width: 100%; height: 1000px"></div>
+<!-- Shown only when LevelFrames.json is there; any other chart drops through to the old single view. -->
+<div id="stepper" hidden>
+    <button id="back" title="Шаг назад (←, с Shift — на десять)">←</button>
+    <button id="forward" title="Шаг вперёд (→, с Shift — на десять)">→</button>
+    <input type="range" id="slider" min="0" value="0">
+    <span id="caption"></span>
+    <label><input type="checkbox" id="projection" checked> продолжение линий</label>
+    <label><input type="checkbox" id="fixedScale"> общая шкала</label>
+</div>
+<div id="legend" class="hint" hidden></div>
+<div id="price_chart" style="width: 100%; height: 760px"></div>
 <div id="volume_chart" style="width: 100%; height: 300px"></div>
 </body>
 </html>
