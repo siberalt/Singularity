@@ -12,6 +12,7 @@ import com.siberalt.singularity.strategy.extreme.ProminentExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.ConsensusLineLevelDetector;
+import com.siberalt.singularity.strategy.level.linear.ConsensusLineLevelDetector.Envelope;
 import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
 import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 
@@ -55,16 +56,25 @@ public class LevelDetectorSimulation {
     private static final Instant TO = Instant.parse("2025-12-01T00:00:00Z");
     /** The bars the detector sees. The contest measured hourly; minutes were never tested. */
     private static final CandleInterval INTERVAL = CandleInterval.HOUR;
-    /** How far to either side a bar has to be the lowest to count as a pivot, in bars of INTERVAL. */
-    private static final int PIVOT_VICINITY = 14;
+    /**
+     * How far to either side a bar has to be the lowest to count as a pivot, in bars of INTERVAL. Ten
+     * gives the consensus 16 points in a median window of 900 bars, 12 to 20 between the tenth and
+     * ninetieth percentile - fourteen gave 12, and 8 or fewer in one window of ten. In the sweep the two
+     * were level on catching future lows.
+     */
+    private static final int PIVOT_VICINITY = 10;
     /** How deep the ground around a pivot has to fall away from it, in volatilities. */
     private static final double PROMINENCE = 0.5;
     /** A level is only kept if something touched it within this many bars of the end. */
     private static final long FRESH_BARS = 200;
     /** How far from the line a low may sit and still be a touch of it, in volatilities. */
     private static final double TOLERANCE = 1;
-    /** How many touches make a level. The pictures looked cleaner at 4 or 5, at the cost of coverage. */
-    private static final int MIN_TOUCHES = 3;
+    /**
+     * How many touches make a level. Five: on seventeen instruments the sweep never chose on, requiring
+     * five lifted the catch of future lows over the shifted control from 0.158 to 0.420, at the price of
+     * finding a level in about half as many windows.
+     */
+    private static final int MIN_TOUCHES = 5;
     private static final int MAX_LEVELS = 10;
     /**
      * The search window, in bars of INTERVAL. Nine hundred - about three and a half months of trading
@@ -181,7 +191,7 @@ public class LevelDetectorSimulation {
 
         return ConsensusLineLevelDetector.createSupport(minExtremeLocator)
             .setVolatilityTolerance(volatilityCalculator, TOLERANCE)
-            .setEnvelope(true)
+            .setEnvelope(Envelope.UNDER)
             .setFreshTouchWithin(FRESH_BARS)
             .setMinPoints(MIN_TOUCHES)
             .setMaxLevels(MAX_LEVELS);

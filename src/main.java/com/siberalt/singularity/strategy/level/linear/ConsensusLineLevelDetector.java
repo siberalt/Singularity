@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.ToDoubleFunction;
 
 /**
  * Наклонный уровень как прямая, вокруг которой собралось больше всего экстремумов окна.
@@ -57,7 +58,8 @@ public class ConsensusLineLevelDetector implements LevelDetector {
     private double volatilities = DEFAULT_VOLATILITIES;
     private int minPoints = DEFAULT_MIN_POINTS;
     private int maxLevels = DEFAULT_MAX_LEVELS;
-    private boolean envelope;
+    private Envelope envelope = Envelope.THROUGH;
+    private ExtremeWeigher weigher = ExtremeWeigher.EQUAL;
     private long freshTouchWithin;
 
     public ConsensusLineLevelDetector(ExtremeLocator extremeLocator) {
@@ -122,9 +124,25 @@ public class ConsensusLineLevelDetector implements LevelDetector {
      * <p>
      * Выключено по умолчанию: это другой смысл уровня, и включать его задним числом для уже сделанных
      * замеров нельзя.
+     * <p>
+     * Поддержке нужна {@link Envelope#UNDER} - прямая под минимумами, сопротивлению
+     * {@link Envelope#OVER} - над максимумами.
      */
-    public ConsensusLineLevelDetector setEnvelope(boolean envelope) {
-        this.envelope = envelope;
+    public ConsensusLineLevelDetector setEnvelope(Envelope envelope) {
+        this.envelope = Objects.requireNonNull(envelope);
+        return this;
+    }
+
+    /**
+     * Сколько весит каждая точка в споре прямых. По умолчанию все равны, и побеждает прямая с
+     * наибольшим числом согласных - как было. С весами побеждает наибольшая сумма весов согласных, и
+     * прямая наименьших квадратов подгоняется с теми же весами: одна объёмная глубокая свежая яма
+     * может перевесить две случайные.
+     * <p>
+     * Число касаний от весов не зависит: {@link #setMinPoints} по-прежнему считает точки.
+     */
+    public ConsensusLineLevelDetector setWeigher(ExtremeWeigher weigher) {
+        this.weigher = Objects.requireNonNull(weigher);
         return this;
     }
 
@@ -164,10 +182,13 @@ public class ConsensusLineLevelDetector implements LevelDetector {
 
         Tolerances tolerance = tolerancesOf(candles);
         long freshFrom = freshFrom(candles);
+        // Веса считаются один раз на окно, по полному списку точек: изъятие точек найденного уровня
+        // не должно менять вес оставшихся.
+        ToDoubleFunction<Candle> weight = weigher.weigh(List.copyOf(extremes), candles);
         List<Level<Double>> levels = new ArrayList<>();
 
         while (levels.size() < maxLevels && extremes.size() >= minPoints) {
-            Line best = bestLine(extremes, tolerance, freshFrom);
+            Line best = bestLine(extremes, tolerance, freshFrom, weight);
 
             if (best == null) {
                 break;
@@ -182,13 +203,17 @@ public class ConsensusLineLevelDetector implements LevelDetector {
         return List.copyOf(levels);
     }
 
-    /** Прямая, у которой в допуске оказалось больше всего экстремумов; при равенстве - та, что шире. */
-    protected Line bestLine(List<Candle> extremes, Tolerances tolerance, long freshFrom) {
+    /**
+     * Прямая с наибольшим весом согласных - при равных весах это просто число согласных; при равенстве
+     * побеждает та, что шире.
+     */
+    protected Line bestLine(List<Candle> extremes, Tolerances tolerance, long freshFrom,
+                            ToDoubleFunction<Candle> weight) {
         Line best = null;
 
         for (int first = 0; first < extremes.size(); first++) {
             for (int second = first + 1; second < extremes.size(); second++) {
-                Line candidate = consensusAround(extremes, extremes.get(first), extremes.get(second), tolerance);
+                Line candidate = consensusAround(extremes, extremes.get(first), extremes.get(second), tolerance, weight);
 
                 if (candidate == null || candidate.points.size() < minPoints) {
                     continue;
@@ -201,8 +226,8 @@ public class ConsensusLineLevelDetector implements LevelDetector {
                 }
 
                 if (best == null
-                    || candidate.points.size() > best.points.size()
-                    || (candidate.points.size() == best.points.size() && candidate.span() > best.span())) {
+                    || candidate.weight() > best.weight()
+                    || (candidate.weight() == best.weight() && candidate.span() > best.span())) {
                     best = candidate;
                 }
             }
@@ -216,7 +241,8 @@ public class ConsensusLineLevelDetector implements LevelDetector {
      * согласным. Второй проход - это и есть отличие от инкрементного поиска: направление определяют не
      * две выбранные точки, а все, кто к ним присоединился.
      */
-    private Line consensusAround(List<Candle> extremes, Candle first, Candle second, Tolerances tolerance) {
+    private Line consensusAround(List<Candle> extremes, Candle first, Candle second, Tolerances tolerance,
+                                 ToDoubleFunction<Candle> weight) {
         if (first.getIndex() == second.getIndex()) {
             return null;
         }
@@ -229,24 +255,23 @@ public class ConsensusLineLevelDetector implements LevelDetector {
             return null;
         }
 
-        double[] refitted = leastSquares(agreeing);
-        double refittedIntercept = envelope ? restingIntercept(agreeing, refitted[0]) : refitted[1];
+        double[] refitted = leastSquares(agreeing, weight);
 
-        return new Line(refitted[0], refittedIntercept, agreeing(extremes, refitted[0], refittedIntercept, tolerance));
+        double refittedIntercept = envelope.intercept(
+            lowestIntercept(agreeing, refitted[0]), highestIntercept(agreeing, refitted[0]), refitted[1]);
+        List<Candle> points = agreeing(extremes, refitted[0], refittedIntercept, tolerance);
+
+        return new Line(refitted[0], refittedIntercept, points, points.stream().mapToDouble(weight).sum());
     }
 
-    /**
-     * Свободный член прямой того же наклона, опущенной до самой низкой из точек - линия ложится на них
-     * снизу, касаясь ближайшей.
-     */
-    protected double restingIntercept(List<Candle> points, double slope) {
-        double lowest = Double.POSITIVE_INFINITY;
+    /** Свободный член прямой того же наклона, проведённой через самую низкую из точек. */
+    private double lowestIntercept(List<Candle> points, double slope) {
+        return points.stream().mapToDouble(point -> priceOf(point) - slope * point.getIndex()).min().orElseThrow();
+    }
 
-        for (Candle point : points) {
-            lowest = Math.min(lowest, priceOf(point) - slope * point.getIndex());
-        }
-
-        return lowest;
+    /** Свободный член прямой того же наклона, проведённой через самую высокую из точек. */
+    private double highestIntercept(List<Candle> points, double slope) {
+        return points.stream().mapToDouble(point -> priceOf(point) - slope * point.getIndex()).max().orElseThrow();
     }
 
     /**
@@ -263,7 +288,7 @@ public class ConsensusLineLevelDetector implements LevelDetector {
             double distance = priceOf(extreme) - (slope * extreme.getIndex() + intercept);
             double allowed = tolerance.at(extreme);
 
-            if (envelope ? distance >= -TOUCHING && distance <= allowed : Math.abs(distance) <= allowed) {
+            if (envelope.accepts(distance, allowed)) {
                 agreeing.add(extreme);
             }
         }
@@ -271,33 +296,38 @@ public class ConsensusLineLevelDetector implements LevelDetector {
         return agreeing;
     }
 
-    /** Прямая наименьших квадратов по точкам; при совпадающих индексах - горизонталь через их среднее. */
-    protected double[] leastSquares(List<Candle> points) {
+    /**
+     * Прямая взвешенных наименьших квадратов по точкам; при равных весах - обычная. При совпадающих
+     * индексах - горизонталь через взвешенное среднее.
+     */
+    protected double[] leastSquares(List<Candle> points, ToDoubleFunction<Candle> weight) {
+        double sumW = 0;
         double sumX = 0;
         double sumY = 0;
         double sumXY = 0;
         double sumXX = 0;
 
         for (Candle point : points) {
+            double w = weight.applyAsDouble(point);
             double x = point.getIndex();
             double y = priceOf(point);
 
-            sumX += x;
-            sumY += y;
-            sumXY += x * y;
-            sumXX += x * x;
+            sumW += w;
+            sumX += w * x;
+            sumY += w * y;
+            sumXY += w * x * y;
+            sumXX += w * x * x;
         }
 
-        int count = points.size();
-        double denominator = count * sumXX - sumX * sumX;
+        double denominator = sumW * sumXX - sumX * sumX;
 
         if (Math.abs(denominator) < 1e-9) {
-            return new double[]{0, sumY / count};
+            return new double[]{0, sumY / sumW};
         }
 
-        double slope = (count * sumXY - sumX * sumY) / denominator;
+        double slope = (sumW * sumXY - sumX * sumY) / denominator;
 
-        return new double[]{slope, (sumY - slope * sumX) / count};
+        return new double[]{slope, (sumY - slope * sumX) / sumW};
     }
 
     /**
@@ -365,7 +395,8 @@ public class ConsensusLineLevelDetector implements LevelDetector {
     }
 
     /** Прямая и экстремумы, которые её подтвердили, по возрастанию индекса. */
-    protected record Line(double slope, double intercept, List<Candle> points) {
+    /** @param weight сумма весов согласных точек - то, по чему прямые соревнуются */
+    protected record Line(double slope, double intercept, List<Candle> points, double weight) {
         protected Line {
             points = points.stream().sorted(Comparator.comparingLong(Candle::getIndex)).toList();
         }
@@ -373,6 +404,79 @@ public class ConsensusLineLevelDetector implements LevelDetector {
         long span() {
             return points.getLast().getIndex() - points.getFirst().getIndex();
         }
+    }
+
+    /**
+     * С какой стороны от прямой стоят подтверждающие её точки и куда её ставить.
+     * <p>
+     * Поддержка лежит под своими минимумами, сопротивление - над максимумами: у обоих допуск
+     * односторонний, но в разные стороны, и прямая прижимается к разным крайним точкам. Прямая без
+     * огибающей идёт сквозь точки с допуском в обе стороны.
+     */
+    public interface Envelope {
+        /** Прямая наименьших квадратов, допуск в обе стороны - не огибающая вовсе. */
+        Envelope THROUGH = new Envelope() {
+            @Override
+            public boolean accepts(double distance, double allowed) {
+                return Math.abs(distance) <= allowed;
+            }
+
+            @Override
+            public double intercept(double lowest, double highest, double fitted) {
+                return fitted;
+            }
+        };
+
+        /** Прямая под точками, касаясь самой низкой: поддержка. */
+        Envelope UNDER = new Envelope() {
+            @Override
+            public boolean accepts(double distance, double allowed) {
+                return distance >= -TOUCHING && distance <= allowed;
+            }
+
+            @Override
+            public double intercept(double lowest, double highest, double fitted) {
+                return lowest;
+            }
+        };
+
+        /** Прямая над точками, касаясь самой высокой: сопротивление. */
+        Envelope OVER = new Envelope() {
+            @Override
+            public boolean accepts(double distance, double allowed) {
+                return distance <= TOUCHING && distance >= -allowed;
+            }
+
+            @Override
+            public double intercept(double lowest, double highest, double fitted) {
+                return highest;
+            }
+        };
+
+        /**
+         * Подтверждает ли прямую точка, лежащая на {@code distance} над ней, при таком допуске.
+         * Отрицательное расстояние - точка под прямой.
+         */
+        boolean accepts(double distance, double allowed);
+
+        /**
+         * Свободный член прямой уже выбранного наклона: {@code lowest} и {@code highest} - прямые того же
+         * наклона через самую низкую и самую высокую из согласных точек, {@code fitted} - прямая
+         * наименьших квадратов.
+         */
+        double intercept(double lowest, double highest, double fitted);
+    }
+
+    /**
+     * Вес каждой точки уровня в этом окне. Считается один раз на окно, и вызывать возвращённую
+     * функцию можно для любой из переданных точек. Веса неотрицательны; равные веса - прежнее
+     * поведение, при котором прямые соревнуются числом согласных.
+     */
+    @FunctionalInterface
+    public interface ExtremeWeigher {
+        ExtremeWeigher EQUAL = (extremes, window) -> extreme -> 1.0;
+
+        ToDoubleFunction<Candle> weigh(List<Candle> extremes, List<Candle> window);
     }
 
     /**

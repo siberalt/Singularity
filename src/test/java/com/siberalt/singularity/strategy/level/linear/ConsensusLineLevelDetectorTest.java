@@ -6,6 +6,7 @@ import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.math.LinearFunction;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.level.Level;
+import com.siberalt.singularity.strategy.level.linear.ConsensusLineLevelDetector.Envelope;
 import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 import org.junit.jupiter.api.Test;
 
@@ -142,7 +143,7 @@ class ConsensusLineLevelDetectorTest {
         );
 
         Level<Double> middle = detector(candles).detect(candles).getFirst();
-        Level<Double> resting = detector(candles).setEnvelope(true).detect(candles).getFirst();
+        Level<Double> resting = detector(candles).setEnvelope(Envelope.UNDER).detect(candles).getFirst();
 
         // The middle line has the tolerance on both sides of it; the envelope has it on one, so at the
         // same tolerance it accepts less - here four of the five lows, the fifth being 1.1 above.
@@ -175,7 +176,7 @@ class ConsensusLineLevelDetectorTest {
             low(0, 101.0), low(5, 100.0), low(10, 110.0), low(20, 120.0), low(30, 130.0), low(40, 140.0)
         );
 
-        Level<Double> resting = detector(candles).setEnvelope(true).detect(candles).getFirst();
+        Level<Double> resting = detector(candles).setEnvelope(Envelope.UNDER).detect(candles).getFirst();
 
         assertTrue(((LinearFunction<Double>) resting.function()).getSlope() > 0,
             "the envelope slopes " + ((LinearFunction<Double>) resting.function()).getSlope());
@@ -195,8 +196,8 @@ class ConsensusLineLevelDetectorTest {
             low(40, 100.0), low(50, 110.0), low(60, 120.0), low(70, 130.0)
         );
 
-        List<Level<Double>> without = detector(candles).setEnvelope(true).detect(candles);
-        List<Level<Double>> with = detector(candles).setEnvelope(true).setFreshTouchWithin(5).detect(candles);
+        List<Level<Double>> without = detector(candles).setEnvelope(Envelope.UNDER).detect(candles);
+        List<Level<Double>> with = detector(candles).setEnvelope(Envelope.UNDER).setFreshTouchWithin(5).detect(candles);
 
         // Both lines are real and both are reported: the falling one has the most points, the rising one
         // the most strength, which is why it is first either way.
@@ -221,8 +222,8 @@ class ConsensusLineLevelDetectorTest {
             low(2400, 100.0), low(3000, 110.0), low(3600, 120.0), low(4200, 130.0)
         );
 
-        List<Level<Double>> onMinutes = detector(minutes).setEnvelope(true).setFreshTouchWithin(5).detect(minutes);
-        List<Level<Double>> onHours = detector(hours).setEnvelope(true).setFreshTouchWithin(5).detect(hours);
+        List<Level<Double>> onMinutes = detector(minutes).setEnvelope(Envelope.UNDER).setFreshTouchWithin(5).detect(minutes);
+        List<Level<Double>> onHours = detector(hours).setEnvelope(Envelope.UNDER).setFreshTouchWithin(5).detect(hours);
 
         // The same nine bars, sixty index units apart instead of one: the same level is dropped as stale
         // and the same one survives, its slope stretched by the spacing.
@@ -280,6 +281,73 @@ class ConsensusLineLevelDetectorTest {
                 return profile;
             }
         };
+    }
+
+    /**
+     * A resistance is the envelope turned over: it lies above its highs and touches the highest one.
+     * Before the envelope knew its side, asking a resistance for one put the line under the highs - a
+     * support drawn through the tops of the bars.
+     */
+    @Test
+    void aResistanceEnvelopeLiesOverItsHighs() {
+        List<Candle> candles = candles(
+            low(0, 100.0), low(10, 110.5), low(20, 119.5), low(30, 130.5), low(40, 139.5));
+
+        Level<Double> resistance = ConsensusLineLevelDetector.createResistance(window -> window)
+            .setVolatilityTolerance(window -> 1, 1)
+            .setEnvelope(Envelope.OVER)
+            .detect(candles)
+            .getFirst();
+
+        for (Candle candle : candles) {
+            double distance = candle.getHighAsDouble() - resistance.function().apply((double) candle.getIndex());
+
+            assertTrue(distance <= 1e-9, "a high sits " + distance + " above the resistance");
+        }
+
+        assertEquals(0.0, candles.stream()
+            .mapToDouble(candle -> candle.getHighAsDouble() - resistance.function().apply((double) candle.getIndex()))
+            .max()
+            .orElseThrow(), 1e-9);
+    }
+
+    /**
+     * Weights decide which line wins. Four equal points on one line outnumber three on another, but
+     * when the three are ten times heavier they outweigh the four, and the detector - asked for a
+     * single level - reports theirs.
+     */
+    @Test
+    void theHeavierLineWinsOverTheMoreNumerousOne() {
+        List<Candle> candles = candles(
+            low(0, 100.0), low(10, 100.0), low(20, 100.0), low(30, 100.0),
+            low(5, 200.0), low(15, 200.0), low(25, 200.0));
+
+        ConsensusLineLevelDetector.ExtremeWeigher heavyAbove = (extremes, window) ->
+            extreme -> extreme.getLowAsDouble() > 150 ? 10 : 1;
+
+        Level<Double> counted = detector(candles).setMaxLevels(1).detect(candles).getFirst();
+        Level<Double> weighed = detector(candles).setMaxLevels(1).setWeigher(heavyAbove).detect(candles).getFirst();
+
+        assertEquals(100.0, counted.function().apply(0.0), 1e-6);
+        assertEquals(4, counted.touchesCount());
+        assertEquals(200.0, weighed.function().apply(0.0), 1e-6);
+        assertEquals(3, weighed.touchesCount(), "weights choose the line; touches still count points");
+    }
+
+    /** The refit is weighted too: a heavy point pulls the line towards itself. */
+    @Test
+    void aHeavyPointPullsTheFittedLineTowardsItself() {
+        List<Candle> candles = candles(low(0, 100.0), low(10, 100.0), low(20, 101.0));
+
+        ConsensusLineLevelDetector.ExtremeWeigher heavyLast = (extremes, window) ->
+            extreme -> extreme.getIndex() == 20 ? 100 : 1;
+
+        Level<Double> equal = detector(candles).setVolatilityTolerance(window -> 1, 2).detect(candles).getFirst();
+        Level<Double> pulled = detector(candles).setVolatilityTolerance(window -> 1, 2).setWeigher(heavyLast)
+            .detect(candles).getFirst();
+
+        assertTrue(Math.abs(pulled.function().apply(20.0) - 101) < Math.abs(equal.function().apply(20.0) - 101),
+            "the weighted line should pass nearer the heavy point");
     }
 
     @Test
