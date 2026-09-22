@@ -3,12 +3,11 @@ package com.siberalt.singularity.broker.impl.mock;
 import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
 import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.entity.candle.CandlePriceField;
-import com.siberalt.singularity.entity.candle.ComparisonOperator;
 import com.siberalt.singularity.entity.candle.FindPriceParams;
 import com.siberalt.singularity.entity.order.Order;
 
 import java.time.Instant;
+import java.util.Objects;
 
 /**
  * Finds the moment a waiting order can next trade, by looking ahead through the candle history
@@ -28,6 +27,7 @@ public class MarketSignalSearch {
     private final SimulationMarketData marketDataService;
     private final OrderPriceModel priceModel;
     private final LiquidityModel liquidityModel;
+    private LimitTrigger limitTrigger = LimitTrigger.TOUCH;
 
     public MarketSignalSearch(
         SimulationMarketData marketDataService,
@@ -37,6 +37,16 @@ public class MarketSignalSearch {
         this.marketDataService = marketDataService;
         this.priceModel = priceModel;
         this.liquidityModel = liquidityModel;
+    }
+
+    public LimitTrigger getLimitTrigger() {
+        return limitTrigger;
+    }
+
+    /** What a bar has to show for a limit order to fill in it - see {@link LimitTrigger}. */
+    public MarketSignalSearch setLimitTrigger(LimitTrigger limitTrigger) {
+        this.limitTrigger = Objects.requireNonNull(limitTrigger);
+        return this;
     }
 
     /**
@@ -70,15 +80,17 @@ public class MarketSignalSearch {
     }
 
     /**
-     * The first bar in which the market reaches the order's limit price.
+     * The first bar in which the market reaches the order's limit price, as {@link #limitTrigger}
+     * understands reaching it.
      * <p>
-     * A parked buy is waiting for the price to come down to it, so it triggers on the first bar
-     * whose low touches the limit; a parked sell waits for the price to come up, and triggers on a
-     * high. Comparing against the bar's open instead would ask a different question - where the
-     * price stood at one instant - and would miss every limit the market crossed inside a bar.
+     * A parked buy is waiting for the price to come down to it, so by default it triggers on the
+     * first bar whose low touches the limit; a parked sell waits for the price to come up, and
+     * triggers on a high. Comparing against the bar's open instead would ask a different question -
+     * where the price stood at one instant - and would miss every limit the market crossed inside a
+     * bar.
      */
     protected Candle barReachingLimit(Order order, Instant from, Instant to) {
-        boolean isBuy = order.getDirection() == OrderDirection.BUY;
+        OrderDirection direction = order.getDirection() == OrderDirection.BUY ? OrderDirection.BUY : OrderDirection.SELL;
 
         return marketDataService.findByPrice(
                 CandleInterval.MIN_1,
@@ -87,8 +99,8 @@ public class MarketSignalSearch {
                     from,
                     to,
                     order.getRequestedPrice(),
-                    isBuy ? CandlePriceField.LOW : CandlePriceField.HIGH,
-                    isBuy ? ComparisonOperator.LESS_OR_EQUAL : ComparisonOperator.MORE_OR_EQUAL,
+                    limitTrigger.field(direction),
+                    limitTrigger.operator(direction),
                     1
                 )
             )

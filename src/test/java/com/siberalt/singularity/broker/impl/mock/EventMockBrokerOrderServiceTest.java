@@ -182,6 +182,65 @@ public class EventMockBrokerOrderServiceTest extends AbstractMockOrderServiceTes
         );
     }
 
+    /** Traded through: the low has to go past the limit, touching it is not enough. */
+    @Test
+    public void testBuyLimitTradedThroughLooksForALowUnderItsPrice() throws AbstractException {
+        Candle marketCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+
+        pendingOrderHandler().setLimitTrigger(LimitTrigger.THROUGH);
+        addMoney(marketCandle.open().multiply(1000));
+        when(candleStorage.findByPrice(anyLong(), any())).thenReturn(List.of());
+        stubLastCandleOfLifeTime(marketCandle);
+
+        assertBuyParked(marketCandle, 10, Quotation.of(9));
+
+        verify(candleStorage).findByPrice(
+            eq(idOf(config.getInstrument().getUid())),
+            eq(priceSearch(Quotation.of(9), CandlePriceField.LOW, ComparisonOperator.LESS))
+        );
+    }
+
+    /** Closed through: the minute has to end under a buy's limit, not only dip under it. */
+    @Test
+    public void testBuyLimitClosedThroughLooksForACloseUnderItsPrice() throws AbstractException {
+        Candle marketCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+
+        pendingOrderHandler().setLimitTrigger(LimitTrigger.CLOSE_THROUGH);
+        addMoney(marketCandle.open().multiply(1000));
+        when(candleStorage.findByPrice(anyLong(), any())).thenReturn(List.of());
+        stubLastCandleOfLifeTime(marketCandle);
+
+        assertBuyParked(marketCandle, 10, Quotation.of(9));
+
+        verify(candleStorage).findByPrice(
+            eq(idOf(config.getInstrument().getUid())),
+            eq(priceSearch(Quotation.of(9), CandlePriceField.CLOSE, ComparisonOperator.LESS))
+        );
+    }
+
+    @Test
+    public void testSellLimitClosedThroughLooksForACloseOverItsPrice() throws AbstractException {
+        Candle marketCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+
+        pendingOrderHandler().setLimitTrigger(LimitTrigger.CLOSE_THROUGH);
+        addInstruments(80);
+        when(candleStorage.findByPrice(anyLong(), any())).thenReturn(List.of());
+        stubLastCandleOfLifeTime(marketCandle);
+
+        assertSellParked(marketCandle, 10, Quotation.of(11));
+
+        verify(candleStorage).findByPrice(
+            eq(idOf(config.getInstrument().getUid())),
+            eq(priceSearch(Quotation.of(11), CandlePriceField.CLOSE, ComparisonOperator.MORE))
+        );
+    }
+
     @Test
     public void testBuyLimitFillsAtItsOwnPriceWhenTheMarketOnlyDipsToIt() throws AbstractException {
         Candle marketCandle = createCandle(

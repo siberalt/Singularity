@@ -85,6 +85,16 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
         return this;
     }
 
+    public LimitTrigger getLimitTrigger() {
+        return marketSignalSearch.getLimitTrigger();
+    }
+
+    /** What a minute has to show for a parked limit order to fill in it - see {@link LimitTrigger}. */
+    public SimulatedPendingOrderHandler setLimitTrigger(LimitTrigger limitTrigger) {
+        marketSignalSearch.setLimitTrigger(limitTrigger);
+        return this;
+    }
+
     /**
      * The simulator's clock is authoritative once a run starts. It is expected to be the same clock
      * the broker was built with - scheduling decisions made here and the timestamps the executor
