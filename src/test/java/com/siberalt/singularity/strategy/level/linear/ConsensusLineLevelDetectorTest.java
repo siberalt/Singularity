@@ -5,6 +5,7 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.math.LinearFunction;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
+import com.siberalt.singularity.strategy.level.ExtremeWeigher;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.linear.ConsensusLineLevelDetector.Envelope;
 import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
@@ -322,7 +323,7 @@ class ConsensusLineLevelDetectorTest {
             low(0, 100.0), low(10, 100.0), low(20, 100.0), low(30, 100.0),
             low(5, 200.0), low(15, 200.0), low(25, 200.0));
 
-        ConsensusLineLevelDetector.ExtremeWeigher heavyAbove = (extremes, window) ->
+        ExtremeWeigher heavyAbove = (extremes, window) ->
             extreme -> extreme.getLowAsDouble() > 150 ? 10 : 1;
 
         Level<Double> counted = detector(candles).setMaxLevels(1).detect(candles).getFirst();
@@ -339,7 +340,7 @@ class ConsensusLineLevelDetectorTest {
     void aHeavyPointPullsTheFittedLineTowardsItself() {
         List<Candle> candles = candles(low(0, 100.0), low(10, 100.0), low(20, 101.0));
 
-        ConsensusLineLevelDetector.ExtremeWeigher heavyLast = (extremes, window) ->
+        ExtremeWeigher heavyLast = (extremes, window) ->
             extreme -> extreme.getIndex() == 20 ? 100 : 1;
 
         Level<Double> equal = detector(candles).setVolatilityTolerance(window -> 1, 2).detect(candles).getFirst();

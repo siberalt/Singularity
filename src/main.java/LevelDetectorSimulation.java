@@ -13,6 +13,9 @@ import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.ConsensusLineLevelDetector;
 import com.siberalt.singularity.strategy.level.linear.ConsensusLineLevelDetector.Envelope;
+import com.siberalt.singularity.strategy.level.zone.WeightedDBSCANZoneDetector;
+import com.siberalt.singularity.strategy.level.zone.Zone;
+import com.siberalt.singularity.strategy.level.zone.ZoneDetector;
 import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
 import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 
@@ -89,10 +92,35 @@ public class LevelDetectorSimulation {
     private static final int LOOKAHEAD = 440;
     /** How near a projected level a later low must fall to count as caught, in volatilities. */
     private static final double CATCH_TOLERANCE = 0.5;
+    /**
+     * The base radius of a low's neighbourhood in a zone, in volatilities of its own time; the heaviest
+     * low of the window reaches twice as far. Half the line's tolerance, so that a slow drift does not
+     * chain into one band. The zone's bounds are its lows' prices widened by half a radius.
+     */
+    private static final double ZONE_TOLERANCE = 0.5;
+    /**
+     * How heavy a low's neighbourhood must be for it to grow a zone, in weights of the window's average
+     * low. The weights are volume times prominence times recency, so three is three ordinary lows, or
+     * fewer heavy fresh ones.
+     */
+    private static final double ZONE_MIN_WEIGHT = 3;
+    /**
+     * How many lows make a zone whatever they weigh. Two: with one, a third of the zones on TMOS were a
+     * single heavy pivot - a big low, not a place the price turned at more than once.
+     */
+    private static final int ZONE_MIN_POINTS = 2;
+    private static final int MAX_ZONES = 5;
     private static final Path OUTPUT = Paths.get("src/main/resources/presenter/google/LevelFrames.json");
 
     /** One position of the window: what was found in it, and how wide a bar was while it was found. */
-    private record Frame(int from, int to, double volatility, List<Line> levels) {
+    private record Frame(int from, int to, double volatility, List<Line> levels, List<Band> zones) {
+    }
+
+    /** A zone as the page draws it: the rows from its first low to its last, and its price bounds. */
+    private record Band(int from, int to, double low, double high, int touches, double strength) {
+        double width() {
+            return high - low;
+        }
     }
 
     /**
@@ -134,6 +162,12 @@ public class LevelDetectorSimulation {
         System.out.printf(Locale.ROOT, "levels per frame: %.1f on average, %d at most%n",
             sweep.stream().mapToInt(frame -> frame.levels().size()).average().orElse(0),
             sweep.stream().mapToInt(frame -> frame.levels().size()).max().orElse(0));
+        System.out.printf(Locale.ROOT, "zones per frame: %.1f on average, %d at most, %.2f volatilities wide on average%n",
+            sweep.stream().mapToInt(frame -> frame.zones().size()).average().orElse(0),
+            sweep.stream().mapToInt(frame -> frame.zones().size()).max().orElse(0),
+            sweep.stream()
+                .flatMap(frame -> frame.zones().stream().map(zone -> zone.width() / frame.volatility()))
+                .mapToDouble(Double::doubleValue).average().orElse(0));
         System.out.println("written to " + OUTPUT);
     }
 
@@ -146,7 +180,32 @@ public class LevelDetectorSimulation {
             lineOf(level, bars, from).ifPresent(lines::add);
         }
 
-        return new Frame(from, from + WINDOW, new ATRVolatilityCalculator().calculate(window), lines);
+        List<Band> zones = new ArrayList<>();
+
+        for (Zone zone : supportZoneDetector(prominentMinimums()).detect(window)) {
+            rowsOf(zone.pointFrom().index(), zone.pointTo().index(), bars, from)
+                .ifPresent(rows -> zones.add(new Band(rows[0], rows[1], zone.low(), zone.high(),
+                    zone.touchesCount(), zone.strength())));
+        }
+
+        return new Frame(from, from + WINDOW, new ATRVolatilityCalculator().calculate(window), lines, zones);
+    }
+
+    /** The first and last row of the window whose candles fall between two candle indices. */
+    private static Optional<int[]> rowsOf(long indexFrom, long indexTo, List<Candle> bars, int from) {
+        int first = -1;
+        int last = -1;
+
+        for (int row = from; row < from + WINDOW; row++) {
+            long index = bars.get(row).getIndex();
+
+            if (index >= indexFrom && index <= indexTo) {
+                first = first < 0 ? row : first;
+                last = row;
+            }
+        }
+
+        return first < 0 ? Optional.empty() : Optional.of(new int[]{first, last});
     }
 
     /**
@@ -154,21 +213,14 @@ public class LevelDetectorSimulation {
      * the ones of the window whose candles fall inside them.
      */
     private static Optional<Line> lineOf(Level<Double> level, List<Candle> bars, int from) {
-        int first = -1;
-        int last = -1;
+        Optional<int[]> rows = rowsOf(level.indexFrom(), level.indexTo(), bars, from);
 
-        for (int row = from; row < from + WINDOW; row++) {
-            long index = bars.get(row).getIndex();
-
-            if (index >= level.indexFrom() && index <= level.indexTo()) {
-                first = first < 0 ? row : first;
-                last = row;
-            }
-        }
-
-        if (first < 0) {
+        if (rows.isEmpty()) {
             return Optional.empty();
         }
+
+        int first = rows.get()[0];
+        int last = rows.get()[1];
 
         double indexFrom = bars.get(first).getIndex();
         double indexTo = bars.get(last).getIndex();
@@ -197,6 +249,18 @@ public class LevelDetectorSimulation {
             .setMaxLevels(MAX_LEVELS);
     }
 
+    /**
+     * Horizontal zones beside the lines, found on the same lows but independently of them: a flat cluster
+     * may give both a zone and a line, and the page shows both.
+     */
+    private static ZoneDetector supportZoneDetector(ExtremeLocator minExtremeLocator) {
+        return WeightedDBSCANZoneDetector.createSupport(minExtremeLocator)
+            .setVolatilityTolerance(new ATRVolatilityCalculator(), ZONE_TOLERANCE)
+            .setMinWeight(ZONE_MIN_WEIGHT)
+            .setMinPoints(ZONE_MIN_POINTS)
+            .setMaxZones(MAX_ZONES);
+    }
+
     /** For resistances, mirror it: {@code createResistance} over {@code ofMaximums} of the same pair. */
     private static ExtremeLocator prominentMinimums() {
         return ProminentExtremeLocator.ofMinimums(
@@ -221,6 +285,9 @@ public class LevelDetectorSimulation {
             out.printf(Locale.ROOT,
                 "  \"settings\": {\"vicinity\": %d, \"prominence\": %s, \"tolerance\": %s, \"fresh\": %d, \"touches\": %d, \"maxLevels\": %d},%n",
                 PIVOT_VICINITY, PROMINENCE, TOLERANCE, FRESH_BARS, MIN_TOUCHES, MAX_LEVELS);
+            out.printf(Locale.ROOT,
+                "  \"zoneSettings\": {\"tolerance\": %s, \"minWeight\": %s, \"points\": %d, \"maxZones\": %d},%n",
+                ZONE_TOLERANCE, ZONE_MIN_WEIGHT, ZONE_MIN_POINTS, MAX_ZONES);
 
             out.print("  \"times\": [");
             for (int row = 0; row < bars.size(); row++) {
@@ -260,6 +327,16 @@ public class LevelDetectorSimulation {
                     out.print(line == 0 ? "" : ",");
                     out.printf(Locale.ROOT, "{\"from\": %d, \"to\": %d, \"price\": %.4f, \"slope\": %.10g, \"touches\": %d}",
                         level.from(), level.to(), level.price(), level.slope(), level.touches());
+                }
+
+                out.print("], \"zones\": [");
+
+                for (int band = 0; band < frame.zones().size(); band++) {
+                    Band zone = frame.zones().get(band);
+                    out.print(band == 0 ? "" : ",");
+                    out.printf(Locale.ROOT,
+                        "{\"from\": %d, \"to\": %d, \"low\": %.4f, \"high\": %.4f, \"touches\": %d, \"strength\": %.3f}",
+                        zone.from(), zone.to(), zone.low(), zone.high(), zone.touches(), zone.strength());
                 }
 
                 out.printf("]}%s%n", at == frames.size() - 1 ? "" : ",");

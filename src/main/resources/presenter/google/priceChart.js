@@ -10,6 +10,8 @@ let lowAt = null;
 let scale = null;
 let chart = null;
 
+const ZONE_COLOUR = '#8e24aa';
+
 function start() {
     fetch('LevelFrames.json')
         .then(response => response.ok ? response.json() : Promise.reject(response.status))
@@ -29,7 +31,7 @@ function startStepper(frames) {
     document.getElementById('legend').innerHTML =
         item('#1a73e8', 'цена в окне') + item('#9aa0a6', 'цена после окна')
         + item('#33691e', '3 касания') + item('#e65100', '4–5') + item('#b71c1c', '6 и больше')
-        + item('#188038', 'минимум впереди у линии') + item('#d93025', 'минимум мимо')
+        + item(ZONE_COLOUR, 'зона') + item('#188038', 'минимум впереди у линии') + item('#d93025', 'минимум мимо')
         + '<span>· окно ' + model['window'] + ' баров, шаг ' + model['step']
         + ', вперёд ' + model['lookahead'] + '; у линии — ближе ' + model['catchTolerance'] + ' ATR</span>';
 
@@ -115,6 +117,22 @@ function drawFrame() {
         }
     });
 
+    // Зона - полоса между интервалами своей серии: сложенные области сложили бы зоны друг на друга.
+    const zones = frame['zones'] || [];
+    const zoneEnd = document.getElementById('projection').checked ? end - 1 : frame['to'] - 1;
+
+    zones.forEach((zone, number) => {
+        const inside = row => row >= zone['from'] && row <= zoneEnd;
+
+        addColumn(table, columns, series,
+            'Зона ' + (number + 1) + ': ' + zone['touches'] + ' касаний, вес ' + zone['strength'].toFixed(1),
+            row => inside(row) ? (zone['low'] + zone['high']) / 2 : null,
+            {color: ZONE_COLOUR, lineWidth: 1, lineDashStyle: [2, 4]});
+        addInterval(table, columns, row => inside(row) ? zone['low'] : null);
+        addInterval(table, columns, row => inside(row) ? zone['high'] : null);
+    });
+
+    const inZone = row => zones.some(zone => zone['low'] <= lowAt.get(row) && lowAt.get(row) <= zone['high']);
     const caught = row => frame['levels'].some(
         level => Math.abs(lowAt.get(row) - levelPrice(level, row)) <= model['catchTolerance'] * frame['volatility']);
 
@@ -140,27 +158,36 @@ function drawFrame() {
         legend: {position: 'none'},
         interpolateNulls: false,
         series: series,
+        intervals: {style: 'area', fillOpacity: 0.18, lineWidth: 0},
         hAxis: {showTextEvery: Math.ceil(rows.length / 12)},
         vAxis: document.getElementById('fixedScale').checked
             ? {viewWindow: {min: scale.min, max: scale.max}}
             : {}
     });
-    writeCaption(frame, end, caught);
+    writeCaption(frame, end, caught, inZone);
 }
 
+// Номер серии - это номер столбца данных без интервалов: интервал принадлежит серии перед ним.
 function addColumn(table, columns, series, title, value, style) {
-    series[columns.length] = style;
+    series[Object.keys(series).length] = style;
     columns.push(value);
     table.addColumn('number', title);
 }
 
-function writeCaption(frame, end, caught) {
+function addInterval(table, columns, value) {
+    columns.push(value);
+    table.addColumn({type: 'number', role: 'interval'});
+}
+
+function writeCaption(frame, end, caught, inZone) {
     let hit = 0;
     let missed = 0;
+    let zoned = 0;
 
     for (let row = frame['to']; row < end; row++) {
         if (lowAt.has(row)) {
             caught(row) ? hit++ : missed++;
+            zoned += inZone(row) ? 1 : 0;
         }
     }
 
@@ -169,7 +196,8 @@ function writeCaption(frame, end, caught) {
         + ' · бары ' + frame['from'] + '–' + frame['to']
         + ' · ' + shortDate(model['times'][frame['from']]) + ' → ' + shortDate(model['times'][frame['to'] - 1])
         + ' · уровней ' + frame['levels'].length
-        + ' · впереди у линии ' + hit + ' из ' + (hit + missed);
+        + ' · впереди у линии ' + hit + ' из ' + (hit + missed)
+        + ' · зон ' + (frame['zones'] || []).length + ', впереди в зоне ' + zoned + ' из ' + (hit + missed);
 }
 
 function shortTime(time) {

@@ -6,6 +6,7 @@ import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.math.ArithmeticOperations;
 import com.siberalt.singularity.math.LinearFunction2D;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
+import com.siberalt.singularity.strategy.level.ExtremeWeigher;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.strength.SimpleStrengthCalculator;
@@ -184,7 +185,7 @@ public class ConsensusLineLevelDetector implements LevelDetector {
         long freshFrom = freshFrom(candles);
         // Веса считаются один раз на окно, по полному списку точек: изъятие точек найденного уровня
         // не должно менять вес оставшихся.
-        ToDoubleFunction<Candle> weight = weigher.weigh(List.copyOf(extremes), candles);
+        ToDoubleFunction<Candle> weight = weigher.weigh(extremes, candles);
         List<Level<Double>> levels = new ArrayList<>();
 
         while (levels.size() < maxLevels && extremes.size() >= minPoints) {
@@ -200,7 +201,7 @@ public class ConsensusLineLevelDetector implements LevelDetector {
 
         levels.sort(Comparator.comparingDouble(Level<Double>::strength).reversed());
 
-        return List.copyOf(levels);
+        return levels;
     }
 
     /**
@@ -465,18 +466,6 @@ public class ConsensusLineLevelDetector implements LevelDetector {
          * наименьших квадратов.
          */
         double intercept(double lowest, double highest, double fitted);
-    }
-
-    /**
-     * Вес каждой точки уровня в этом окне. Считается один раз на окно, и вызывать возвращённую
-     * функцию можно для любой из переданных точек. Веса неотрицательны; равные веса - прежнее
-     * поведение, при котором прямые соревнуются числом согласных.
-     */
-    @FunctionalInterface
-    public interface ExtremeWeigher {
-        ExtremeWeigher EQUAL = (extremes, window) -> extreme -> 1.0;
-
-        ToDoubleFunction<Candle> weigh(List<Candle> extremes, List<Candle> window);
     }
 
     /**
