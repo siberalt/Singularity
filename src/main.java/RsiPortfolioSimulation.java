@@ -83,6 +83,9 @@ public class RsiPortfolioSimulation {
         double share = Double.parseDouble(options.getOrDefault("share", "0.2"));
         double commission = Double.parseDouble(options.getOrDefault("fee", String.valueOf(COMMISSION)));
 
+        // How many median hourly volumes the signal hour has to trade; zero asks nothing.
+        double volume = Double.parseDouble(options.getOrDefault("vol", "0"));
+
         System.out.printf(Locale.ROOT,
             "%s .. %s: %d instruments on one account, %.0f%% of the free money a trade%n",
             from, to, chosen.length, 100 * share);
@@ -123,6 +126,7 @@ public class RsiPortfolioSimulation {
                         .setLimitOffset(offset)
                         .setEntryAtMarket(atMarket)
                         .setOversold(oversold)
+                        .setMinVolume(volume, 24)
                         .setHoldHours(hold)
                         .setExitRsi(exitRsi)
                         .setPositionShare(share);

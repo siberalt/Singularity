@@ -88,6 +88,9 @@ public class RsiLimitEntrySimulation {
         int hold = Integer.parseInt(options.getOrDefault("hold", "5"));
         double commission = Double.parseDouble(options.getOrDefault("fee", String.valueOf(COMMISSION)));
 
+        // How many median hourly volumes the signal hour has to trade; zero asks nothing.
+        double volume = Double.parseDouble(options.getOrDefault("vol", "0"));
+
         System.out.printf(Locale.ROOT, "%s .. %s: RSI < %.0f, entry %s, exit %s, hold %d h, commission %.3f%% a side%n",
             from, to, oversold,
             atMarket ? "at the market" : String.format(Locale.ROOT, "limit %.2f ATR under", offset),
@@ -136,6 +139,7 @@ public class RsiLimitEntrySimulation {
                         .setLimitOffset(offset)
                         .setEntryAtMarket(atMarket)
                         .setOversold(oversold)
+                        .setMinVolume(volume, 24)
                         .setHoldHours(hold)
                         .setExitRsi(exitRsi);
 
