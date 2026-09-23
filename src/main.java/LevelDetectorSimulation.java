@@ -54,7 +54,7 @@ import java.util.stream.IntStream;
  * keys. Nothing is recomputed while stepping; the whole sweep is done here, in parallel, once.
  */
 public class LevelDetectorSimulation {
-    // Our id for TMOS - what its candles are kept under.
+    // Our id for Sber - what its candles are kept under. The index fund TMOS is 2, not this.
     private static final long INSTRUMENT_ID = 7;
     private static final Instant FROM = Instant.parse("2024-01-01T00:00:00Z");
     private static final Instant TO = Instant.parse("2025-12-01T00:00:00Z");

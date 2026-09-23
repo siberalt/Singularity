@@ -242,13 +242,17 @@ public class RsiLimitEntrySimulation {
          * What the average instrument did between these two moments, in per cent. An instrument that did
          * not trade in one of the hours is left out of the average rather than carried at its last price:
          * a name that was not trading is not part of the market of that hour.
+         * <p>
+         * The start is read forwards and the end backwards, so that a span reaching past either edge of
+         * what was loaded still has two prices to compare - at the edges there is nothing earlier to fall
+         * back to, and an hour with no bar of its own would otherwise leave the whole span unanswered.
          */
-        private double moveBetween(Instant from, Instant to) {
+        double moveBetween(Instant from, Instant to) {
             double total = 0;
             int counted = 0;
 
             for (NavigableMap<Long, Double> hours : byInstrument.values()) {
-                Map.Entry<Long, Double> before = hours.floorEntry(bucketOf(from));
+                Map.Entry<Long, Double> before = firstAtOrAround(hours, bucketOf(from));
                 Map.Entry<Long, Double> after = hours.floorEntry(bucketOf(to));
 
                 if (before == null || after == null || before.getValue() <= 0 || before.getKey().equals(after.getKey())) {
@@ -260,6 +264,13 @@ public class RsiLimitEntrySimulation {
             }
 
             return counted == 0 ? Double.NaN : total / counted;
+        }
+
+        /** The price of that hour, or of the nearest one before it, or - at the very start - after it. */
+        private static Map.Entry<Long, Double> firstAtOrAround(NavigableMap<Long, Double> hours, long bucket) {
+            Map.Entry<Long, Double> before = hours.floorEntry(bucket);
+
+            return before != null ? before : hours.ceilingEntry(bucket);
         }
 
         private static long bucketOf(Instant time) {

@@ -76,6 +76,7 @@ public class RsiLimitEntryStrategy implements Strategy {
     private EntryPriceCalculator entryPrices;
     private double exitOffset;
     private double exitRsi;
+    private double positionShare = 1;
 
     private String orderId;
     private String exitOrderId;
@@ -150,6 +151,24 @@ public class RsiLimitEntryStrategy implements Strategy {
         }
 
         this.exitRsi = exitRsi;
+        return this;
+    }
+
+    /**
+     * What share of the money the account still has free one trade may spend. One - the default - is
+     * everything, which is what a strategy trading a single instrument does.
+     * <p>
+     * On one account trading many instruments the signals compete for the same money, and the first one
+     * of the day would otherwise leave nothing for the rest. A share of what is free rather than of the
+     * whole account keeps that automatic: each new position is smaller than the last, and the money
+     * never runs out.
+     */
+    public RsiLimitEntryStrategy setPositionShare(double positionShare) {
+        if (positionShare <= 0 || positionShare > 1) {
+            throw new IllegalArgumentException("Доля капитала должна быть в (0, 1], получено " + positionShare);
+        }
+
+        this.positionShare = positionShare;
         return this;
     }
 
@@ -304,7 +323,7 @@ public class RsiLimitEntryStrategy implements Strategy {
         }
 
         double limit = bar.getCloseAsDouble() - limitOffset * atr.value();
-        long lots = broker.getMaxBuyQuantity(accountId, instrumentId, OrderType.MARKET);
+        long lots = (long) (broker.getMaxBuyQuantity(accountId, instrumentId, OrderType.MARKET) * positionShare);
 
         if (limit <= 0 || lots <= 0) {
             return;

@@ -12,6 +12,7 @@ import com.siberalt.singularity.strategy.observer.Observer;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 
 /**
  * Backtests a strategy: replays it against any {@link SimulationBroker} over a past time range on a
@@ -25,7 +26,8 @@ public class StrategyBacktester<B extends SimulationBroker> {
 
     private final StrategyStarter<B> strategyStarter;
     private final B broker;
-    private final String instrumentId;
+    /** Everything the run may end up holding - what the account is worth is what it holds of all of them. */
+    private final List<String> instrumentIds;
     private final Money initialInvestment;
     private final SimulationClock clock;
     private final EventSimulatorInitializer eventSimulatorInitializer;
@@ -61,9 +63,29 @@ public class StrategyBacktester<B extends SimulationBroker> {
                               SimulationClock clock,
                               EventSimulatorInitializer eventSimulatorInitializer
     ) {
+        this(strategyStarter, broker, List.of(instrumentId), initialInvestment, clock, eventSimulatorInitializer);
+    }
+
+    /** A strategy that trades several instruments on one account: all of them are worth marking at the end. */
+    public StrategyBacktester(StrategyStarter<B> strategyStarter,
+                              B broker,
+                              List<String> instrumentIds,
+                              Money initialInvestment,
+                              SimulationClock clock
+    ) {
+        this(strategyStarter, broker, instrumentIds, initialInvestment, clock, (timeRange, accountId, simulator) -> {});
+    }
+
+    public StrategyBacktester(StrategyStarter<B> strategyStarter,
+                              B broker,
+                              List<String> instrumentIds,
+                              Money initialInvestment,
+                              SimulationClock clock,
+                              EventSimulatorInitializer eventSimulatorInitializer
+    ) {
         this.strategyStarter = strategyStarter;
         this.broker = broker;
-        this.instrumentId = instrumentId;
+        this.instrumentIds = List.copyOf(instrumentIds);
         this.initialInvestment = initialInvestment;
         this.clock = clock;
         this.eventSimulatorInitializer = eventSimulatorInitializer;
@@ -123,14 +145,14 @@ public class StrategyBacktester<B extends SimulationBroker> {
         Money money = brokerFacade.getAvailableMoney(accountId, currencyIso)
             .add(brokerFacade.getBlockedMoney(accountId, currencyIso));
 
-        long heldLots = brokerFacade.getHeldPositionSize(accountId, instrumentId);
+        for (String instrumentId : instrumentIds) {
+            long heldLots = brokerFacade.getHeldPositionSize(accountId, instrumentId);
 
-        if (heldLots == 0) {
-            return money;
+            if (heldLots > 0) {
+                money = money.add(Money.of(currencyIso, brokerFacade.getLastPrice(instrumentId).multiply(heldLots)));
+            }
         }
 
-        return money.add(
-            Money.of(currencyIso, brokerFacade.getLastPrice(instrumentId).multiply(heldLots))
-        );
+        return money;
     }
 }
