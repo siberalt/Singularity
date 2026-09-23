@@ -1,10 +1,13 @@
 import com.siberalt.singularity.broker.contract.service.instrument.common.InstrumentType;
+import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.impl.mock.EventMockBroker;
 import com.siberalt.singularity.broker.impl.mock.LimitTrigger;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.AbstractTinkoffBroker;
 import com.siberalt.singularity.configuration.ConfigInterface;
 import com.siberalt.singularity.configuration.YamlConfig;
+import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.CandleAggregator;
 import com.siberalt.singularity.entity.candle.SqliteCandleRepository;
 import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
@@ -34,6 +37,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 
 /**
  * The RSI limit entry run through the event simulator, one instrument at a time.
@@ -79,6 +84,7 @@ public class RsiLimitEntrySimulation {
         String exit = options.getOrDefault("exit", "market");
         double exitOffset = exit.equals("market") ? 0 : Double.parseDouble(exit);
         double oversold = Double.parseDouble(options.getOrDefault("rsi", "20"));
+        double exitRsi = Double.parseDouble(options.getOrDefault("exitRsi", "0"));
         int hold = Integer.parseInt(options.getOrDefault("hold", "5"));
         double commission = Double.parseDouble(options.getOrDefault("fee", String.valueOf(COMMISSION)));
 
@@ -87,10 +93,18 @@ public class RsiLimitEntrySimulation {
             atMarket ? "at the market" : String.format(Locale.ROOT, "limit %.2f ATR under", offset),
             exitOffset == 0 ? "at the market" : String.format(Locale.ROOT, "limit %.2f ATR over the fill", exitOffset),
             hold, 100 * commission);
-        System.out.printf("%4s %10s %8s %7s %9s %9s %8s%n", "id", "profit %", "trades", "wins", "mean %", "median %", "time");
+
+        if (exitRsi > 0) {
+            System.out.printf(Locale.ROOT, "  and out as soon as an hour closes with RSI >= %.0f%n", exitRsi);
+        }
+
+        Market market = Market.of(candles, INSTRUMENTS, from, to);
+
+        System.out.printf("%4s %10s %8s %7s %9s %11s %9s%n",
+            "id", "profit %", "trades", "wins", "mean %", "excess %", "in market");
 
         List<Double> profits = new ArrayList<>();
-        List<Double> allTrades = new ArrayList<>();
+        List<Trade> allTrades = new ArrayList<>();
 
         for (long id : chosen) {
             String uid = instruments.brokerInstrumentIdOf(AbstractTinkoffBroker.ID, id).orElseThrow();
@@ -122,7 +136,8 @@ public class RsiLimitEntrySimulation {
                         .setLimitOffset(offset)
                         .setEntryAtMarket(atMarket)
                         .setOversold(oversold)
-                        .setHoldHours(hold);
+                        .setHoldHours(hold)
+                        .setExitRsi(exitRsi);
 
                     if (exitOffset > 0) {
                         strategy.setExitLimit(new BaseEntryPriceCalculator(operations), exitOffset);
@@ -136,22 +151,120 @@ public class RsiLimitEntrySimulation {
                 clock
             ).run(from, to);
 
-            List<Double> trades = tradesOf(operations.getByAccountId(result.accountId(), new TimeRange(from, to)));
-            List<Double> sorted = trades.stream().sorted().toList();
+            List<Trade> trades = tradesOf(operations.getByAccountId(result.accountId(), new TimeRange(from, to)));
 
             profits.add(result.profitPercent());
             allTrades.addAll(trades);
 
-            System.out.printf(Locale.ROOT, "%4d %+10.2f %8d %6.0f%% %+9.3f %+9.3f %7ds%n", id, result.profitPercent(),
-                trades.size(), 100.0 * trades.stream().filter(trade -> trade > 0).count() / Math.max(1, trades.size()),
-                trades.stream().mapToDouble(Double::doubleValue).average().orElse(0),
-                sorted.isEmpty() ? 0 : sorted.get(sorted.size() / 2), result.executionDuration().toSeconds());
+            System.out.printf(Locale.ROOT, "%4d %+10.2f %8d %6.0f%% %+9.3f %+11.3f %8.1f%%%n", id, result.profitPercent(),
+                trades.size(), 100.0 * trades.stream().filter(trade -> trade.percent() > 0).count() / Math.max(1, trades.size()),
+                trades.stream().mapToDouble(Trade::percent).average().orElse(0),
+                market.excessOf(trades), 100 * market.exposureOf(id, trades, from, to));
         }
 
-        System.out.printf(Locale.ROOT, "%nmean profit per instrument %+.2f%%, positive on %d of %d; %d trades, mean %+.3f%% a trade%n",
+        System.out.printf(Locale.ROOT, "%nmean profit per instrument %+.2f%%, positive on %d of %d%n",
             profits.stream().mapToDouble(Double::doubleValue).average().orElse(0),
-            profits.stream().filter(profit -> profit > 0).count(), profits.size(), allTrades.size(),
-            allTrades.stream().mapToDouble(Double::doubleValue).average().orElse(0));
+            profits.stream().filter(profit -> profit > 0).count(), profits.size());
+        System.out.printf(Locale.ROOT, "%d trades, mean %+.3f%% a trade, %+.3f%% over the market of the same hours%n",
+            allTrades.size(), allTrades.stream().mapToDouble(Trade::percent).average().orElse(0),
+            market.excessOf(allTrades));
+    }
+
+    /** One completed trade: when it was bought, when it was sold, and what it made of what it spent. */
+    record Trade(Instant entry, Instant exit, double percent) {
+    }
+
+    /**
+     * What every instrument did, hour by hour, so that a trade can be read against the market rather than
+     * on its own.
+     * <p>
+     * The simulation trades one instrument at a time, and its profit therefore carries whatever the market
+     * did while the position was open - the longer the holding time, the more of it. Every measurement
+     * before this one was market-neutral, and this is the same measure: the mean move of all the
+     * instruments over the very hours a trade was held, subtracted from what the trade made.
+     */
+    record Market(Map<Long, NavigableMap<Long, Double>> byInstrument) {
+        static Market of(SqliteCandleRepository candles, long[] ids, Instant from, Instant to) {
+            Map<Long, NavigableMap<Long, Double>> byInstrument = new HashMap<>();
+            CandleAggregator aggregator = new CandleAggregator();
+
+            for (long id : ids) {
+                NavigableMap<Long, Double> hours = new TreeMap<>();
+
+                for (Candle bar : aggregator.aggregate(candles.getPeriod(id, from, to), CandleInterval.HOUR)) {
+                    hours.put(aggregator.bucketOf(bar, CandleInterval.HOUR), bar.getCloseAsDouble());
+                }
+
+                if (!hours.isEmpty()) {
+                    byInstrument.put(id, hours);
+                }
+            }
+
+            return new Market(byInstrument);
+        }
+
+        /** The mean of the trades' results less the market's move over each trade's own hours, in per cent. */
+        double excessOf(List<Trade> trades) {
+            double total = 0;
+            int counted = 0;
+
+            for (Trade trade : trades) {
+                double market = moveBetween(trade.entry(), trade.exit());
+
+                if (!Double.isNaN(market)) {
+                    total += trade.percent() - market;
+                    counted++;
+                }
+            }
+
+            return counted == 0 ? 0 : total / counted;
+        }
+
+        /** The share of the instrument's trading hours the strategy spent holding it. */
+        double exposureOf(long id, List<Trade> trades, Instant from, Instant to) {
+            NavigableMap<Long, Double> hours = byInstrument.get(id);
+
+            if (hours == null || hours.isEmpty()) {
+                return 0;
+            }
+
+            long open = hours.subMap(bucketOf(from), true, bucketOf(to), false).size();
+            long held = 0;
+
+            for (Trade trade : trades) {
+                held += hours.subMap(bucketOf(trade.entry()), true, bucketOf(trade.exit()), false).size();
+            }
+
+            return open == 0 ? 0 : (double) held / open;
+        }
+
+        /**
+         * What the average instrument did between these two moments, in per cent. An instrument that did
+         * not trade in one of the hours is left out of the average rather than carried at its last price:
+         * a name that was not trading is not part of the market of that hour.
+         */
+        private double moveBetween(Instant from, Instant to) {
+            double total = 0;
+            int counted = 0;
+
+            for (NavigableMap<Long, Double> hours : byInstrument.values()) {
+                Map.Entry<Long, Double> before = hours.floorEntry(bucketOf(from));
+                Map.Entry<Long, Double> after = hours.floorEntry(bucketOf(to));
+
+                if (before == null || after == null || before.getValue() <= 0 || before.getKey().equals(after.getKey())) {
+                    continue;
+                }
+
+                total += 100 * (after.getValue() / before.getValue() - 1);
+                counted++;
+            }
+
+            return counted == 0 ? Double.NaN : total / counted;
+        }
+
+        private static long bucketOf(Instant time) {
+            return Math.floorDiv(time.toEpochMilli(), CandleInterval.HOUR.getDuration().toMillis());
+        }
     }
 
     /**
@@ -159,26 +272,30 @@ public class RsiLimitEntrySimulation {
      * summed until a sale closes the trade. The sale's own fee is journalled beside it at the same
      * moment, in either order, so a trade closes only once the moment of its sale has passed.
      */
-    static List<Double> tradesOf(List<Operation> operations) {
-        List<Double> trades = new ArrayList<>();
+    static List<Trade> tradesOf(List<Operation> operations) {
+        List<Trade> trades = new ArrayList<>();
         double spent = 0;
         double net = 0;
+        Instant boughtAt = null;
         Instant soldAt = null;
 
         for (Operation operation : operations.stream()
             .filter(operation -> operation.state() == OperationState.EXECUTED)
+            .filter(operation -> operation.executedDate() != null)
             .sorted(Comparator.comparing(Operation::executedDate))
             .toList()) {
             if (soldAt != null && !operation.executedDate().equals(soldAt)) {
-                trades.add(100 * net / spent);
+                trades.add(new Trade(boughtAt, soldAt, 100 * net / spent));
                 spent = 0;
                 net = 0;
+                boughtAt = null;
                 soldAt = null;
             }
 
             double payment = operation.payment() == null ? 0 : operation.payment().toDouble();
 
             if (operation.direction() == OperationType.BUY) {
+                boughtAt = boughtAt == null ? operation.executedDate() : boughtAt;
                 spent += Math.abs(payment);
             }
 
@@ -190,7 +307,7 @@ public class RsiLimitEntrySimulation {
         }
 
         if (soldAt != null) {
-            trades.add(100 * net / spent);
+            trades.add(new Trade(boughtAt, soldAt, 100 * net / spent));
         }
 
         return trades;

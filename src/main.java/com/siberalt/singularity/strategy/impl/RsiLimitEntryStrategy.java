@@ -75,6 +75,7 @@ public class RsiLimitEntryStrategy implements Strategy {
 
     private EntryPriceCalculator entryPrices;
     private double exitOffset;
+    private double exitRsi;
 
     private String orderId;
     private String exitOrderId;
@@ -133,6 +134,22 @@ public class RsiLimitEntryStrategy implements Strategy {
 
         this.entryPrices = Objects.requireNonNull(entryPrices);
         this.exitOffset = exitOffset;
+        return this;
+    }
+
+    /**
+     * Leave as soon as an hour closes with RSI at or over this, instead of waiting out the holding time.
+     * {@link #setHoldHours} stays as the cap: an RSI that never recovers must not turn a trade of hours
+     * into one of weeks, which would be holding the market rather than the signal.
+     * <p>
+     * Zero - the default - leaves only the holding time.
+     */
+    public RsiLimitEntryStrategy setExitRsi(double exitRsi) {
+        if (exitRsi < 0 || exitRsi > 100) {
+            throw new IllegalArgumentException("RSI выхода должен быть от нуля до ста, получено " + exitRsi);
+        }
+
+        this.exitRsi = exitRsi;
         return this;
     }
 
@@ -247,8 +264,10 @@ public class RsiLimitEntryStrategy implements Strategy {
 
             long free = broker.getPositionSize(accountId, instrumentId);
             long owned = broker.getHeldPositionSize(accountId, instrumentId);
+            // The bounce is over as soon as the market calls this instrument dear again.
+            boolean recovered = exitRsi > 0 && owned > 0 && !Double.isNaN(rsi) && rsi >= exitRsi;
 
-            if (hoursSinceSignal >= holdHours) {
+            if (hoursSinceSignal >= holdHours || recovered) {
                 cancelIfWorking(orderId);
                 cancelIfWorking(exitOrderId);
                 orderId = null;
