@@ -26,6 +26,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -110,6 +111,8 @@ public class LevelDetectorSimulation {
      */
     private static final int ZONE_MIN_POINTS = 2;
     private static final int MAX_ZONES = 5;
+    /** The RSI drawn under the price: fourteen bars, as everything measured on it used. */
+    private static final int RSI_PERIOD = 14;
     private static final Path OUTPUT = Paths.get("src/main/resources/presenter/google/LevelFrames.json");
 
     /** One position of the window: what was found in it, and how wide a bar was while it was found. */
@@ -271,6 +274,38 @@ public class LevelDetectorSimulation {
     }
 
     /**
+     * Wilder's RSI of the closes, one value per bar, fifty until it has seen {@link #RSI_PERIOD}
+     * changes. It is drawn under the price rather than used by the detector: of everything measured on
+     * these instruments, a long after an hourly RSI below twenty is the only signal that held on
+     * instruments it was not chosen on, and the levels of a frame are worth looking at beside it.
+     */
+    private static double[] rsiOf(List<Candle> bars) {
+        double[] rsi = new double[bars.size()];
+        double gain = 0;
+        double loss = 0;
+
+        Arrays.fill(rsi, 50);
+
+        for (int bar = 1; bar < bars.size(); bar++) {
+            double change = bars.get(bar).getCloseAsDouble() - bars.get(bar - 1).getCloseAsDouble();
+
+            if (bar <= RSI_PERIOD) {
+                gain += Math.max(change, 0) / RSI_PERIOD;
+                loss += Math.max(-change, 0) / RSI_PERIOD;
+            } else {
+                gain = (gain * (RSI_PERIOD - 1) + Math.max(change, 0)) / RSI_PERIOD;
+                loss = (loss * (RSI_PERIOD - 1) + Math.max(-change, 0)) / RSI_PERIOD;
+            }
+
+            if (bar >= RSI_PERIOD) {
+                rsi[bar] = loss == 0 ? (gain == 0 ? 50 : 100) : 100 - 100 / (1 + gain / loss);
+            }
+        }
+
+        return rsi;
+    }
+
+    /**
      * The series once, the frames after it. The page needs the candle index of every row to walk a line
      * across the gaps, and the lows to mark; everything else it derives.
      */
@@ -305,6 +340,13 @@ public class LevelDetectorSimulation {
             for (int row = 0; row < bars.size(); row++) {
                 out.print(row == 0 ? "" : ",");
                 out.printf(Locale.ROOT, "%.4f", bars.get(row).getCloseAsDouble());
+            }
+
+            out.printf("],%n  \"rsi\": [");
+            double[] rsi = rsiOf(bars);
+            for (int row = 0; row < bars.size(); row++) {
+                out.print(row == 0 ? "" : ",");
+                out.printf(Locale.ROOT, "%.2f", rsi[row]);
             }
 
             out.printf("],%n  \"lows\": [");

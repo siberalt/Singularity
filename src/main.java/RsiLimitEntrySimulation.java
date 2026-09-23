@@ -19,6 +19,7 @@ import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.shared.TimeRange;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
 import com.siberalt.singularity.strategy.impl.RsiLimitEntryStrategy;
+import com.siberalt.singularity.strategy.market.position.BaseEntryPriceCalculator;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyBacktester;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyResult;
 
@@ -27,9 +28,12 @@ import java.nio.file.Paths;
 import java.sql.DriverManager;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * The RSI limit entry run through the event simulator, one instrument at a time.
@@ -56,18 +60,33 @@ public class RsiLimitEntrySimulation {
         String dbPath = ConfigFacade.of(configuration).getAsString("dbPath");
         SqliteCandleRepository candles = new SqliteCandleRepositoryFactory().create(dbPath);
         SqliteInstrumentRepository instruments = new SqliteInstrumentRepository(DriverManager.getConnection(dbPath));
-        long[] chosen = args.length > 0
-            ? java.util.Arrays.stream(args[0].split(",")).mapToLong(Long::parseLong).toArray()
-            : INSTRUMENTS;
-        Instant from = args.length > 1 ? Instant.parse(args[1]) : FROM;
-        Instant to = args.length > 2 ? Instant.parse(args[2]) : TO;
-        boolean atMarket = args.length > 3 && args[3].equals("market");
-        double offset = args.length > 3 && !atMarket ? Double.parseDouble(args[3]) : LIMIT_OFFSET;
-        double commission = args.length > 4 ? Double.parseDouble(args[4]) : COMMISSION;
+        // Named arguments: entry=market|<atr>, rsi=20, hold=5, exit=market|<atr>, fee=0.0005, ids=4,5,7
+        Map<String, String> options = new HashMap<>();
 
-        System.out.printf(Locale.ROOT, "%s .. %s, %s, commission %.2f%% a side%n", from, to,
-            atMarket ? "entry at the market" : String.format(Locale.ROOT, "limit %.2f ATR under the close", offset),
-            100 * commission);
+        for (String argument : args) {
+            int at = argument.indexOf('=');
+            options.put(argument.substring(0, at), argument.substring(at + 1));
+        }
+
+        long[] chosen = options.containsKey("ids")
+            ? Arrays.stream(options.get("ids").split(",")).mapToLong(Long::parseLong).toArray()
+            : INSTRUMENTS;
+        Instant from = Instant.parse(options.getOrDefault("from", FROM.toString()));
+        Instant to = Instant.parse(options.getOrDefault("to", TO.toString()));
+        String entry = options.getOrDefault("entry", String.valueOf(LIMIT_OFFSET));
+        boolean atMarket = entry.equals("market");
+        double offset = atMarket ? 0 : Double.parseDouble(entry);
+        String exit = options.getOrDefault("exit", "market");
+        double exitOffset = exit.equals("market") ? 0 : Double.parseDouble(exit);
+        double oversold = Double.parseDouble(options.getOrDefault("rsi", "20"));
+        int hold = Integer.parseInt(options.getOrDefault("hold", "5"));
+        double commission = Double.parseDouble(options.getOrDefault("fee", String.valueOf(COMMISSION)));
+
+        System.out.printf(Locale.ROOT, "%s .. %s: RSI < %.0f, entry %s, exit %s, hold %d h, commission %.3f%% a side%n",
+            from, to, oversold,
+            atMarket ? "at the market" : String.format(Locale.ROOT, "limit %.2f ATR under", offset),
+            exitOffset == 0 ? "at the market" : String.format(Locale.ROOT, "limit %.2f ATR over the fill", exitOffset),
+            hold, 100 * commission);
         System.out.printf("%4s %10s %8s %7s %9s %9s %8s%n", "id", "profit %", "trades", "wins", "mean %", "median %", "time");
 
         List<Double> profits = new ArrayList<>();
@@ -98,11 +117,19 @@ public class RsiLimitEntrySimulation {
             broker.getPendingOrderHandler().setLimitTrigger(LimitTrigger.CLOSE_THROUGH);
 
             StrategyResult result = new StrategyBacktester<EventMockBroker>(
-                (range, accountId, simulated, observer) ->
-                    new RsiLimitEntryStrategy(simulated, uid, accountId, candles)
+                (range, accountId, simulated, observer) -> {
+                    RsiLimitEntryStrategy strategy = new RsiLimitEntryStrategy(simulated, uid, accountId, candles)
                         .setLimitOffset(offset)
                         .setEntryAtMarket(atMarket)
-                        .run(observer),
+                        .setOversold(oversold)
+                        .setHoldHours(hold);
+
+                    if (exitOffset > 0) {
+                        strategy.setExitLimit(new BaseEntryPriceCalculator(operations), exitOffset);
+                    }
+
+                    strategy.run(observer);
+                },
                 broker,
                 uid,
                 INITIAL,

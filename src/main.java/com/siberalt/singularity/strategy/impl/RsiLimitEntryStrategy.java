@@ -12,12 +12,15 @@ import com.siberalt.singularity.entity.candle.CandleAggregator;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.event.subscription.Subscription;
 import com.siberalt.singularity.strategy.Strategy;
+import com.siberalt.singularity.strategy.market.position.EntryPrice;
+import com.siberalt.singularity.strategy.market.position.EntryPriceCalculator;
 import com.siberalt.singularity.strategy.observer.Observer;
 import com.siberalt.singularity.strategy.volatility.IncrementalATR;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -70,7 +73,12 @@ public class RsiLimitEntryStrategy implements Strategy {
     private double averageLoss;
     private int changes;
 
+    private EntryPriceCalculator entryPrices;
+    private double exitOffset;
+
     private String orderId;
+    private String exitOrderId;
+    private double signalAtr;
     // Hours closed since the signal hour; negative while no trade is on.
     private int hoursSinceSignal = -1;
 
@@ -107,6 +115,24 @@ public class RsiLimitEntryStrategy implements Strategy {
      */
     public RsiLimitEntryStrategy setEntryAtMarket(boolean entryAtMarket) {
         this.entryAtMarket = entryAtMarket;
+        return this;
+    }
+
+    /**
+     * Leave the position with a sell limit this many ATRs over what it was bought at, instead of selling
+     * at the market the moment the holding time is up. The limit still gives way to a market sale at
+     * {@link #setHoldHours}: a target that the price never comes back to is not an exit.
+     *
+     * @param entryPrices what the position was bought at on average - a limit that is a target has to be
+     *                    measured from the fill, not from the signal
+     */
+    public RsiLimitEntryStrategy setExitLimit(EntryPriceCalculator entryPrices, double exitOffset) {
+        if (exitOffset <= 0) {
+            throw new IllegalArgumentException("Цель продажи должна быть выше входа, получено " + exitOffset);
+        }
+
+        this.entryPrices = Objects.requireNonNull(entryPrices);
+        this.exitOffset = exitOffset;
         return this;
     }
 
@@ -215,22 +241,40 @@ public class RsiLimitEntryStrategy implements Strategy {
             hoursSinceSignal++;
 
             if (hoursSinceSignal == orderHours) {
-                cancelIfWorking();
+                cancelIfWorking(orderId);
+                orderId = null;
             }
 
-            long held = broker.getPositionSize(accountId, instrumentId);
+            long free = broker.getPositionSize(accountId, instrumentId);
+            long owned = broker.getHeldPositionSize(accountId, instrumentId);
 
             if (hoursSinceSignal >= holdHours) {
-                cancelIfWorking();
+                cancelIfWorking(orderId);
+                cancelIfWorking(exitOrderId);
+                orderId = null;
+                exitOrderId = null;
 
-                if (held > 0) {
-                    broker.sellBestPrice(accountId, instrumentId, held);
+                // What the cancelled sell held is free again, so the position is read after it.
+                long left = broker.getPositionSize(accountId, instrumentId);
+
+                if (left > 0) {
+                    broker.sellBestPrice(accountId, instrumentId, left);
                 }
 
                 hoursSinceSignal = -1;
-            } else if (hoursSinceSignal >= orderHours && held == 0) {
-                // The order ran out without a fill: nothing to hold, so the next signal may come.
-                hoursSinceSignal = -1;
+            } else if (owned == 0) {
+                if (exitOrderId != null) {
+                    // The target was reached and the position is gone: the trade is over early.
+                    cancelIfWorking(orderId);
+                    orderId = null;
+                    exitOrderId = null;
+                    hoursSinceSignal = -1;
+                } else if (hoursSinceSignal >= orderHours) {
+                    // The order ran out without a fill: nothing to hold, so the next signal may come.
+                    hoursSinceSignal = -1;
+                }
+            } else if (exitOrderId == null && entryPrices != null && free > 0) {
+                placeExitLimit(free);
             }
 
             return;
@@ -250,22 +294,33 @@ public class RsiLimitEntryStrategy implements Strategy {
         orderId = entryAtMarket
             ? broker.buyBestPrice(accountId, instrumentId, lots).getOrderId()
             : broker.buyLimit(accountId, instrumentId, (int) Math.min(Integer.MAX_VALUE, lots), limit).getOrderId();
+        signalAtr = atr.value();
         hoursSinceSignal = 0;
     }
 
-    protected void cancelIfWorking() throws AbstractException {
-        if (orderId == null) {
+    /** The target the position is offered at: what it cost plus the offset, in the signal hour's ATR. */
+    protected void placeExitLimit(long lots) throws AbstractException {
+        EntryPrice entry = entryPrices.calculate(accountId, instrumentId);
+
+        if (entry.isEmpty()) {
+            return;
+        }
+
+        exitOrderId = broker.sellLimit(accountId, instrumentId, lots,
+            entry.averagePrice().toDouble() + exitOffset * signalAtr).getOrderId();
+    }
+
+    protected void cancelIfWorking(String id) throws AbstractException {
+        if (id == null) {
             return;
         }
 
         boolean working = broker.getOrders(accountId).getOrders().stream()
-            .anyMatch(order -> orderId.equals(order.getOrderId()));
+            .anyMatch(order -> id.equals(order.getOrderId()));
 
         if (working) {
-            broker.cancelOrder(accountId, orderId);
+            broker.cancelOrder(accountId, id);
         }
-
-        orderId = null;
     }
 
     /** Adds a closed hour to ATR and to Wilder's RSI, and returns the RSI, or NaN until it has settled. */

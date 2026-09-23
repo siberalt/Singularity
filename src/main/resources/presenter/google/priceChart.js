@@ -9,8 +9,13 @@ let frameAt = 0;
 let lowAt = null;
 let scale = null;
 let chart = null;
+let rsiChart = null;
 
 const ZONE_COLOUR = '#8e24aa';
+const RSI_COLOUR = '#6a1b9a';
+// Перепроданность, на которой держится единственный переживший проверки сигнал, и перекупленность.
+const RSI_OVERSOLD = 20;
+const RSI_OVERBOUGHT = 70;
 
 function start() {
     fetch('LevelFrames.json')
@@ -25,6 +30,11 @@ function startStepper(frames) {
     scale = {min: Math.min(...model['price']), max: Math.max(...model['price'])};
     chart = new google.visualization.ComboChart(document.getElementById('price_chart'));
 
+    if (model['rsi']) {
+        document.getElementById('rsi_chart').hidden = false;
+        rsiChart = new google.visualization.ComboChart(document.getElementById('rsi_chart'));
+    }
+
     document.getElementById('volume_chart').hidden = true;
     document.getElementById('stepper').hidden = false;
     document.getElementById('legend').hidden = false;
@@ -32,6 +42,7 @@ function startStepper(frames) {
         item('#1a73e8', 'цена в окне') + item('#9aa0a6', 'цена после окна')
         + item('#33691e', '3 касания') + item('#e65100', '4–5') + item('#b71c1c', '6 и больше')
         + item(ZONE_COLOUR, 'зона') + item('#188038', 'минимум впереди у линии') + item('#d93025', 'минимум мимо')
+        + item(RSI_COLOUR, 'RSI(14) снизу')
         + '<span>· окно ' + model['window'] + ' баров, шаг ' + model['step']
         + ', вперёд ' + model['lookahead'] + '; у линии — ближе ' + model['catchTolerance'] + ' ATR</span>';
 
@@ -153,6 +164,7 @@ function drawFrame() {
     }
 
     table.addRows(rows);
+    drawRsi(frame, end);
     chart.draw(table, {
         chartArea: {width: '93%', height: '86%', top: 16, left: 70, right: 30},
         legend: {position: 'none'},
@@ -165,6 +177,49 @@ function drawFrame() {
             : {}
     });
     writeCaption(frame, end, caught, inZone);
+}
+
+// RSI тех же строк, что и цена сверху: левое поле и ширина области совпадают с графиком цены, иначе
+// один и тот же бар оказывался бы на двух графиках в разных местах.
+function drawRsi(frame, end) {
+    if (rsiChart === null) {
+        return;
+    }
+
+    const table = new google.visualization.DataTable();
+
+    table.addColumn('string', 'Время');
+    table.addColumn('number', 'RSI(14) в окне');
+    table.addColumn('number', 'RSI(14) после окна');
+    table.addColumn('number', 'перепроданность');
+    table.addColumn('number', 'перекупленность');
+
+    const rows = [];
+
+    for (let row = frame['from']; row < end; row++) {
+        rows.push([
+            shortTime(model['times'][row]),
+            row <= frame['to'] ? model['rsi'][row] : null,
+            row >= frame['to'] ? model['rsi'][row] : null,
+            RSI_OVERSOLD,
+            RSI_OVERBOUGHT
+        ]);
+    }
+
+    table.addRows(rows);
+    rsiChart.draw(table, {
+        chartArea: {width: '93%', height: '78%', top: 10, left: 70, right: 30},
+        legend: {position: 'none'},
+        interpolateNulls: false,
+        series: {
+            0: {color: RSI_COLOUR, lineWidth: 1},
+            1: {color: '#b39ddb', lineWidth: 1},
+            2: {color: '#188038', lineWidth: 1, lineDashStyle: [4, 4]},
+            3: {color: '#d93025', lineWidth: 1, lineDashStyle: [4, 4]}
+        },
+        hAxis: {showTextEvery: Math.ceil(rows.length / 12)},
+        vAxis: {viewWindow: {min: 0, max: 100}, ticks: [0, RSI_OVERSOLD, 50, RSI_OVERBOUGHT, 100]}
+    });
 }
 
 // Номер серии - это номер столбца данных без интервалов: интервал принадлежит серии перед ним.
