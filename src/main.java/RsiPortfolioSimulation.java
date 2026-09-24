@@ -6,6 +6,8 @@ import com.siberalt.singularity.broker.impl.mock.LimitTrigger;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.AbstractTinkoffBroker;
 import com.siberalt.singularity.configuration.ConfigInterface;
 import com.siberalt.singularity.configuration.YamlConfig;
+import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.CandleAggregator;
 import com.siberalt.singularity.entity.candle.SqliteCandleRepository;
 import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
@@ -29,6 +31,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -37,6 +41,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 /**
  * The same strategy as {@link RsiLimitEntrySimulation}, but all the instruments on one account.
@@ -60,6 +65,8 @@ public class RsiPortfolioSimulation {
     private static final Money INITIAL = Money.of("RUB", 1_000_000.00);
     /** Longer than this, a trade is not the rule working but the data pausing - see the report. */
     private static final double STUCK_HOURS = 24;
+    /** How far back the turnover that decides an instrument's bars is measured. */
+    private static final Duration FEATURE_WINDOW = Duration.ofDays(180);
 
     public static void main(String[] args) throws Exception {
         ConfigInterface configuration = new YamlConfig(Files.newInputStream(Paths.get("src/main/resources/app.yaml")));
@@ -95,13 +102,16 @@ public class RsiPortfolioSimulation {
         // Instruments that trade on faster bars than the rest: liquidity decides what an instrument can
         // carry, so one account may hold both kinds.
         CandleInterval fastInterval = CandleInterval.valueOf(options.getOrDefault("fastBars", "MIN_15"));
+        double fastShare = Double.parseDouble(options.getOrDefault("fastShare", "0.33"));
         Set<Long> fast = options.containsKey("fast")
             ? Arrays.stream(options.get("fast").split(",")).map(Long::parseLong).collect(Collectors.toSet())
-            : Set.of();
+            : mostTraded(candles, chosen, from, fastShare);
 
         System.out.printf(Locale.ROOT,
             "%s .. %s: %d instruments on one account, %.0f%% of the free money a trade%n",
             from, to, chosen.length, 100 * share);
+        System.out.printf(Locale.ROOT, "  on %s bars: %s%n", fastInterval,
+            fast.isEmpty() ? "nobody" : fast.stream().map(String::valueOf).collect(Collectors.joining(", ")));
         System.out.printf(Locale.ROOT, "%s bars: RSI < %.0f, entry %s, exit %s, out at RSI >= %.0f, hold at most %d bars, commission %.3f%% a side%n",
             interval, oversold, atMarket ? "at the market" : String.format(Locale.ROOT, "limit %.2f ATR under", offset),
             exitOffset == 0 ? "at the market" : String.format(Locale.ROOT, "limit %.2f ATR over the fill", exitOffset),
@@ -223,6 +233,43 @@ public class RsiPortfolioSimulation {
             market.excessOf(normal));
         System.out.printf(Locale.ROOT, "for comparison: holding the average instrument through the period %+.2f%%, %.2f%% a year%n",
             market.moveBetween(from, to), market.moveBetween(from, to) / years);
+    }
+
+    /**
+     * The instruments that carry the faster bars: the busiest {@code share} of the list by their median
+     * hourly turnover over the {@link #FEATURE_WINDOW} before the run starts.
+     * <p>
+     * What an instrument can carry is decided by what a round trip costs on it, and turnover is the
+     * measure of that at hand. Measured on 2021 and 2022, the busiest third did better on quarter-hour
+     * bars and the thinnest third on hourly ones - and that ordering was already there in those years,
+     * before the periods it was then confirmed on.
+     * <p>
+     * Ranked rather than compared with a figure in roubles: turnover grows with the years, and a
+     * threshold fixed in money would quietly reclassify the whole list as time passes.
+     */
+    static Set<Long> mostTraded(SqliteCandleRepository candles, long[] instruments, Instant start, double share) {
+        CandleAggregator aggregator = new CandleAggregator();
+        Map<Long, Double> turnover = new TreeMap<>();
+
+        for (long id : instruments) {
+            List<Double> hours = new ArrayList<>();
+
+            for (Candle bar : aggregator.aggregate(
+                candles.getPeriod(id, start.minus(FEATURE_WINDOW), start), CandleInterval.HOUR)) {
+                hours.add(bar.getCloseAsDouble() * bar.volume());
+            }
+
+            if (!hours.isEmpty()) {
+                Collections.sort(hours);
+                turnover.put(id, hours.get(hours.size() / 2));
+            }
+        }
+
+        List<Long> ranked = new ArrayList<>(turnover.keySet());
+
+        ranked.sort(Comparator.comparingDouble(turnover::get).reversed());
+
+        return new TreeSet<>(ranked.subList(0, Math.min(ranked.size(), (int) Math.round(share * instruments.length))));
     }
 
     static double hoursOf(RsiLimitEntrySimulation.Trade trade) {
