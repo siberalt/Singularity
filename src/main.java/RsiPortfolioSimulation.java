@@ -1,4 +1,5 @@
 import com.siberalt.singularity.broker.contract.service.instrument.common.InstrumentType;
+import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.impl.mock.EventMockBroker;
 import com.siberalt.singularity.broker.impl.mock.LimitTrigger;
@@ -54,6 +55,8 @@ public class RsiPortfolioSimulation {
     private static final Instant TO = Instant.parse("2026-09-16T00:00:00Z");
     private static final double COMMISSION = 0.0005;
     private static final Money INITIAL = Money.of("RUB", 1_000_000.00);
+    /** Longer than this, a trade is not the rule working but the data pausing - see the report. */
+    private static final double STUCK_HOURS = 24;
 
     public static void main(String[] args) throws Exception {
         ConfigInterface configuration = new YamlConfig(Files.newInputStream(Paths.get("src/main/resources/app.yaml")));
@@ -85,12 +88,13 @@ public class RsiPortfolioSimulation {
 
         // How many median hourly volumes the signal hour has to trade; zero asks nothing.
         double volume = Double.parseDouble(options.getOrDefault("vol", "0"));
+        CandleInterval interval = CandleInterval.valueOf(options.getOrDefault("bars", "HOUR"));
 
         System.out.printf(Locale.ROOT,
             "%s .. %s: %d instruments on one account, %.0f%% of the free money a trade%n",
             from, to, chosen.length, 100 * share);
-        System.out.printf(Locale.ROOT, "RSI < %.0f, entry %s, exit %s, out at RSI >= %.0f, hold at most %d h, commission %.3f%% a side%n",
-            oversold, atMarket ? "at the market" : String.format(Locale.ROOT, "limit %.2f ATR under", offset),
+        System.out.printf(Locale.ROOT, "%s bars: RSI < %.0f, entry %s, exit %s, out at RSI >= %.0f, hold at most %d bars, commission %.3f%% a side%n",
+            interval, oversold, atMarket ? "at the market" : String.format(Locale.ROOT, "limit %.2f ATR under", offset),
             exitOffset == 0 ? "at the market" : String.format(Locale.ROOT, "limit %.2f ATR over the fill", exitOffset),
             exitRsi, hold, 100 * commission);
 
@@ -127,7 +131,8 @@ public class RsiPortfolioSimulation {
                         .setEntryAtMarket(atMarket)
                         .setOversold(oversold)
                         .setMinVolume(volume, 24)
-                        .setHoldHours(hold)
+                        .setInterval(interval)
+                        .setHoldBars(hold)
                         .setExitRsi(exitRsi)
                         .setPositionShare(share);
 
@@ -181,8 +186,34 @@ public class RsiPortfolioSimulation {
             market.excessOf(trades));
         System.out.printf(Locale.ROOT, "in the market %.0f%% of the hours, at most %d positions at once, %.1f on average when open%n",
             100 * busyShare(trades, from, to), mostAtOnce(trades), meanWhenOpen(trades));
+
+        List<Double> held = trades.stream()
+            .map(trade -> hoursOf(trade))
+            .sorted()
+            .toList();
+
+        System.out.printf(Locale.ROOT, "held for %.1f h in the middle, %.1f h at the ninetieth, %.1f h at the longest%n",
+            held.isEmpty() ? 0 : held.get(held.size() / 2),
+            held.isEmpty() ? 0 : held.get((int) (0.9 * held.size())),
+            held.isEmpty() ? 0 : held.getLast());
+
+        // A position is left when a bar closes, and a bar closes when the next one's first minute
+        // arrives. An instrument that stops trading for a while therefore freezes the trade in it, and
+        // what comes out is an accidental buy-and-hold of weeks, which belongs to the data and not to
+        // the strategy. They are counted apart rather than quietly averaged in.
+        List<RsiLimitEntrySimulation.Trade> stuck = trades.stream().filter(trade -> hoursOf(trade) > STUCK_HOURS).toList();
+        List<RsiLimitEntrySimulation.Trade> normal = trades.stream().filter(trade -> hoursOf(trade) <= STUCK_HOURS).toList();
+
+        System.out.printf(Locale.ROOT, "of them %d held over %.0f h, worth %+.2f%% of the account between them; the rest: %d trades, mean %+.3f%%, %+.3f%% over the market%n",
+            stuck.size(), STUCK_HOURS, stuck.stream().mapToDouble(RsiLimitEntrySimulation.Trade::percent).sum(),
+            normal.size(), normal.stream().mapToDouble(RsiLimitEntrySimulation.Trade::percent).average().orElse(0),
+            market.excessOf(normal));
         System.out.printf(Locale.ROOT, "for comparison: holding the average instrument through the period %+.2f%%, %.2f%% a year%n",
             market.moveBetween(from, to), market.moveBetween(from, to) / years);
+    }
+
+    static double hoursOf(RsiLimitEntrySimulation.Trade trade) {
+        return Duration.between(trade.entry(), trade.exit()).toMinutes() / 60.0;
     }
 
     /** The share of the period's hours with at least one position open. */

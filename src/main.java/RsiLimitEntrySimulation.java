@@ -90,6 +90,7 @@ public class RsiLimitEntrySimulation {
 
         // How many median hourly volumes the signal hour has to trade; zero asks nothing.
         double volume = Double.parseDouble(options.getOrDefault("vol", "0"));
+        CandleInterval interval = CandleInterval.valueOf(options.getOrDefault("bars", "HOUR"));
 
         System.out.printf(Locale.ROOT, "%s .. %s: RSI < %.0f, entry %s, exit %s, hold %d h, commission %.3f%% a side%n",
             from, to, oversold,
@@ -140,7 +141,8 @@ public class RsiLimitEntrySimulation {
                         .setEntryAtMarket(atMarket)
                         .setOversold(oversold)
                         .setMinVolume(volume, 24)
-                        .setHoldHours(hold)
+                        .setInterval(interval)
+                        .setHoldBars(hold)
                         .setExitRsi(exitRsi);
 
                     if (exitOffset > 0) {
@@ -312,6 +314,13 @@ public class RsiLimitEntrySimulation {
             if (operation.direction() == OperationType.BUY) {
                 boughtAt = boughtAt == null ? operation.executedDate() : boughtAt;
                 spent += Math.abs(payment);
+            }
+
+            // Nothing has been bought yet, so this belongs to no trade: a sale of what an earlier trade
+            // left behind, or its fee. Counting it here would hand the next trade someone else's money
+            // and divide it by a spend it never made.
+            if (spent == 0) {
+                continue;
             }
 
             net += payment;

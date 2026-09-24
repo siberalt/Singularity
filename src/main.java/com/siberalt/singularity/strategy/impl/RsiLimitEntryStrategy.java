@@ -26,27 +26,31 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Buys the hourly oversold with a limit under the market, and gives the position a fixed number of
- * hours to bounce.
+ * Buys the oversold with a limit under the market, and gives the position a fixed number of bars to
+ * bounce.
  * <p>
  * What was measured on 33 instruments over 2021-2026, and what this strategy does:
  * <ul>
- *   <li>The signal is an hour closing with RSI(14) under twenty. It was the one thing that held on
+ *   <li>The signal is a bar closing with RSI(14) under twenty. It was the one thing that held on
  *       seventeen instruments it was never chosen on; everything tried on top of it - reversal
  *       candles, levels, zones, a rising RSI - either did nothing or made it worse.</li>
- *   <li>The entry is a buy limit {@code limitOffset} hourly ATRs under that close, working for
- *       {@code orderHours} hours and cancelled after. Against buying at the next open, half an ATR
+ *   <li>The entry is a buy limit {@code limitOffset} ATRs under that close, working for
+ *       {@code orderBars} bars and cancelled after. Against buying at the next open, half an ATR
  *       under added 0.09 ATR per signal and a whole ATR 0.14, with fills taken only in minutes that
  *       closed under the limit. In 2021, when the bounces came at once, it lost to the open instead:
  *       a limit misses the signals that turn straight up.</li>
- *   <li>The exit is at the market, {@code holdHours} hours after the signal hour.</li>
+ *   <li>The exit is at the market, {@code holdBars} bars after the signal bar.</li>
  * </ul>
  * One trade at a time: a new signal is not taken while an order works or a position is held.
  * <p>
- * Hours are built here from the minutes the broker sends, bucketed as {@link CandleAggregator} does.
- * An hour is known to be over only when the first minute of a later one arrives, so the signal of a
- * session's last hour is acted on at the next session's first minute - which is also when the
- * limit could first have been placed.
+ * The bars are built here from the minutes the broker sends, bucketed as {@link CandleAggregator}
+ * does, at whatever {@link #setInterval interval} is asked for. Hourly is what most of the work was
+ * measured on; a quarter of an hour keeps about half the effect per trade and fires three times as
+ * often, which is more in total but leaves far less over the cost of a round trip.
+ * <p>
+ * A bar is known to be over only when the first minute of a later one arrives, so the signal of a
+ * session's last bar is acted on at the next session's first minute - which is also when the limit
+ * could first have been placed.
  */
 public class RsiLimitEntryStrategy implements Strategy {
     private final EventSubscriptionBrokerFacade broker;
@@ -55,19 +59,20 @@ public class RsiLimitEntryStrategy implements Strategy {
     private final ReadCandleRepository candleRepository;
     private final CandleAggregator aggregator = new CandleAggregator();
 
+    private CandleInterval interval = CandleInterval.HOUR;
     private int rsiPeriod = 14;
     private int atrPeriod = 14;
     private double oversold = 20;
     private double limitOffset = 0.5;
     private boolean entryAtMarket;
-    private int orderHours = 3;
-    private int holdHours = 5;
+    private int orderBars = 3;
+    private int holdBars = 5;
     private Duration warmup = Duration.ofDays(60);
 
     private Subscription subscription;
     private boolean initialized;
-    private final List<Candle> hour = new ArrayList<>();
-    private long hourBucket = Long.MIN_VALUE;
+    private final List<Candle> bar = new ArrayList<>();
+    private long currentBucket = Long.MIN_VALUE;
 
     private IncrementalATR atr;
     private double previousClose = Double.NaN;
@@ -86,8 +91,8 @@ public class RsiLimitEntryStrategy implements Strategy {
     private String orderId;
     private String exitOrderId;
     private double signalAtr;
-    // Hours closed since the signal hour; negative while no trade is on.
-    private int hoursSinceSignal = -1;
+    // Bars closed since the signal bar; negative while no trade is on.
+    private int barsSinceSignal = -1;
 
     public RsiLimitEntryStrategy(
         EventSubscriptionBroker broker,
@@ -101,12 +106,21 @@ public class RsiLimitEntryStrategy implements Strategy {
         this.candleRepository = candleRepository;
     }
 
+    /**
+     * The bars everything else is counted in: the RSI and the ATR are of these, and so are the holding
+     * time and the life of the order. Every one of them has to be narrower than the interval.
+     */
+    public RsiLimitEntryStrategy setInterval(CandleInterval interval) {
+        this.interval = Objects.requireNonNull(interval);
+        return this;
+    }
+
     public RsiLimitEntryStrategy setOversold(double oversold) {
         this.oversold = oversold;
         return this;
     }
 
-    /** How far under the signal hour's close the buy limit goes, in hourly ATRs. */
+    /** How far under the signal bar's close the buy limit goes, in ATRs of the interval. */
     public RsiLimitEntryStrategy setLimitOffset(double limitOffset) {
         if (limitOffset < 0) {
             throw new IllegalArgumentException("Лимит не может стоять выше закрытия, получено " + limitOffset);
@@ -128,7 +142,7 @@ public class RsiLimitEntryStrategy implements Strategy {
     /**
      * Leave the position with a sell limit this many ATRs over what it was bought at, instead of selling
      * at the market the moment the holding time is up. The limit still gives way to a market sale at
-     * {@link #setHoldHours}: a target that the price never comes back to is not an exit.
+     * {@link #setHoldBars}: a target that the price never comes back to is not an exit.
      *
      * @param entryPrices what the position was bought at on average - a limit that is a target has to be
      *                    measured from the fill, not from the signal
@@ -144,8 +158,8 @@ public class RsiLimitEntryStrategy implements Strategy {
     }
 
     /**
-     * Leave as soon as an hour closes with RSI at or over this, instead of waiting out the holding time.
-     * {@link #setHoldHours} stays as the cap: an RSI that never recovers must not turn a trade of hours
+     * Leave as soon as a bar closes with RSI at or over this, instead of waiting out the holding time.
+     * {@link #setHoldBars} stays as the cap: an RSI that never recovers must not turn a trade of hours
      * into one of weeks, which would be holding the market rather than the signal.
      * <p>
      * Zero - the default - leaves only the holding time.
@@ -178,8 +192,8 @@ public class RsiLimitEntryStrategy implements Strategy {
     }
 
     /**
-     * Take the signal only when its hour traded at least this many times the median volume of the last
-     * {@code bars} hours - the capitulation the oversold is supposed to be.
+     * Take the signal only when its bar traded at least this many times the median volume of the last
+     * {@code bars} bars - the capitulation the oversold is supposed to be.
      * <p>
      * Measured on 33 instruments over four periods: requiring twice the median left RSI under fifteen
      * ahead in all four and lifted the instruments it pays on from 27 to 29 of 33, while dropping a fifth
@@ -199,17 +213,17 @@ public class RsiLimitEntryStrategy implements Strategy {
         return this;
     }
 
-    public RsiLimitEntryStrategy setOrderHours(int orderHours) {
-        this.orderHours = orderHours;
+    public RsiLimitEntryStrategy setOrderBars(int orderBars) {
+        this.orderBars = orderBars;
         return this;
     }
 
-    public RsiLimitEntryStrategy setHoldHours(int holdHours) {
-        if (holdHours < 1) {
-            throw new IllegalArgumentException("Держать нужно хотя бы час, получено " + holdHours);
+    public RsiLimitEntryStrategy setHoldBars(int holdBars) {
+        if (holdBars < 1) {
+            throw new IllegalArgumentException("Держать нужно хотя бы бар, получено " + holdBars);
         }
 
-        this.holdHours = holdHours;
+        this.holdBars = holdBars;
         return this;
     }
 
@@ -250,32 +264,32 @@ public class RsiLimitEntryStrategy implements Strategy {
             warmUp(minute);
         }
 
-        long bucket = aggregator.bucketOf(minute, CandleInterval.HOUR);
+        long bucket = aggregator.bucketOf(minute, interval);
 
-        if (bucket != hourBucket) {
-            if (!hour.isEmpty()) {
+        if (bucket != currentBucket) {
+            if (!bar.isEmpty()) {
                 try {
-                    onHourClosed(aggregator.merge(hour));
+                    onBarClosed(aggregator.merge(bar));
                 } catch (AbstractException e) {
                     throw new RuntimeException(e);
                 }
             }
 
-            hour.clear();
-            hourBucket = bucket;
+            bar.clear();
+            currentBucket = bucket;
         }
 
-        hour.add(minute);
+        bar.add(minute);
     }
 
     /**
-     * Feeds the indicators the hours before the first minute, without trading on them. The minutes
-     * of the hour already under way are kept as its start.
+     * Feeds the indicators the bars before the first minute, without trading on them. The minutes
+     * of the bar already under way are kept as its start.
      */
     protected void warmUp(Candle first) {
         List<Candle> history = candleRepository.getPeriod(
             first.instrumentId(), first.getTime().minus(warmup), first.getTime());
-        long firstBucket = aggregator.bucketOf(first, CandleInterval.HOUR);
+        long firstBucket = aggregator.bucketOf(first, interval);
         List<Candle> earlier = new ArrayList<>();
 
         for (Candle minute : history) {
@@ -283,27 +297,27 @@ public class RsiLimitEntryStrategy implements Strategy {
                 break;
             }
 
-            if (aggregator.bucketOf(minute, CandleInterval.HOUR) == firstBucket) {
-                hour.add(minute);
+            if (aggregator.bucketOf(minute, interval) == firstBucket) {
+                bar.add(minute);
             } else {
                 earlier.add(minute);
             }
         }
 
-        for (Candle bar : aggregator.aggregate(earlier, CandleInterval.HOUR)) {
+        for (Candle bar : aggregator.aggregate(earlier, interval)) {
             update(bar);
         }
 
-        hourBucket = firstBucket;
+        currentBucket = firstBucket;
     }
 
-    protected void onHourClosed(Candle bar) throws AbstractException {
+    protected void onBarClosed(Candle bar) throws AbstractException {
         double rsi = update(bar);
 
-        if (hoursSinceSignal >= 0) {
-            hoursSinceSignal++;
+        if (barsSinceSignal >= 0) {
+            barsSinceSignal++;
 
-            if (hoursSinceSignal == orderHours) {
+            if (barsSinceSignal == orderBars) {
                 cancelIfWorking(orderId);
                 orderId = null;
             }
@@ -313,30 +327,18 @@ public class RsiLimitEntryStrategy implements Strategy {
             // The bounce is over as soon as the market calls this instrument dear again.
             boolean recovered = exitRsi > 0 && owned > 0 && !Double.isNaN(rsi) && rsi >= exitRsi;
 
-            if (hoursSinceSignal >= holdHours || recovered) {
-                cancelIfWorking(orderId);
-                cancelIfWorking(exitOrderId);
-                orderId = null;
-                exitOrderId = null;
-
-                // What the cancelled sell held is free again, so the position is read after it.
-                long left = broker.getPositionSize(accountId, instrumentId);
-
-                if (left > 0) {
-                    broker.sellBestPrice(accountId, instrumentId, left);
-                }
-
-                hoursSinceSignal = -1;
+            if (barsSinceSignal >= holdBars || recovered) {
+                leave();
             } else if (owned == 0) {
                 if (exitOrderId != null) {
                     // The target was reached and the position is gone: the trade is over early.
                     cancelIfWorking(orderId);
                     orderId = null;
                     exitOrderId = null;
-                    hoursSinceSignal = -1;
-                } else if (hoursSinceSignal >= orderHours) {
+                    barsSinceSignal = -1;
+                } else if (barsSinceSignal >= orderBars) {
                     // The order ran out without a fill: nothing to hold, so the next signal may come.
-                    hoursSinceSignal = -1;
+                    barsSinceSignal = -1;
                 }
             } else if (exitOrderId == null && entryPrices != null && free > 0) {
                 placeExitLimit(free);
@@ -360,10 +362,27 @@ public class RsiLimitEntryStrategy implements Strategy {
             ? broker.buyBestPrice(accountId, instrumentId, lots).getOrderId()
             : broker.buyLimit(accountId, instrumentId, (int) Math.min(Integer.MAX_VALUE, lots), limit).getOrderId();
         signalAtr = atr.value();
-        hoursSinceSignal = 0;
+        barsSinceSignal = 0;
     }
 
-    /** The target the position is offered at: what it cost plus the offset, in the signal hour's ATR. */
+    /** Ends the trade: nothing of it is left working, and whatever it holds is sold at the market. */
+    protected void leave() throws AbstractException {
+        cancelIfWorking(orderId);
+        cancelIfWorking(exitOrderId);
+        orderId = null;
+        exitOrderId = null;
+
+        // What the cancelled sell held is free again, so the position is read after it.
+        long left = broker.getPositionSize(accountId, instrumentId);
+
+        if (left > 0) {
+            broker.sellBestPrice(accountId, instrumentId, left);
+        }
+
+        barsSinceSignal = -1;
+    }
+
+    /** The target the position is offered at: what it cost plus the offset, in the signal bar's ATR. */
     protected void placeExitLimit(long lots) throws AbstractException {
         EntryPrice entry = entryPrices.calculate(accountId, instrumentId);
 
@@ -389,7 +408,7 @@ public class RsiLimitEntryStrategy implements Strategy {
     }
 
     /**
-     * Whether this hour traded enough to be a capitulation rather than a drift. Until there are
+     * Whether this bar traded enough to be a capitulation rather than a drift. Until there are
      * {@link #setMinVolume} bars to take a median of, nothing is asked - the alternative is to judge by
      * half a window, which is not the same rule.
      */
@@ -403,7 +422,7 @@ public class RsiLimitEntryStrategy implements Strategy {
         return bar.volume() >= volumeTimes * sorted[sorted.length / 2];
     }
 
-    /** Adds a closed hour to ATR and to Wilder's RSI, and returns the RSI, or NaN until it has settled. */
+    /** Adds a closed bar to ATR and to Wilder's RSI, and returns the RSI, or NaN until it has settled. */
     protected double update(Candle bar) {
         atr.add(bar);
         volumes.addLast(bar.volume());
