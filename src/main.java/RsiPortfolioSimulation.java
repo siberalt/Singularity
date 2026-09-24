@@ -30,9 +30,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.TreeMap;
 
 /**
@@ -89,6 +92,12 @@ public class RsiPortfolioSimulation {
         // How many median hourly volumes the signal hour has to trade; zero asks nothing.
         double volume = Double.parseDouble(options.getOrDefault("vol", "0"));
         CandleInterval interval = CandleInterval.valueOf(options.getOrDefault("bars", "HOUR"));
+        // Instruments that trade on faster bars than the rest: liquidity decides what an instrument can
+        // carry, so one account may hold both kinds.
+        CandleInterval fastInterval = CandleInterval.valueOf(options.getOrDefault("fastBars", "MIN_15"));
+        Set<Long> fast = options.containsKey("fast")
+            ? Arrays.stream(options.get("fast").split(",")).map(Long::parseLong).collect(Collectors.toSet())
+            : Set.of();
 
         System.out.printf(Locale.ROOT,
             "%s .. %s: %d instruments on one account, %.0f%% of the free money a trade%n",
@@ -101,10 +110,13 @@ public class RsiPortfolioSimulation {
         InMemoryInstrumentRepository listing = new InMemoryInstrumentRepository();
         List<String> uids = new ArrayList<>();
 
+        Map<String, CandleInterval> intervals = new HashMap<>();
+
         for (long id : chosen) {
             String uid = instruments.brokerInstrumentIdOf(AbstractTinkoffBroker.ID, id).orElseThrow();
 
             uids.add(uid);
+            intervals.put(uid, fast.contains(id) ? fastInterval : interval);
             listing.save(EventMockBroker.DEFAULT_ID, new Instrument()
                 .setInstrumentType(InstrumentType.SHARE)
                 .setLot(1)
@@ -131,7 +143,8 @@ public class RsiPortfolioSimulation {
                         .setEntryAtMarket(atMarket)
                         .setOversold(oversold)
                         .setMinVolume(volume, 24)
-                        .setInterval(interval)
+                        .setInterval(intervals.get(uid))
+                        .setHeartbeat(new HashSet<>(uids))
                         .setHoldBars(hold)
                         .setExitRsi(exitRsi)
                         .setPositionShare(share);

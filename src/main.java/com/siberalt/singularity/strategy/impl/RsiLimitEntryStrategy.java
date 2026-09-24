@@ -18,9 +18,11 @@ import com.siberalt.singularity.strategy.observer.Observer;
 import com.siberalt.singularity.strategy.volatility.IncrementalATR;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -53,6 +55,9 @@ import java.util.Set;
  * could first have been placed.
  */
 public class RsiLimitEntryStrategy implements Strategy {
+    /** No trade of bars is meant to last this long; past it, the instrument has stopped trading. */
+    private static final Duration IDLE_DAYS = Duration.ofDays(5);
+
     private final EventSubscriptionBrokerFacade broker;
     private final String instrumentId;
     private final String accountId;
@@ -88,9 +93,12 @@ public class RsiLimitEntryStrategy implements Strategy {
     private int volumeBars = 24;
     private final Deque<Long> volumes = new ArrayDeque<>();
 
+    private Set<String> heartbeat = Set.of();
+
     private String orderId;
     private String exitOrderId;
     private double signalAtr;
+    private Instant signalTime;
     // Bars closed since the signal bar; negative while no trade is on.
     private int barsSinceSignal = -1;
 
@@ -112,6 +120,20 @@ public class RsiLimitEntryStrategy implements Strategy {
      */
     public RsiLimitEntryStrategy setInterval(CandleInterval interval) {
         this.interval = Objects.requireNonNull(interval);
+        return this;
+    }
+
+    /**
+     * Other instruments to listen to, traded by nobody here: their candles are a clock.
+     * <p>
+     * A position is left when a bar of its own instrument closes, and that bar is only known to be over
+     * once the next one's first minute arrives. An instrument that stops trading therefore freezes the
+     * trade in it - on this data, twenty trades of 2023-24 were held for days or months that way, and
+     * between them they made more than the other five hundred. Anything that keeps ticking will do:
+     * the position then leaves on time whatever its own instrument does.
+     */
+    public RsiLimitEntryStrategy setHeartbeat(Set<String> heartbeat) {
+        this.heartbeat = Set.copyOf(heartbeat);
         return this;
     }
 
@@ -241,8 +263,11 @@ public class RsiLimitEntryStrategy implements Strategy {
 
     @Override
     public void run(Observer observer) {
+        Set<String> listened = new HashSet<>(heartbeat);
+
+        listened.add(instrumentId);
         atr = new IncrementalATR(atrPeriod);
-        subscription = broker.subscribe(new NewCandleSubscriptionSpec(Set.of(instrumentId)), this::handleNewCandle);
+        subscription = broker.subscribe(new NewCandleSubscriptionSpec(listened), this::handleNewCandle);
     }
 
     @Override
@@ -253,33 +278,62 @@ public class RsiLimitEntryStrategy implements Strategy {
     }
 
     public void handleNewCandle(NewCandleEvent event, Subscription subscription) {
-        if (!instrumentId.equals(event.getInstrumentUid())) {
-            return;
-        }
-
         Candle minute = event.getCandle();
 
-        if (!initialized) {
-            initialized = true;
-            warmUp(minute);
-        }
-
-        long bucket = aggregator.bucketOf(minute, interval);
-
-        if (bucket != currentBucket) {
-            if (!bar.isEmpty()) {
-                try {
-                    onBarClosed(aggregator.merge(bar));
-                } catch (AbstractException e) {
-                    throw new RuntimeException(e);
-                }
+        try {
+            // Whoever's candle this is, it says what the time is, and a trade that has outstayed its
+            // welcome leaves on it.
+            if (overstayed(minute.getTime())) {
+                leave();
             }
 
-            bar.clear();
-            currentBucket = bucket;
+            if (!instrumentId.equals(event.getInstrumentUid())) {
+                return;
+            }
+
+            if (!initialized) {
+                initialized = true;
+                warmUp(minute);
+            }
+
+            long bucket = aggregator.bucketOf(minute, interval);
+
+            if (bucket != currentBucket) {
+                if (!bar.isEmpty()) {
+                    onBarClosed(aggregator.merge(bar));
+                }
+
+                bar.clear();
+                currentBucket = bucket;
+            }
+        } catch (AbstractException e) {
+            throw new RuntimeException(e);
         }
 
         bar.add(minute);
+    }
+
+    /**
+     * Whether the trade has outstayed its holding time by the clock rather than by bars.
+     * <p>
+     * Bars are counted in trading time and a clock is not: five hourly bars span a night, a weekend or a
+     * holiday, and a net set to the bars themselves fires in the middle of ordinary trades - it cut the
+     * average trade of 2023-24 from plus 0.32 to minus 0.39 per cent when it was. So the net is set in
+     * days: nothing legitimate lasts {@link #IDLE_DAYS} of them, and the pauses this is for lasted
+     * months.
+     */
+    protected boolean overstayed(Instant now) {
+        if (barsSinceSignal < 0 || signalTime == null) {
+            return false;
+        }
+
+        Duration allowed = interval.getDuration().multipliedBy(2L * holdBars + 4);
+
+        if (allowed.compareTo(IDLE_DAYS) < 0) {
+            allowed = IDLE_DAYS;
+        }
+
+        return !now.isBefore(signalTime.plus(allowed));
     }
 
     /**
@@ -362,6 +416,7 @@ public class RsiLimitEntryStrategy implements Strategy {
             ? broker.buyBestPrice(accountId, instrumentId, lots).getOrderId()
             : broker.buyLimit(accountId, instrumentId, (int) Math.min(Integer.MAX_VALUE, lots), limit).getOrderId();
         signalAtr = atr.value();
+        signalTime = bar.getTime();
         barsSinceSignal = 0;
     }
 
