@@ -64,7 +64,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class BasicTradeStrategySimulation {
-    private final static String INSTRUMENT_ID = "55371b1f-8f7c-4c12-9d93-386fae5ec12a";
+    private final static String INSTRUMENT_ID = "e6123145-9665-43e0-8413-cd61b8aa9b13";
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
         Instant startTime = Instant.parse("2023-01-01T00:00:00Z");
@@ -199,58 +199,6 @@ public class BasicTradeStrategySimulation {
         ExtremeLocator maximaBaseLocator,
         ExtremeLocator minimaBaseLocator
     ) {
-//        UpsideCalculator volumeUpsideCalculator = new CompositeFactorUpsideCalculator(
-//            List.of(
-//                //new CompositeFactorUpsideCalculator.WeightedCalculator(new NetVolumeUpsideCalculator(), 0.7),
-//                new CompositeFactorUpsideCalculator.WeightedCalculator(new VPTUpsideCalculator(), 1)
-//            )
-//        );
-//
-//        LevelBasedUpsideCalculator adaptiveUpsideCalculator = new AdaptiveUpsideCalculator(
-//            new ChannelLevelBasedUpsideCalculator(),
-//            SubrangeUpsideCalculator.ofLastN(60, volumeUpsideCalculator)
-//        );
-//
-//        upsideCalculator.setLevelSelector(selectorTracker);
-        var maximinUpsideCalculator = new MaximinUpsideCalculator(
-            LastExtremeLocator.ofMaximums(10, Candle::getCloseAsDouble),
-            LastExtremeLocator.ofMinimums(10, Candle::getCloseAsDouble)
-        );
-        var volumeUpsideCalculator = new CompositeFactorUpsideCalculator(
-            List.of(
-//                CompositeFactorUpsideCalculator.newWeightedCalculator(
-//                    SubrangeUpsideCalculator.ofLastN(60, new VWAPUpsideCalculator()), 1
-//                )
-                CompositeFactorUpsideCalculator.newWeightedCalculator(
-                    CalendarPeriodFilterDecorator.ofLastDays(1, new VWAPUpsideCalculator()), 1
-                )
-            )
-        );
-
-        var adaptiveUpsideCalculator = new AdaptiveUpsideCalculator(
-            new SimpleLevelBasedUpsideCalculator(),
-            volumeUpsideCalculator
-        );
-
-        UpsideCalculator levelUpsideCalculator = new KeyLevelsUpsideCalculator(
-            supportDetector,
-            resistanceDetector,
-            adaptiveUpsideCalculator,
-            selectorTracker,
-            volumeUpsideCalculator
-        );
-        //levelUpsideCalculator = SubrangeUpsideCalculator.ofLastN(60 * 24 * 7 * 2, levelUpsideCalculator);
-
-        CompositeFactorUpsideCalculator compositeUpsideCalculator = new CompositeFactorUpsideCalculator(
-            List.of(
-                // CompositeFactorUpsideCalculator.newWeightedCalculator(levelUpsideCalculator, 0.8),
-                CompositeFactorUpsideCalculator.newWeightedCalculator(SubrangeUpsideCalculator.ofLastN(60 * 24, maximinUpsideCalculator), 0.2),
-                CompositeFactorUpsideCalculator.newWeightedCalculator(volumeUpsideCalculator, 0.8)
-
-                // CompositeFactorUpsideCalculator.newWeightedCalculator(maximinUpsideCalculator, 0.2)
-                //new CompositeFactorUpsideCalculator.WeightedCalculator(subrangeUpsideCalculator, 0.05)
-            )
-        );
 
         // The stop is checked on every minute, but measured in hourly volatility: four hourly ATRs, as
         // when it sat behind the aggregator. Four minute ATRs would be a far tighter stop.
@@ -261,7 +209,7 @@ public class BasicTradeStrategySimulation {
             new BaseEntryPriceCalculator(readOperationRepository),
             candles -> hourlyAtr.calculate(new CandleAggregator().aggregate(candles, CandleInterval.HOUR))
         );
-        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(2);
+        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(30);
 
         // The aggregator hands on one closed hour at a time, so the window of hours sits behind it.
         AggregatingUpsideCalculator hourlySignal = new AggregatingUpsideCalculator(
@@ -287,7 +235,22 @@ public class BasicTradeStrategySimulation {
             broker,
             INSTRUMENT_ID,
             accountId,
-            new WindowUpsideCalculator(switcherUpsideCalculator, 60 * 24),
+            new WindowUpsideCalculator(
+                new UpsideSignalAmplifier(slopeUpsideCalculator, 0.9, 0.65),
+                600
+            ),
+//            new WindowUpsideCalculator(
+//                FixedSignalReverserUpsideCalculator.ofRises(
+//                    new UpsideSignalAmplifier(slopeUpsideCalculator, 0.95, 0.95), 800, 1
+//                ),
+//                600
+//            ),
+//            new WindowUpsideCalculator(
+//                FixedSignalReverserUpsideCalculator.ofFalls(
+//                    new UpsideSignalAmplifier(slopeUpsideCalculator, 0.97, 0.97), 80, 1
+//                ),
+//                200
+//            ),
             candleRepository
         );
         strategy.setLookbackCandles(60 * 24);

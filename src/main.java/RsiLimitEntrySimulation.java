@@ -7,7 +7,6 @@ import com.siberalt.singularity.broker.impl.tinkoff.shared.AbstractTinkoffBroker
 import com.siberalt.singularity.configuration.ConfigInterface;
 import com.siberalt.singularity.configuration.YamlConfig;
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.entity.candle.CandleAggregator;
 import com.siberalt.singularity.entity.candle.SqliteCandleRepository;
 import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.entity.instrument.InMemoryInstrumentRepository;
@@ -37,8 +36,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.NavigableMap;
-import java.util.TreeMap;
 
 /**
  * The RSI limit entry run through the event simulator, one instrument at a time.
@@ -181,35 +178,37 @@ public class RsiLimitEntrySimulation {
     }
 
     /**
-     * What every instrument did, hour by hour, so that a trade can be read against the market rather than
-     * on its own.
+     * What every instrument did, minute by minute, so that a trade can be read against the market rather
+     * than on its own.
      * <p>
      * The simulation trades one instrument at a time, and its profit therefore carries whatever the market
      * did while the position was open - the longer the holding time, the more of it. Every measurement
      * before this one was market-neutral, and this is the same measure: the mean move of all the
-     * instruments over the very hours a trade was held, subtracted from what the trade made.
+     * instruments over the very minutes a trade was held, subtracted from what the trade made.
+     * <p>
+     * Minute by minute, and not by the hour as this first read it. A trade's own result runs from the
+     * moment it was filled to the moment it was sold; read on an hourly grid, the market's leg instead ran
+     * from the close of the hour the fill happened in, which is up to an hour later. Buying a dip, the own
+     * leg then collected the bounce from the low to that hour's close and the market's leg started after
+     * it - so the excess came out flattering, the more so the shorter the trade. At a median holding time
+     * of an hour and a bit, that was most of them.
      */
-    record Market(Map<Long, NavigableMap<Long, Double>> byInstrument) {
+    record Market(Map<Long, Prices> byInstrument) {
         static Market of(SqliteCandleRepository candles, long[] ids, Instant from, Instant to) {
-            Map<Long, NavigableMap<Long, Double>> byInstrument = new HashMap<>();
-            CandleAggregator aggregator = new CandleAggregator();
+            Map<Long, Prices> byInstrument = new HashMap<>();
 
             for (long id : ids) {
-                NavigableMap<Long, Double> hours = new TreeMap<>();
+                Prices prices = Prices.of(candles.getPeriod(id, from, to));
 
-                for (Candle bar : aggregator.aggregate(candles.getPeriod(id, from, to), CandleInterval.HOUR)) {
-                    hours.put(aggregator.bucketOf(bar, CandleInterval.HOUR), bar.getCloseAsDouble());
-                }
-
-                if (!hours.isEmpty()) {
-                    byInstrument.put(id, hours);
+                if (prices != null) {
+                    byInstrument.put(id, prices);
                 }
             }
 
             return new Market(byInstrument);
         }
 
-        /** The mean of the trades' results less the market's move over each trade's own hours, in per cent. */
+        /** The mean of the trades' results less the market's move over each trade's own span, in per cent. */
         double excessOf(List<Trade> trades) {
             double total = 0;
             int counted = 0;
@@ -228,59 +227,100 @@ public class RsiLimitEntrySimulation {
 
         /** The share of the instrument's trading hours the strategy spent holding it. */
         double exposureOf(long id, List<Trade> trades, Instant from, Instant to) {
-            NavigableMap<Long, Double> hours = byInstrument.get(id);
+            Prices prices = byInstrument.get(id);
 
-            if (hours == null || hours.isEmpty()) {
+            if (prices == null) {
                 return 0;
             }
 
-            long open = hours.subMap(bucketOf(from), true, bucketOf(to), false).size();
+            long open = prices.tradedHours(from, to);
             long held = 0;
 
             for (Trade trade : trades) {
-                held += hours.subMap(bucketOf(trade.entry()), true, bucketOf(trade.exit()), false).size();
+                held += prices.tradedHours(trade.entry(), trade.exit());
             }
 
             return open == 0 ? 0 : (double) held / open;
         }
 
         /**
-         * What the average instrument did between these two moments, in per cent. An instrument that did
-         * not trade in one of the hours is left out of the average rather than carried at its last price:
-         * a name that was not trading is not part of the market of that hour.
-         * <p>
-         * The start is read forwards and the end backwards, so that a span reaching past either edge of
-         * what was loaded still has two prices to compare - at the edges there is nothing earlier to fall
-         * back to, and an hour with no bar of its own would otherwise leave the whole span unanswered.
+         * What the average instrument did between these two moments, in per cent. An instrument that was
+         * not trading around either of them is left out of the average rather than carried at its last
+         * price: a name that had stopped trading is not part of the market of that moment.
          */
         double moveBetween(Instant from, Instant to) {
             double total = 0;
             int counted = 0;
 
-            for (NavigableMap<Long, Double> hours : byInstrument.values()) {
-                Map.Entry<Long, Double> before = firstAtOrAround(hours, bucketOf(from));
-                Map.Entry<Long, Double> after = hours.floorEntry(bucketOf(to));
+            for (Prices prices : byInstrument.values()) {
+                double before = prices.at(from);
+                double after = prices.at(to);
 
-                if (before == null || after == null || before.getValue() <= 0 || before.getKey().equals(after.getKey())) {
+                if (before <= 0 || Double.isNaN(before) || Double.isNaN(after)) {
                     continue;
                 }
 
-                total += 100 * (after.getValue() / before.getValue() - 1);
+                total += 100 * (after / before - 1);
                 counted++;
             }
 
             return counted == 0 ? Double.NaN : total / counted;
         }
+    }
 
-        /** The price of that hour, or of the nearest one before it, or - at the very start - after it. */
-        private static Map.Entry<Long, Double> firstAtOrAround(NavigableMap<Long, Double> hours, long bucket) {
-            Map.Entry<Long, Double> before = hours.floorEntry(bucket);
+    /**
+     * One instrument's minute closes, as two sorted arrays rather than a map: a period holds a few hundred
+     * thousand minutes for each of the 33 names, and a tree of that size costs an order of magnitude more
+     * memory for a lookup that a binary search answers just as well.
+     */
+    record Prices(long[] minutes, double[] closes) {
+        private static final long HOUR = CandleInterval.HOUR.getDuration().toMillis();
 
-            return before != null ? before : hours.ceilingEntry(bucket);
+        static Prices of(List<Candle> candles) {
+            long[] minutes = new long[candles.size()];
+            double[] closes = new double[candles.size()];
+            int kept = 0;
+
+            for (Candle candle : candles) {
+                if (candle.getCloseAsDouble() > 0) {
+                    minutes[kept] = candle.getTime().toEpochMilli();
+                    closes[kept] = candle.getCloseAsDouble();
+                    kept++;
+                }
+            }
+
+            return kept == 0 ? null : new Prices(Arrays.copyOf(minutes, kept), Arrays.copyOf(closes, kept));
         }
 
-        private static long bucketOf(Instant time) {
-            return Math.floorDiv(time.toEpochMilli(), CandleInterval.HOUR.getDuration().toMillis());
+        /**
+         * The price at that moment: the last close at or before it, provided the instrument traded within
+         * the hour leading up to it.
+         */
+        double at(Instant time) {
+            long moment = time.toEpochMilli();
+            int found = Arrays.binarySearch(minutes, moment);
+            int before = found >= 0 ? found : -found - 2;
+
+            return before < 0 || moment - minutes[before] > HOUR ? Double.NaN : closes[before];
+        }
+
+        /** How many distinct hours the instrument traded in between those two moments. */
+        long tradedHours(Instant from, Instant to) {
+            long counted = 0;
+            long last = Long.MIN_VALUE;
+            int found = Arrays.binarySearch(minutes, from.toEpochMilli());
+
+            for (int at = found >= 0 ? found : -found - 1; at < minutes.length
+                && minutes[at] < to.toEpochMilli(); at++) {
+                long hour = Math.floorDiv(minutes[at], HOUR);
+
+                if (hour != last) {
+                    counted++;
+                    last = hour;
+                }
+            }
+
+            return counted;
         }
     }
 

@@ -56,8 +56,8 @@ import java.util.stream.IntStream;
 public class LevelDetectorSimulation {
     // Our id for Sber - what its candles are kept under. The index fund TMOS is 2, not this.
     private static final long INSTRUMENT_ID = 7;
-    private static final Instant FROM = Instant.parse("2024-01-01T00:00:00Z");
-    private static final Instant TO = Instant.parse("2025-12-01T00:00:00Z");
+    private static final Instant FROM = Instant.parse("2023-01-01T00:00:00Z");
+    private static final Instant TO = Instant.parse("2023-02-01T00:00:00Z");
     /** The bars the detector sees. The contest measured hourly; minutes were never tested. */
     private static final CandleInterval INTERVAL = CandleInterval.HOUR;
     /**
@@ -86,7 +86,7 @@ public class LevelDetectorSimulation {
      * of sixteen detectors, and the advantage held at every freshness, so it is the window itself that
      * matters and not the age of the last touch.
      */
-    private static final int WINDOW = 900;
+    private static final int WINDOW = 300;
     /** How far the window moves from one frame to the next. */
     private static final int STEP = 100;
     /** Bars drawn past the window's end - the future the levels of that frame did not see. */
