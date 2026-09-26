@@ -1,6 +1,7 @@
-﻿<html lang="ru">
+<html lang="ru">
 <head>
     <meta charset="utf-8">
+    <title>Результат симуляции</title>
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script type="text/javascript" src="priceChart.js"></script>
     <style>
@@ -9,64 +10,51 @@
             margin: 0 12px;
         }
 
-        #stepper {
+        #controls {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 14px;
             flex-wrap: wrap;
             padding: 8px 0;
             border-bottom: 1px solid #e0e0e0;
         }
 
-        #stepper button {
-            font-size: 16px;
-            width: 36px;
-            height: 28px;
-            cursor: pointer;
-        }
-
-        #slider {
-            flex: 1 1 280px;
-            min-width: 200px;
-        }
-
-        #caption {
-            font-variant-numeric: tabular-nums;
-            white-space: nowrap;
-        }
-
-        #legend span {
-            margin-right: 10px;
-            white-space: nowrap;
-        }
-
-        .swatch {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            margin-right: 3px;
-            vertical-align: middle;
-        }
-
-        .hint {
+        #span, #missing, .hint {
             color: #5f6368;
+        }
+
+        #missing {
+            padding: 12px 0;
+        }
+
+        /* Все три графика внутри одной прокрутки и одной ширины: у категориальной оси нет общего
+           масштаба, и разъехаться они могут только если прокручивать их порознь. */
+        #scroller {
+            overflow-x: auto;
+            overflow-y: hidden;
         }
     </style>
 </head>
 <body>
-<!-- Shown only when LevelFrames.json is there; any other chart drops through to the old single view. -->
-<div id="stepper" hidden>
-    <button id="back" title="Шаг назад (←, с Shift — на десять)">←</button>
-    <button id="forward" title="Шаг вперёд (→, с Shift — на десять)">→</button>
-    <input type="range" id="slider" min="0" value="0">
-    <span id="caption"></span>
-    <label><input type="checkbox" id="projection" checked> продолжение линий</label>
-    <label><input type="checkbox" id="fixedScale"> общая шкала</label>
+<!-- Результат симуляции: цена с заявками, RSI и объём. Кадры детектора уровней - на LevelFrames.html. -->
+<div id="controls">
+    <label>масштаб
+        <select id="zoom">
+            <option value="1" selected>по окну</option>
+            <option value="3">втрое шире</option>
+            <option value="10">вдесятеро</option>
+            <option value="30">максимум</option>
+        </select>
+    </label>
+    <span id="span"></span>
+    <span class="hint">прокрутка по горизонтали — Shift + колесо</span>
 </div>
-<div id="legend" class="hint" hidden></div>
-<div id="price_chart" style="width: 100%; height: 800px"></div>
-<!-- Под ценой, на тех же строках кадра: RSI(14) по часам с уровнями 20 и 70. -->
-<div id="rsi_chart" style="width: 100%; height: 200px" hidden></div>
-<div id="volume_chart" style="width: 100%; height: 300px"></div>
+<div id="missing" hidden></div>
+<div id="scroller">
+    <div id="price_chart" style="height: 800px"></div>
+    <!-- RSI(14) по точкам самого графика, а не по часам: шаг точки написан в подписи. -->
+    <div id="rsi_chart" style="height: 160px"></div>
+    <div id="volume_chart" style="height: 220px"></div>
+</div>
 </body>
 </html>

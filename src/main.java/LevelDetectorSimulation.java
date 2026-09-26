@@ -50,14 +50,14 @@ import java.util.stream.IntStream;
  * are marked as caught or missed. That is the question the levels can answer; the money ones they could
  * not - seven protocols on them failed.
  * <p>
- * The frames go to one file, {@link #OUTPUT}, which {@code PriceChart.html} steps through with the arrow
+ * The frames go to one file, {@link #OUTPUT}, which {@code LevelFrames.html} steps through with the arrow
  * keys. Nothing is recomputed while stepping; the whole sweep is done here, in parallel, once.
  */
 public class LevelDetectorSimulation {
     // Our id for Sber - what its candles are kept under. The index fund TMOS is 2, not this.
-    private static final long INSTRUMENT_ID = 7;
-    private static final Instant FROM = Instant.parse("2023-01-01T00:00:00Z");
-    private static final Instant TO = Instant.parse("2023-02-01T00:00:00Z");
+    private static final long INSTRUMENT_ID = 1;
+    private static final Instant FROM = Instant.parse("2023-01-15T00:00:00Z");
+    private static final Instant TO = Instant.parse("2023-08-18T00:00:00Z");
     /** The bars the detector sees. The contest measured hourly; minutes were never tested. */
     private static final CandleInterval INTERVAL = CandleInterval.HOUR;
     /**

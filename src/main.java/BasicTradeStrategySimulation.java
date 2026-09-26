@@ -64,11 +64,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class BasicTradeStrategySimulation {
-    private final static String INSTRUMENT_ID = "e6123145-9665-43e0-8413-cd61b8aa9b13";
+    private final static String INSTRUMENT_ID = "55371b1f-8f7c-4c12-9d93-386fae5ec12a"; // Сбербанк
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
-        Instant startTime = Instant.parse("2023-01-01T00:00:00Z");
-        Instant endTime = Instant.parse("2023-02-01T00:00:00Z");
+        Instant startTime = Instant.parse("2023-01-15T00:00:00Z");
+        Instant endTime = Instant.parse("2023-08-18T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
@@ -199,57 +199,27 @@ public class BasicTradeStrategySimulation {
         ExtremeLocator maximaBaseLocator,
         ExtremeLocator minimaBaseLocator
     ) {
+        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(10);
 
-        // The stop is checked on every minute, but measured in hourly volatility: four hourly ATRs, as
-        // when it sat behind the aggregator. Four minute ATRs would be a far tighter stop.
-        VolatilityCalculator hourlyAtr = ATRVolatilityCalculator.ofMultiplier(4);
-        PositionRiskManagerUpsideCalculator riskManagerUpsideCalculator = new PositionRiskManagerUpsideCalculator(
-            accountId,
-            INSTRUMENT_ID,
-            new BaseEntryPriceCalculator(readOperationRepository),
-            candles -> hourlyAtr.calculate(new CandleAggregator().aggregate(candles, CandleInterval.HOUR))
-        );
-        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(30);
-
-        // The aggregator hands on one closed hour at a time, so the window of hours sits behind it.
-        AggregatingUpsideCalculator hourlySignal = new AggregatingUpsideCalculator(
-            CandleInterval.HOUR,
-            new WindowUpsideCalculator(
-                new UpsideSignalAmplifier(slopeUpsideCalculator, 0.9, 0.9),
-                12
-            )
-        );
-
-        // The hourly signal wins when it has something to say; in the minutes between hours it is
-        // neutral, and the risk manager reads the last day of minutes. The window of minutes sits in
-        // front of the switch rather than behind its second branch, which is asked only when the
-        // signal is quiet and would miss the minutes it was not asked on; the aggregator skips the
-        // minutes it has already seen, so handing it the whole window costs it nothing.
-        ThresholdSwitchUpsideCalculator switcherUpsideCalculator = new ThresholdSwitchUpsideCalculator(
-            hourlySignal,
-            riskManagerUpsideCalculator,
-            0.8,
-            -0.8
-        );
         BasicTradeStrategy strategy = new BasicTradeStrategy(
             broker,
             INSTRUMENT_ID,
             accountId,
+//            new WindowUpsideCalculator(
+//                new UpsideSignalAmplifier(slopeUpsideCalculator, 0.95, 0.95),
+//                100
+//            ),
             new WindowUpsideCalculator(
-                new UpsideSignalAmplifier(slopeUpsideCalculator, 0.9, 0.65),
-                600
+                FixedSignalReverserUpsideCalculator.ofRises(
+                    new UpsideSignalAmplifier(slopeUpsideCalculator, 0.95, 0.95), 800, 1
+                ),
+                100
             ),
 //            new WindowUpsideCalculator(
-//                FixedSignalReverserUpsideCalculator.ofRises(
-//                    new UpsideSignalAmplifier(slopeUpsideCalculator, 0.95, 0.95), 800, 1
-//                ),
-//                600
-//            ),
-//            new WindowUpsideCalculator(
 //                FixedSignalReverserUpsideCalculator.ofFalls(
-//                    new UpsideSignalAmplifier(slopeUpsideCalculator, 0.97, 0.97), 80, 1
+//                    new UpsideSignalAmplifier(slopeUpsideCalculator, 0.95, 0.9), 5, 1
 //                ),
-//                200
+//                100
 //            ),
             candleRepository
         );
@@ -340,10 +310,10 @@ public class BasicTradeStrategySimulation {
             "#CC8400"
         );
         priceChart.setStepInterval(1);
-        priceChart.setInterval(CandleInterval.MIN_1);
+        priceChart.setInterval(CandleInterval.HOUR);
         priceChart.render(candles);
         VolumeChart volumeChart = new VolumeChart(1);
-        volumeChart.setInterval(CandleInterval.MIN_1);
+        volumeChart.setInterval(CandleInterval.HOUR);
         volumeChart.render(candles);
         Toolkit.getDefaultToolkit().beep();
     }
