@@ -59,7 +59,7 @@ public class LevelDetectorSimulation {
     private static final Instant FROM = Instant.parse("2023-01-15T00:00:00Z");
     private static final Instant TO = Instant.parse("2023-08-18T00:00:00Z");
     /** The bars the detector sees. The contest measured hourly; minutes were never tested. */
-    private static final CandleInterval INTERVAL = CandleInterval.HOUR;
+    private static final CandleInterval INTERVAL = CandleInterval.MIN_1;
     /**
      * How far to either side a bar has to be the lowest to count as a pivot, in bars of INTERVAL. Ten
      * gives the consensus 16 points in a median window of 900 bars, 12 to 20 between the tenth and

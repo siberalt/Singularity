@@ -67,8 +67,8 @@ public class BasicTradeStrategySimulation {
     private final static String INSTRUMENT_ID = "55371b1f-8f7c-4c12-9d93-386fae5ec12a"; // Сбербанк
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
-        Instant startTime = Instant.parse("2023-01-15T00:00:00Z");
-        Instant endTime = Instant.parse("2023-08-18T00:00:00Z");
+        Instant startTime = Instant.parse("2023-03-15T00:00:00Z");
+        Instant endTime = Instant.parse("2023-04-18T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
@@ -205,16 +205,20 @@ public class BasicTradeStrategySimulation {
             broker,
             INSTRUMENT_ID,
             accountId,
+            new WindowUpsideCalculator(
+                new PriceChangeUpsideCalculator(5, 6,   2),
+                100
+            ),
 //            new WindowUpsideCalculator(
 //                new UpsideSignalAmplifier(slopeUpsideCalculator, 0.95, 0.95),
 //                100
 //            ),
-            new WindowUpsideCalculator(
-                FixedSignalReverserUpsideCalculator.ofRises(
-                    new UpsideSignalAmplifier(slopeUpsideCalculator, 0.95, 0.95), 800, 1
-                ),
-                100
-            ),
+//            new WindowUpsideCalculator(
+//                FixedSignalReverserUpsideCalculator.ofRises(
+//                    new UpsideSignalAmplifier(slopeUpsideCalculator, 0.95, 0.95), 800, 1
+//                ),
+//                100
+//            ),
 //            new WindowUpsideCalculator(
 //                FixedSignalReverserUpsideCalculator.ofFalls(
 //                    new UpsideSignalAmplifier(slopeUpsideCalculator, 0.95, 0.9), 5, 1
@@ -310,10 +314,10 @@ public class BasicTradeStrategySimulation {
             "#CC8400"
         );
         priceChart.setStepInterval(1);
-        priceChart.setInterval(CandleInterval.HOUR);
+        priceChart.setInterval(CandleInterval.MIN_1);
         priceChart.render(candles);
         VolumeChart volumeChart = new VolumeChart(1);
-        volumeChart.setInterval(CandleInterval.HOUR);
+        volumeChart.setInterval(CandleInterval.MIN_1);
         volumeChart.render(candles);
         Toolkit.getDefaultToolkit().beep();
     }
