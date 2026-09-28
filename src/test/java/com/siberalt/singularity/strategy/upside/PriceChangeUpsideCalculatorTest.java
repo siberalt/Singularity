@@ -106,21 +106,33 @@ class PriceChangeUpsideCalculatorTest {
         assertEquals(FALL, calculator.calculate(closes(100, 104, 102, 97)));
     }
 
-    /** A candle above the end of the window means the top is already behind us. */
+    /** A candle above the end disqualifies the rise - but only one standing after the low. */
     @Test
-    void should_ReturnNeutral_WhenThePeakIsInsideTheWindow() {
-        var calculator = new PriceChangeUpsideCalculator(3, 5);
+    void should_ReturnNeutral_WhenThePeakIsAfterTheLow() {
+        var calculator = new PriceChangeUpsideCalculator(3, 5, 30);
 
-        // The rise from the low is +17.5%, but 120 stands above the 94 it ends on.
-        assertEquals(Upside.NEUTRAL, calculator.calculate(closes(100, 120, 80, 94)));
+        // From the low it is +17.5%, but the 120 printed after it stands above the 94 it ends on; and the
+        // fall from that 120 is -21.7%, which this calculator is not asked about until 30.
+        assertEquals(Upside.NEUTRAL, calculator.calculate(closes(100, 80, 120, 94)));
+    }
+
+    /**
+     * A high before the low belongs to whatever the price was doing before this move began. Vetoing on it
+     * would throw away the move itself, so only the part of the window from the low onwards is read.
+     */
+    @Test
+    void should_ReturnRise_WhenTheHighIsBeforeTheLow() {
+        var calculator = new PriceChangeUpsideCalculator(2, 5, 30);
+
+        assertEquals(RISE, calculator.calculate(closes(120, 80, 94)));
     }
 
     @Test
-    void should_ReturnNeutral_WhenTheBottomIsInsideTheWindow() {
-        var calculator = new PriceChangeUpsideCalculator(3, 5);
+    void should_ReturnNeutral_WhenTheBottomIsAfterTheHigh() {
+        var calculator = new PriceChangeUpsideCalculator(2, 30, 5);
 
-        // The fall from the high is -11.7%, but 90 stands below the 106 it ends on.
-        assertEquals(Upside.NEUTRAL, calculator.calculate(closes(100, 90, 120, 106)));
+        // The fall from the high is vetoed by the 80 after it, and the rise from that 80 is +25%.
+        assertEquals(Upside.NEUTRAL, calculator.calculate(closes(120, 80, 100)));
     }
 
     /** The end of the window may be equalled - only a candle strictly past it disqualifies. */
@@ -131,13 +143,44 @@ class PriceChangeUpsideCalculatorTest {
         assertEquals(RISE, calculator.calculate(closes(100, 94, 106, 106)));
     }
 
-    /** One long rise and one that has rolled over, read off the same window length. */
+    /** A dip inside the run does not move the anchor: the lowest of the window is where it began. */
+    @Test
+    void should_MeasureTheRiseFromTheLowestAcrossADipInside() {
+        var candles = closes(100, 80, 95, 85, 105);
+
+        // +31.3% from the 80, and the 95 and 85 after it both stand below the 105 it ends on.
+        assertEquals(RISE, new PriceChangeUpsideCalculator(4, 30).calculate(candles));
+        assertEquals(Upside.NEUTRAL, new PriceChangeUpsideCalculator(4, 35).calculate(candles));
+    }
+
+    @Test
+    void should_MeasureTheFallFromTheHighestAcrossARallyInside() {
+        var candles = closes(100, 120, 105, 115, 95);
+
+        // -20.8% from the 120, and the 105 and 115 after it both stand above the 95 it ends on.
+        assertEquals(FALL, new PriceChangeUpsideCalculator(4, 20).calculate(candles));
+        assertEquals(Upside.NEUTRAL, new PriceChangeUpsideCalculator(4, 25).calculate(candles));
+    }
+
+    @Test
+    void should_ReturnRise_WhenThePriceOnlyClimbed() {
+        var calculator = new PriceChangeUpsideCalculator(4, 3);
+
+        assertEquals(RISE, calculator.calculate(closes(100, 101, 102, 103, 104)));
+    }
+
+    /**
+     * One long rise and one that has rolled over, read off the same window length. The aftermath is not a
+     * rise; read from the top it has since left, it is a fall, which is the same event from the other side.
+     */
     @Test
     void should_TellAMoveAtItsTop_FromItsAftermath() {
-        var calculator = new PriceChangeUpsideCalculator(4, 5);
-
-        assertEquals(RISE, calculator.calculate(closes(100, 98, 102, 104, 108)));
-        assertEquals(Upside.NEUTRAL, calculator.calculate(closes(100, 98, 108, 104, 102)));
+        assertEquals(RISE, new PriceChangeUpsideCalculator(4, 5, 50)
+            .calculate(closes(100, 98, 102, 104, 108)));
+        assertEquals(Upside.NEUTRAL, new PriceChangeUpsideCalculator(4, 5, 50)
+            .calculate(closes(100, 98, 108, 104, 102)));
+        assertEquals(FALL, new PriceChangeUpsideCalculator(4, 5, 5)
+            .calculate(closes(100, 98, 108, 104, 102)));
     }
 
     @Test

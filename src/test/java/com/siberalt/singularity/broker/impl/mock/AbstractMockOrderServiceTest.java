@@ -524,6 +524,33 @@ public abstract class AbstractMockOrderServiceTest {
         verify(candleStorage, atLeastOnce()).findBeforeOrEqual(idOf(instrumentConfig.getUid()), currentTime, 1);
     }
 
+    /**
+     * A sell of lots nobody owns is refused, and allowed once the broker is told shorts are - leaving
+     * the position below zero, which a buy of the same size brings back.
+     */
+    @Test
+    public void testSellShortOnlyWhenAllowed() throws AbstractException {
+        Candle validCandle = createCandle(
+            currentTime, 10, 15, 5, 10, 100
+        );
+        Quotation openPrice = validCandle.open();
+        long lot = config.getInstrument().getLot();
+
+        assertThrowsWithErrorCode(
+            InvalidRequestException.class,
+            ErrorCode.INSUFFICIENT_BALANCE,
+            () -> postSell(validCandle, OrderType.MARKET, 10, openPrice)
+        );
+
+        broker.getOrderService().setShortsAllowed(true);
+        assertSellFilled(validCandle, OrderType.MARKET, 10, openPrice);
+        assertEquals(-10 * lot, freePositionLots());
+
+        addMoney(openPrice.multiply(100));
+        assertBuyFilled(validCandle, OrderType.MARKET, 10, openPrice);
+        assertEquals(0, freePositionLots());
+    }
+
     @Test
     public void testSellLimitFillsWhenMarketMeetsThePrice() throws AbstractException {
         Candle validCandle = createCandle(

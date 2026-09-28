@@ -96,6 +96,16 @@ public class SimulatedPendingOrderHandler implements PendingOrderHandler, EventI
     }
 
     /**
+     * Whether a parked sell may exceed the position, which is the reservation's half of
+     * {@link MockOrderService#setShortsAllowed}. Set through the order service rather than here, so that
+     * the two halves cannot disagree.
+     */
+    SimulatedPendingOrderHandler setShortsAllowed(boolean shortsAllowed) {
+        fundsReserve.setShortsAllowed(shortsAllowed);
+        return this;
+    }
+
+    /**
      * The simulator's clock is authoritative once a run starts. It is expected to be the same clock
      * the broker was built with - scheduling decisions made here and the timestamps the executor
      * stamps on fills have to agree.

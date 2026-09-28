@@ -43,6 +43,7 @@ public class MockOrderService implements OrderService {
     protected OrderExecutor orderExecutor;
     protected PendingOrderHandler pendingOrderHandler;
     protected Duration executionLatency = Duration.ZERO;
+    protected boolean shortsAllowed;
 
     public MockOrderService(
         Clock clock,
@@ -198,6 +199,28 @@ public class MockOrderService implements OrderService {
         }
 
         this.executionLatency = executionLatency;
+        return this;
+    }
+
+    /**
+     * Whether a sell may exceed what the account holds, leaving the position negative.
+     * <p>
+     * Off by default, and the default is the honest one for a cash account: a sell of lots nobody owns
+     * is refused, as a broker would refuse it. Turned on, a short sale is modelled as the account's
+     * position going below zero and the money from it arriving as cash, which is all the mechanics a
+     * measurement of a short-lived short needs - and none of the rest of one. There is no margin
+     * requirement, no borrow fee, no recall of the borrowed lots and no check that the instrument can be
+     * borrowed at all; a strategy left short for months here pays nothing for the privilege, while a real
+     * one would. Short holds of an hour or so are where this stays close enough to the truth to be worth
+     * measuring, and the borrow of an hour is a fraction of a basis point.
+     */
+    public MockOrderService setShortsAllowed(boolean shortsAllowed) {
+        this.shortsAllowed = shortsAllowed;
+
+        if (pendingOrderHandler instanceof SimulatedPendingOrderHandler simulated) {
+            simulated.setShortsAllowed(shortsAllowed);
+        }
+
         return this;
     }
 
@@ -425,6 +448,10 @@ public class MockOrderService implements OrderService {
     }
 
     protected void checkEnoughOfPositionToSell(Order order) throws AbstractException {
+        if (shortsAllowed) {
+            return;
+        }
+
         Position position = operationsService.getPositionByInstrumentId(
             order.getAccountId(),
             order.getInstrument().getUid()

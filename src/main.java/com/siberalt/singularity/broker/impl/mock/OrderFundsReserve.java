@@ -29,6 +29,8 @@ public class OrderFundsReserve {
     private final OrderExecutor orderExecutor;
     private final OrderPriceModel priceModel;
 
+    private boolean shortsAllowed;
+
     public OrderFundsReserve(
         MockOperationsService operationsService,
         OrderExecutor orderExecutor,
@@ -56,6 +58,13 @@ public class OrderFundsReserve {
         }
 
         return holdLots(order, lots, orderEvent);
+    }
+
+    /** Whether a sell may exceed the position - see {@link MockOrderService#setShortsAllowed}. */
+    public OrderFundsReserve setShortsAllowed(boolean shortsAllowed) {
+        this.shortsAllowed = shortsAllowed;
+
+        return this;
     }
 
     public void release(OrderEvent orderEvent) throws AbstractException {
@@ -142,6 +151,12 @@ public class OrderFundsReserve {
      */
     private boolean holdLots(Order order, long lots, OrderEvent orderEvent) throws AbstractException {
         long reservedLots = lots * order.getInstrument().getLot();
+
+        if (shortsAllowed) {
+            // Nothing to set aside: the lots being sold are not the account's, and what the sale has to
+            // be covered by - margin - is not modelled at all. See MockOrderService#setShortsAllowed.
+            return true;
+        }
 
         if (freeLots(order) < reservedLots) {
             return false;

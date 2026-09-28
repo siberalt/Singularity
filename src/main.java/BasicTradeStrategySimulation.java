@@ -68,7 +68,7 @@ public class BasicTradeStrategySimulation {
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
         Instant startTime = Instant.parse("2023-03-25T00:00:00Z");
-        Instant endTime = Instant.parse("2023-04-18T00:00:00Z");
+        Instant endTime = Instant.parse("2023-10-18T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
@@ -208,9 +208,9 @@ public class BasicTradeStrategySimulation {
             new WindowUpsideCalculator(
                 //new PriceChangeUpsideCalculator(10, 3.5, 0.5),
                 new EntryExitUpsideCalculator(
-                    new PriceChangeUpsideCalculator(30, 2, 100),
-                    new PriceChangeUpsideCalculator(10, 100, 2.5)
-                ),
+                    new PriceChangeUpsideCalculator(20, 4, 100),
+                    new PriceChangeUpsideCalculator(10, 100, 2.4)
+                ).setMaxWaitBars(60*18),
                 100
             ),
 //            new WindowUpsideCalculator(
