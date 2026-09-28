@@ -36,7 +36,7 @@ public class TimeSpendCalculator {
             "24:07", // Jun
             "18:02", // Jul
             "29:38", // Aug
-            "59:49", // Sep
+            "69:55", // Sep
         };
 
         Duration total = calculateTimeSpend(spendsPerMonth);

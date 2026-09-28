@@ -41,7 +41,9 @@ import java.util.Set;
  *       under added 0.09 ATR per signal and a whole ATR 0.14, with fills taken only in minutes that
  *       closed under the limit. In 2021, when the bounces came at once, it lost to the open instead:
  *       a limit misses the signals that turn straight up.</li>
- *   <li>The exit is at the market, {@code holdBars} bars after the signal bar.</li>
+ *   <li>The exit is at the market, {@code holdBars} bars after the signal bar - or after the bar the
+ *       order filled in, if {@link #setHoldFromFill asked for}, which is how the holding time was
+ *       measured.</li>
  * </ul>
  * One trade at a time: a new signal is not taken while an order works or a position is held.
  * <p>
@@ -72,6 +74,7 @@ public class RsiLimitEntryStrategy implements Strategy {
     private boolean entryAtMarket;
     private int orderBars = 3;
     private int holdBars = 5;
+    private boolean holdFromFill;
     private Duration warmup = Duration.ofDays(60);
 
     private Subscription subscription;
@@ -101,6 +104,8 @@ public class RsiLimitEntryStrategy implements Strategy {
     private Instant signalTime;
     // Bars closed since the signal bar; negative while no trade is on.
     private int barsSinceSignal = -1;
+    // Bars closed since the one the fill happened in, counting it as zero; negative while nothing is held.
+    private int barsSinceFill = -1;
 
     public RsiLimitEntryStrategy(
         EventSubscriptionBroker broker,
@@ -249,6 +254,21 @@ public class RsiLimitEntryStrategy implements Strategy {
         return this;
     }
 
+    /**
+     * Whether the holding time is counted from the bar the order filled in rather than from the signal
+     * bar.
+     * <p>
+     * It matters more than it sounds. The order works for {@code orderBars} bars, so a fill on the last of
+     * them leaves only {@code holdBars - orderBars} bars of holding - two of five, with the defaults - and
+     * the later the fill the shorter the trade, which is the wrong way round: a fill that took three bars
+     * to happen is one where the price kept falling, and that is the trade most in need of its full time.
+     * Counted from the fill, every trade gets the same bars the measurement gave it.
+     */
+    public RsiLimitEntryStrategy setHoldFromFill(boolean holdFromFill) {
+        this.holdFromFill = holdFromFill;
+        return this;
+    }
+
     /** How much history before the first minute is read to settle RSI and ATR. */
     public RsiLimitEntryStrategy setWarmup(Duration warmup) {
         this.warmup = warmup;
@@ -381,7 +401,13 @@ public class RsiLimitEntryStrategy implements Strategy {
             // The bounce is over as soon as the market calls this instrument dear again.
             boolean recovered = exitRsi > 0 && owned > 0 && !Double.isNaN(rsi) && rsi >= exitRsi;
 
-            if (barsSinceSignal >= holdBars || recovered) {
+            if (owned > 0) {
+                barsSinceFill = barsSinceFill < 0 ? 0 : barsSinceFill + 1;
+            }
+
+            boolean served = holdFromFill ? barsSinceFill >= holdBars : barsSinceSignal >= holdBars;
+
+            if (served || recovered) {
                 leave();
             } else if (owned == 0) {
                 if (exitOrderId != null) {
@@ -390,9 +416,11 @@ public class RsiLimitEntryStrategy implements Strategy {
                     orderId = null;
                     exitOrderId = null;
                     barsSinceSignal = -1;
+                    barsSinceFill = -1;
                 } else if (barsSinceSignal >= orderBars) {
                     // The order ran out without a fill: nothing to hold, so the next signal may come.
                     barsSinceSignal = -1;
+                    barsSinceFill = -1;
                 }
             } else if (exitOrderId == null && entryPrices != null && free > 0) {
                 placeExitLimit(free);
@@ -418,6 +446,7 @@ public class RsiLimitEntryStrategy implements Strategy {
         signalAtr = atr.value();
         signalTime = bar.getTime();
         barsSinceSignal = 0;
+        barsSinceFill = -1;
     }
 
     /** Ends the trade: nothing of it is left working, and whatever it holds is sold at the market. */
@@ -435,6 +464,7 @@ public class RsiLimitEntryStrategy implements Strategy {
         }
 
         barsSinceSignal = -1;
+        barsSinceFill = -1;
     }
 
     /** The target the position is offered at: what it cost plus the offset, in the signal bar's ATR. */

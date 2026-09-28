@@ -62,7 +62,8 @@ public class RsiLimitEntrySimulation {
         String dbPath = ConfigFacade.of(configuration).getAsString("dbPath");
         SqliteCandleRepository candles = new SqliteCandleRepositoryFactory().create(dbPath);
         SqliteInstrumentRepository instruments = new SqliteInstrumentRepository(DriverManager.getConnection(dbPath));
-        // Named arguments: entry=market|<atr>, rsi=20, hold=5, exit=market|<atr>, fee=0.0005, ids=4,5,7
+        // Named arguments: entry=market or an ATR offset, rsi=20, hold=5, holdFrom=signal or fill,
+        // exit=market or an ATR offset, fee=0.0005, ids=4,5,7
         Map<String, String> options = new HashMap<>();
 
         for (String argument : args) {
@@ -83,6 +84,10 @@ public class RsiLimitEntrySimulation {
         double oversold = Double.parseDouble(options.getOrDefault("rsi", "20"));
         double exitRsi = Double.parseDouble(options.getOrDefault("exitRsi", "0"));
         int hold = Integer.parseInt(options.getOrDefault("hold", "5"));
+        // Whether those bars are counted from the fill, as the measurement did, or from the signal bar.
+        boolean holdFromFill = options.getOrDefault("holdFrom", "signal").equals("fill");
+        // What a minute has to show before the parked limit counts as filled; the strictest by default.
+        LimitTrigger trigger = LimitTrigger.valueOf(options.getOrDefault("fill", "CLOSE_THROUGH").toUpperCase(Locale.ROOT));
         double commission = Double.parseDouble(options.getOrDefault("fee", String.valueOf(COMMISSION)));
 
         // How many median hourly volumes the signal hour has to trade; zero asks nothing.
@@ -94,6 +99,9 @@ public class RsiLimitEntrySimulation {
             atMarket ? "at the market" : String.format(Locale.ROOT, "limit %.2f ATR under", offset),
             exitOffset == 0 ? "at the market" : String.format(Locale.ROOT, "limit %.2f ATR over the fill", exitOffset),
             hold, 100 * commission);
+
+        System.out.printf(Locale.ROOT, "  the hold is counted from %s, a limit fills on %s%n",
+            holdFromFill ? "the fill" : "the signal bar", trigger);
 
         if (exitRsi > 0) {
             System.out.printf(Locale.ROOT, "  and out as soon as an hour closes with RSI >= %.0f%n", exitRsi);
@@ -129,7 +137,7 @@ public class RsiLimitEntrySimulation {
             // hours of minutes on the thinner names, and under a participation limit one trade would
             // still be filling when the next began.
             broker.getOrderService().getLiquidityModel().setInfiniteLiquidity(true);
-            broker.getPendingOrderHandler().setLimitTrigger(LimitTrigger.CLOSE_THROUGH);
+            broker.getPendingOrderHandler().setLimitTrigger(trigger);
 
             StrategyResult result = new StrategyBacktester<EventMockBroker>(
                 (range, accountId, simulated, observer) -> {
@@ -140,6 +148,7 @@ public class RsiLimitEntrySimulation {
                         .setMinVolume(volume, 24)
                         .setInterval(interval)
                         .setHoldBars(hold)
+                        .setHoldFromFill(holdFromFill)
                         .setExitRsi(exitRsi);
 
                     if (exitOffset > 0) {

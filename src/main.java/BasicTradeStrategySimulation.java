@@ -67,7 +67,7 @@ public class BasicTradeStrategySimulation {
     private final static String INSTRUMENT_ID = "55371b1f-8f7c-4c12-9d93-386fae5ec12a"; // Сбербанк
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
-        Instant startTime = Instant.parse("2023-03-15T00:00:00Z");
+        Instant startTime = Instant.parse("2023-03-25T00:00:00Z");
         Instant endTime = Instant.parse("2023-04-18T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
@@ -206,7 +206,11 @@ public class BasicTradeStrategySimulation {
             INSTRUMENT_ID,
             accountId,
             new WindowUpsideCalculator(
-                new PriceChangeUpsideCalculator(5, 6,   2),
+                //new PriceChangeUpsideCalculator(10, 3.5, 0.5),
+                new EntryExitUpsideCalculator(
+                    new PriceChangeUpsideCalculator(30, 2, 100),
+                    new PriceChangeUpsideCalculator(10, 100, 2.5)
+                ),
                 100
             ),
 //            new WindowUpsideCalculator(
