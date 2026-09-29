@@ -33,6 +33,9 @@ import java.util.List;
  * often, while requiring the significant part to end on its extreme fires less. What the pair of them is
  * worth against the plain reading between two candles is a matter for measurement, not for argument.
  * <p>
+ * How long that part has to be is {@link #setMinBarsSinceExtreme asked separately}, because a move of the
+ * whole threshold inside one candle is a different thing from one that took twenty.
+ * <p>
  * The signal is the direction of the move itself: {@code +1} when the price has risen past the rise
  * threshold, {@code -1} when it has fallen past the fall threshold, and {@link Upside#NEUTRAL} in between.
  * That is the move, not a bet on it. What was measured here is that such moves come back rather than
@@ -55,6 +58,8 @@ public class PriceChangeUpsideCalculator implements UpsideCalculator {
     private final double fallPercent;
 
     private PriceExtractor priceExtractor = Candle::close;
+
+    private int minBarsSinceExtreme = 1;
 
     /**
      * @param period      how many candles back the move is measured over
@@ -83,6 +88,32 @@ public class PriceChangeUpsideCalculator implements UpsideCalculator {
     /** Reads the move off something other than the close - the highs, say. */
     public PriceChangeUpsideCalculator setPriceExtractor(PriceExtractor priceExtractor) {
         this.priceExtractor = priceExtractor;
+
+        return this;
+    }
+
+    /**
+     * How many candles there have to be between the extreme the move is measured from and the end of the
+     * window.
+     * <p>
+     * One by default, which asks nothing: the low may be the candle immediately before the last, and then
+     * the whole move is a single bar. That is worth being able to refuse. A move the size of the threshold
+     * printed in one minute is either a real dislocation or a print nobody could have traded at, and the
+     * two are indistinguishable here - while a move that took a dozen minutes to build was made of trades
+     * at every price along the way. Asking for a distance is also asking for a move with a shape rather
+     * than a jump.
+     * <p>
+     * The distance is counted to the <i>last</i> candle at the extreme price, which is the shortest reading
+     * of it, and may be as long as {@code period} - which demands that the extreme be the window's first
+     * candle and makes the reading the plain one between its ends.
+     */
+    public PriceChangeUpsideCalculator setMinBarsSinceExtreme(int minBarsSinceExtreme) {
+        if (minBarsSinceExtreme < 1 || minBarsSinceExtreme > period) {
+            throw new IllegalArgumentException("The extreme has to lie between one candle back and the "
+                + "start of the window, got " + minBarsSinceExtreme + " for a window of " + period);
+        }
+
+        this.minBarsSinceExtreme = minBarsSinceExtreme;
 
         return this;
     }
@@ -133,6 +164,7 @@ public class PriceChangeUpsideCalculator implements UpsideCalculator {
      */
     private double movedFrom(List<Candle> lastCandles, int last, double now, boolean rise) {
         double extreme = rise ? Double.MAX_VALUE : 0;
+        int extremeAt = last;
         // The furthest the price went the other way within the part that matters, and the same over
         // everything walked so far - which is that part as of the candle before the one being looked at.
         double beyond = rise ? 0 : Double.MAX_VALUE;
@@ -147,10 +179,15 @@ public class PriceChangeUpsideCalculator implements UpsideCalculator {
 
             if (rise ? price < extreme : price > extreme) {
                 extreme = price;
+                extremeAt = at;
                 beyond = beyondSoFar;
             }
 
             beyondSoFar = rise ? Math.max(beyondSoFar, price) : Math.min(beyondSoFar, price);
+        }
+
+        if (last - extremeAt < minBarsSinceExtreme) {
+            return Double.NaN;
         }
 
         if (rise ? beyond > now : beyond < now) {

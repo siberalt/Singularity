@@ -183,6 +183,62 @@ class PriceChangeUpsideCalculatorTest {
             .calculate(closes(100, 98, 108, 104, 102)));
     }
 
+    /** A rise the size of the threshold printed in one candle is refused once a distance is asked for. */
+    @Test
+    void should_ReturnNeutral_WhenTheExtremeIsCloserThanAsked() {
+        var candles = closes(100, 100, 100, 94, 106);
+
+        assertEquals(RISE, new PriceChangeUpsideCalculator(4, 5).calculate(candles));
+        assertEquals(Upside.NEUTRAL,
+            new PriceChangeUpsideCalculator(4, 5).setMinBarsSinceExtreme(2).calculate(candles));
+    }
+
+    @Test
+    void should_ReturnRise_WhenTheExtremeIsAsFarBackAsAsked() {
+        // The low is two candles before the end, and the 100s before it stand below that end.
+        var candles = closes(100, 100, 94, 98, 106);
+
+        assertEquals(RISE,
+            new PriceChangeUpsideCalculator(4, 5).setMinBarsSinceExtreme(2).calculate(candles));
+        assertEquals(Upside.NEUTRAL,
+            new PriceChangeUpsideCalculator(4, 5).setMinBarsSinceExtreme(3).calculate(candles));
+    }
+
+    /** The distance is counted to the last candle at the extreme price, not to the first. */
+    @Test
+    void should_CountTheDistance_FromTheLastCandleAtTheExtreme() {
+        var candles = closes(94, 94, 94, 94, 106);
+
+        assertEquals(RISE,
+            new PriceChangeUpsideCalculator(4, 5).setMinBarsSinceExtreme(1).calculate(candles));
+        assertEquals(Upside.NEUTRAL,
+            new PriceChangeUpsideCalculator(4, 5).setMinBarsSinceExtreme(2).calculate(candles));
+    }
+
+    @Test
+    void should_AskTheSameDistance_OfAFall() {
+        var candles = closes(100, 100, 100, 106, 94);
+
+        assertEquals(FALL, new PriceChangeUpsideCalculator(4, 5).calculate(candles));
+        assertEquals(Upside.NEUTRAL,
+            new PriceChangeUpsideCalculator(4, 5).setMinBarsSinceExtreme(2).calculate(candles));
+    }
+
+    @Test
+    void should_ReturnItself_FromSetMinBarsSinceExtreme() {
+        var calculator = new PriceChangeUpsideCalculator(10, 5);
+
+        assertEquals(calculator, calculator.setMinBarsSinceExtreme(3));
+    }
+
+    @Test
+    void should_Throw_WhenTheDistanceDoesNotFitTheWindow() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new PriceChangeUpsideCalculator(10, 5).setMinBarsSinceExtreme(0));
+        assertThrows(IllegalArgumentException.class,
+            () -> new PriceChangeUpsideCalculator(10, 5).setMinBarsSinceExtreme(11));
+    }
+
     @Test
     void should_ReturnNeutral_WhenNotEnoughCandles() {
         var calculator = new PriceChangeUpsideCalculator(3, 5);

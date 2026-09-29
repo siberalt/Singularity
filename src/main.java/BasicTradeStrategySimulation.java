@@ -210,7 +210,7 @@ public class BasicTradeStrategySimulation {
                 new EntryExitUpsideCalculator(
                     new PriceChangeUpsideCalculator(20, 4, 100),
                     new PriceChangeUpsideCalculator(10, 100, 2.4)
-                ).setMaxWaitBars(60*18),
+                ).setMaxWaitBars(30),
                 100
             ),
 //            new WindowUpsideCalculator(
