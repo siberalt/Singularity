@@ -28,10 +28,33 @@ function start() {
         });
 }
 
+/**
+ * Наименьшее и наибольшее одним проходом.
+ *
+ * Не через Math.min(...price): раскрытие массива в аргументы кладёт их на стек вызова, и на сотнях тысяч
+ * точек это RangeError вместо графика. Кадров пока меньше, но ряд тот же, минутный.
+ */
+function extremesOf(values) {
+    let min = Infinity;
+    let max = -Infinity;
+
+    for (const value of values) {
+        if (value < min) {
+            min = value;
+        }
+
+        if (value > max) {
+            max = value;
+        }
+    }
+
+    return {min: min, max: max};
+}
+
 function startStepper(frames) {
     model = frames;
     lowAt = new Map(model['lows']);
-    scale = {min: Math.min(...model['price']), max: Math.max(...model['price'])};
+    scale = extremesOf(model['price']);
     chart = new google.visualization.ComboChart(document.getElementById('price_chart'));
 
     if (model['rsi']) {

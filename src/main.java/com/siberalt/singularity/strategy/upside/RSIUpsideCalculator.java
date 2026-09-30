@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.upside;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.strategy.indicator.IncrementalRsi;
 
 import java.util.List;
 
@@ -11,7 +12,7 @@ import java.util.List;
  * Сила (strength) = abs(RSI - 50) / 50   (ограничена 1)
  * </p>
  * <p>
- * RSI вычисляется по закрытию свечей за указанный период.
+ * RSI вычисляется по закрытию свечей - {@link IncrementalRsi}, один расчёт для всего проекта.
  * Для первой свечи (недостаточно данных) возвращается Upside.NEUTRAL.
  * </p>
  */
@@ -55,13 +56,8 @@ public class RSIUpsideCalculator implements UpsideCalculator {
             return Upside.NEUTRAL;
         }
 
-        // Извлекаем цены закрытия
-        double[] closes = new double[lastCandles.size()];
-        for (int i = 0; i < lastCandles.size(); i++) {
-            closes[i] = lastCandles.get(i).getCloseAsDouble();
-        }
+        double rsi = IncrementalRsi.of(lastCandles, period);
 
-        double rsi = calculateRsi(closes);
         if (Double.isNaN(rsi)) {
             return Upside.NEUTRAL;
         }
@@ -80,42 +76,5 @@ public class RSIUpsideCalculator implements UpsideCalculator {
         }
 
         return new Upside(signal, strength);
-    }
-
-    /**
-     * Вычисляет значение RSI по массиву цен закрытия.
-     * Используется классический метод Уайлдера (экспоненциальное сглаживание).
-     */
-    private double calculateRsi(double[] closes) {
-        int n = closes.length;
-        double avgGain = 0.0;
-        double avgLoss = 0.0;
-
-        // Первый шаг: сумма приростов и убытков за period
-        for (int i = 1; i <= period; i++) {
-            double change = closes[i] - closes[i - 1];
-            if (change > 0) {
-                avgGain += change;
-            } else {
-                avgLoss -= change; // change отрицательный, поэтому вычитаем
-            }
-        }
-        avgGain /= period;
-        avgLoss /= period;
-
-        // Сглаживание для последующих свечей
-        for (int i = period + 1; i < n; i++) {
-            double change = closes[i] - closes[i - 1];
-            double gain = Math.max(change, 0);
-            double loss = Math.max(-change, 0);
-            avgGain = (avgGain * (period - 1) + gain) / period;
-            avgLoss = (avgLoss * (period - 1) + loss) / period;
-        }
-
-        if (avgLoss == 0) {
-            return avgGain == 0 ? 50.0 : 100.0;
-        }
-        double rs = avgGain / avgLoss;
-        return 100.0 - (100.0 / (1.0 + rs));
     }
 }

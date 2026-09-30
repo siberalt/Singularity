@@ -32,6 +32,7 @@ import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.LastExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
+import com.siberalt.singularity.strategy.indicator.IncrementalRsi;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetector;
@@ -199,7 +200,10 @@ public class BasicTradeStrategySimulation {
         ExtremeLocator maximaBaseLocator,
         ExtremeLocator minimaBaseLocator
     ) {
-        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(10);
+        FilterUpsideCalculator filterUpsideCalculator = new FilterUpsideCalculator(
+            new PriceChangeUpsideCalculator(30, 7, 100),
+            lastCandles ->  true // IncrementalRsi.of(lastCandles, 12) <= 70
+        );
 
         BasicTradeStrategy strategy = new BasicTradeStrategy(
             broker,
@@ -208,8 +212,8 @@ public class BasicTradeStrategySimulation {
             new WindowUpsideCalculator(
                 //new PriceChangeUpsideCalculator(10, 3.5, 0.5),
                 new EntryExitUpsideCalculator(
-                    new PriceChangeUpsideCalculator(20, 4, 100),
-                    new PriceChangeUpsideCalculator(10, 100, 2.4)
+                    filterUpsideCalculator,
+                    new PriceChangeUpsideCalculator(10, 100, 4)
                 ).setMaxWaitBars(30),
                 100
             ),

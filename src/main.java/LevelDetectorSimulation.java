@@ -9,6 +9,7 @@ import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.ProminentExtremeLocator;
+import com.siberalt.singularity.strategy.indicator.IncrementalRsi;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.ConsensusLineLevelDetector;
@@ -280,25 +281,13 @@ public class LevelDetectorSimulation {
      * instruments it was not chosen on, and the levels of a frame are worth looking at beside it.
      */
     private static double[] rsiOf(List<Candle> bars) {
-        double[] rsi = new double[bars.size()];
-        double gain = 0;
-        double loss = 0;
+        double[] rsi = IncrementalRsi.seriesOf(bars, RSI_PERIOD);
 
-        Arrays.fill(rsi, 50);
-
-        for (int bar = 1; bar < bars.size(); bar++) {
-            double change = bars.get(bar).getCloseAsDouble() - bars.get(bar - 1).getCloseAsDouble();
-
-            if (bar <= RSI_PERIOD) {
-                gain += Math.max(change, 0) / RSI_PERIOD;
-                loss += Math.max(-change, 0) / RSI_PERIOD;
-            } else {
-                gain = (gain * (RSI_PERIOD - 1) + Math.max(change, 0)) / RSI_PERIOD;
-                loss = (loss * (RSI_PERIOD - 1) + Math.max(-change, 0)) / RSI_PERIOD;
-            }
-
-            if (bar >= RSI_PERIOD) {
-                rsi[bar] = loss == 0 ? (gain == 0 ? 50 : 100) : 100 - 100 / (1 + gain / loss);
+        // The page draws a line, and a line cannot start halfway: the bars before the indicator has
+        // settled are given the middle of the scale rather than a gap.
+        for (int bar = 0; bar < rsi.length; bar++) {
+            if (Double.isNaN(rsi[bar])) {
+                rsi[bar] = IncrementalRsi.BALANCED;
             }
         }
 

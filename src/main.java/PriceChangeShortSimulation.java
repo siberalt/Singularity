@@ -23,6 +23,7 @@ import com.siberalt.singularity.strategy.impl.quantity.TradeMoment;
 import com.siberalt.singularity.strategy.impl.quantity.TradeQuantity;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyBacktester;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyResult;
+import com.siberalt.singularity.strategy.upside.FilterUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.FixedSignalReverserUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.InvertedUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.PriceChangeUpsideCalculator;
@@ -32,6 +33,7 @@ import com.siberalt.singularity.strategy.upside.WindowUpsideCalculator;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.DriverManager;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -84,7 +86,7 @@ public class PriceChangeShortSimulation {
         String dbPath = ConfigFacade.of(configuration).getAsString("dbPath");
         SqliteCandleRepository candles = new SqliteCandleRepositoryFactory().create(dbPath);
         SqliteInstrumentRepository instruments = new SqliteInstrumentRepository(DriverManager.getConnection(dbPath));
-        // Named arguments: rise=10, span=60, hold=60, fee=0.0005, ids=4,5,7, from=..., to=...
+        // Named arguments: rise=10, span=60, hold=60, session=1, fee=0.0005, ids=4,5,7, from=..., to=...
         Map<String, String> options = new HashMap<>();
 
         for (String argument : args) {
@@ -101,10 +103,16 @@ public class PriceChangeShortSimulation {
         int span = Integer.parseInt(options.getOrDefault("span", "60"));
         int hold = Integer.parseInt(options.getOrDefault("hold", "60"));
         double commission = Double.parseDouble(options.getOrDefault("fee", String.valueOf(COMMISSION)));
+        // Whether windows that span a break in trading are refused, as the stand refused them.
+        boolean inSession = !options.getOrDefault("session", "0").equals("0");
 
         System.out.printf(Locale.ROOT,
             "%s .. %s: short a rise of %.1f%% measured from the low of %d candles, held %d, "
                 + "commission %.3f%% a side%n", from, to, rise, span, hold, 100 * commission);
+
+        if (inSession) {
+            System.out.println("  windows that span a break in trading are refused");
+        }
 
         RsiLimitEntrySimulation.Market market = RsiLimitEntrySimulation.Market.of(candles, INSTRUMENTS,
             from, to);
@@ -139,12 +147,22 @@ public class PriceChangeShortSimulation {
 
             StrategyResult result = new StrategyBacktester<EventMockBroker>(
                 (range, accountId, simulated, observer) -> {
+                    UpsideCalculator rises = new PriceChangeUpsideCalculator(span, rise, 100);
+
+                    if (inSession) {
+                        // The hygiene the stand did by hand: a window of span candles that took more than
+                        // half again as long in wall-clock minutes has a break in it, and a break is the
+                        // largest price change there is. The filter goes around what opens the trade, not
+                        // around the reverser that closes it - see FilterUpsideCalculator.
+                        rises = new FilterUpsideCalculator(rises, window -> window.size() > span
+                            && Duration.between(window.get(window.size() - 1 - span).getTime(),
+                            window.getLast().getTime()).toMinutes() <= 3L * span / 2);
+                    }
+
                     // The calculator says "it has risen" with +1; inverted that is -1, a sell, which is
                     // the side the reverser has to be told about - it reads the sign of the signal, not
                     // the direction of the price. Its own +1, hold bars later, buys the short back.
-                    UpsideCalculator sell = new InvertedUpsideCalculator(
-                        new PriceChangeUpsideCalculator(span, rise, 100)
-                    );
+                    UpsideCalculator sell = new InvertedUpsideCalculator(rises);
 
                     new BasicTradeStrategy(simulated, uid, accountId,
                         new WindowUpsideCalculator(

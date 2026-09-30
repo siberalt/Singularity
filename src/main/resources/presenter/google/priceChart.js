@@ -44,7 +44,12 @@ function start() {
             });
             render();
         })
-        .catch(() => {
+        .catch(error => {
+            // Пустая страница молча - худшее, что тут может быть: файлы лежат на месте, а причины не
+            // видно. Про отсутствующий файл уже сказано в load, всё остальное говорится здесь.
+            if (typeof error !== 'number') {
+                fail(error);
+            }
         });
 }
 
@@ -60,11 +65,21 @@ function load(file) {
 
 // Пустая страница ничего не говорит о том, чего не хватает, поэтому говорим прямо.
 function report(file, error) {
+    say('Не удалось прочитать ' + file + ': запустите симуляцию, она пишет этот файл. ');
+    console.error('Error loading JSON data:', error);
+}
+
+// То же для всего, что сломалось уже после чтения: сообщение на странице и разбор в консоли.
+function fail(error) {
+    say('Данные прочитаны, но график не построился: ' + error + '. ');
+    console.error('Error building the chart:', error);
+}
+
+function say(text) {
     const missing = document.getElementById('missing');
 
     missing.hidden = false;
-    missing.textContent += 'Не удалось прочитать ' + file + ': запустите симуляцию, она пишет этот файл. ';
-    console.error('Error loading JSON data:', error);
+    missing.textContent += text;
 }
 
 function prepare() {
@@ -73,8 +88,7 @@ function prepare() {
     labels = times.map(formatDate);
     stepMinutes = times.length > 1 ? Math.round((new Date(times[1]) - new Date(times[0])) / 60000) : 0;
     const prices = priceData['data'].map(row => row[1]).filter(price => price !== null && price !== undefined);
-    const low = Math.min(...prices);
-    const high = Math.max(...prices);
+    const [low, high] = extremesOf(prices);
     // Ось от нуля прижимает цену к верхней трети поля: у бумаги за 300 рублей колебания в десять
     // рублей на такой шкале не видно вовсе.
     const margin = (high - low) * 0.05;
@@ -84,6 +98,30 @@ function prepare() {
 
     span = times.length + ' точек по ' + stepMinutes + ' мин · ' + formatDate(times[0]) + ' → '
         + formatDate(times[times.length - 1]);
+}
+
+/**
+ * Наименьшее и наибольшее одним проходом.
+ *
+ * Не через Math.min(...prices): раскрытие массива в аргументы кладёт их на стек вызова, а у прогона
+ * симуляции точек несколько сотен тысяч - на 346 тысячах это RangeError, из-за которого страница
+ * оставалась пустой.
+ */
+function extremesOf(values) {
+    let low = Infinity;
+    let high = -Infinity;
+
+    for (const value of values) {
+        if (value < low) {
+            low = value;
+        }
+
+        if (value > high) {
+            high = value;
+        }
+    }
+
+    return [low, high];
 }
 
 /**

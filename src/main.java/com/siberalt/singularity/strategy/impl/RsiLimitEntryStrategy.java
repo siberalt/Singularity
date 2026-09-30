@@ -15,6 +15,7 @@ import com.siberalt.singularity.strategy.Strategy;
 import com.siberalt.singularity.strategy.market.position.EntryPrice;
 import com.siberalt.singularity.strategy.market.position.EntryPriceCalculator;
 import com.siberalt.singularity.strategy.observer.Observer;
+import com.siberalt.singularity.strategy.indicator.IncrementalRsi;
 import com.siberalt.singularity.strategy.volatility.IncrementalATR;
 
 import java.time.Duration;
@@ -83,10 +84,7 @@ public class RsiLimitEntryStrategy implements Strategy {
     private long currentBucket = Long.MIN_VALUE;
 
     private IncrementalATR atr;
-    private double previousClose = Double.NaN;
-    private double averageGain;
-    private double averageLoss;
-    private int changes;
+    private IncrementalRsi rsi;
 
     private EntryPriceCalculator entryPrices;
     private double exitOffset;
@@ -287,6 +285,7 @@ public class RsiLimitEntryStrategy implements Strategy {
 
         listened.add(instrumentId);
         atr = new IncrementalATR(atrPeriod);
+        rsi = new IncrementalRsi(rsiPeriod);
         subscription = broker.subscribe(new NewCandleSubscriptionSpec(listened), this::handleNewCandle);
     }
 
@@ -516,35 +515,6 @@ public class RsiLimitEntryStrategy implements Strategy {
             volumes.removeFirst();
         }
 
-
-        double close = bar.getCloseAsDouble();
-
-        if (!Double.isNaN(previousClose)) {
-            double change = close - previousClose;
-            double gain = Math.max(change, 0);
-            double loss = Math.max(-change, 0);
-
-            changes++;
-
-            if (changes <= rsiPeriod) {
-                averageGain += gain / rsiPeriod;
-                averageLoss += loss / rsiPeriod;
-            } else {
-                averageGain = (averageGain * (rsiPeriod - 1) + gain) / rsiPeriod;
-                averageLoss = (averageLoss * (rsiPeriod - 1) + loss) / rsiPeriod;
-            }
-        }
-
-        previousClose = close;
-
-        if (changes < rsiPeriod) {
-            return Double.NaN;
-        }
-
-        if (averageLoss == 0) {
-            return averageGain == 0 ? 50 : 100;
-        }
-
-        return 100 - 100 / (1 + averageGain / averageLoss);
+        return rsi.add(bar);
     }
 }
