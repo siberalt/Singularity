@@ -21,6 +21,7 @@ import com.siberalt.singularity.entity.operation.ReadOperationRepository;
 import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.presenter.google.PriceChart;
+import com.siberalt.singularity.presenter.google.RsiChart;
 import com.siberalt.singularity.presenter.google.VolumeChart;
 import com.siberalt.singularity.presenter.google.series.FunctionGroupSeriesProvider;
 import com.siberalt.singularity.presenter.google.series.OrderSeriesProvider;
@@ -65,11 +66,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class BasicTradeStrategySimulation {
-    private final static String INSTRUMENT_ID = "55371b1f-8f7c-4c12-9d93-386fae5ec12a"; // Сбербанк
+    private final static String INSTRUMENT_ID = "e6123145-9665-43e0-8413-cd61b8aa9b13"; // Сбербанк
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
         Instant startTime = Instant.parse("2023-03-25T00:00:00Z");
-        Instant endTime = Instant.parse("2023-10-18T00:00:00Z");
+        Instant endTime = Instant.parse("2023-08-18T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
@@ -322,11 +323,14 @@ public class BasicTradeStrategySimulation {
             "#CC8400"
         );
         priceChart.setStepInterval(1);
-        priceChart.setInterval(CandleInterval.MIN_1);
+        priceChart.setInterval(CandleInterval.MIN_5);
         priceChart.render(candles);
         VolumeChart volumeChart = new VolumeChart(1);
-        volumeChart.setInterval(CandleInterval.MIN_1);
+        volumeChart.setInterval(CandleInterval.MIN_5);
         volumeChart.render(candles);
+        RsiChart rsiChart = new RsiChart(1);
+        rsiChart.setInterval(CandleInterval.MIN_5);
+        rsiChart.render(candles);
         Toolkit.getDefaultToolkit().beep();
     }
 

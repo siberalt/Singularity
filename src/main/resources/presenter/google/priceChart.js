@@ -9,12 +9,13 @@ let priceData = null;
 let volumeData = null;
 let labels = null;
 let rsi = null;
+let rsiData = null;
 let stepMinutes = 0;
 let span = '';
 let resizing = null;
 let priceRange = null;
 
-const RSI_PERIOD = 14;
+
 const RSI_COLOUR = '#6a1b9a';
 // Те же уровни, что на странице кадров: перепроданность, на которой держится переживший сигнал.
 const RSI_OVERSOLD = 20;
@@ -30,10 +31,11 @@ const LEFT = 80;
 const RIGHT = 30;
 
 function start() {
-    Promise.all([load('PriceChart.json'), load('VolumeChart.json')])
-        .then(([price, volume]) => {
+    Promise.all([load('PriceChart.json'), load('VolumeChart.json'), load('RsiChart.json')])
+        .then(([price, volume, readings]) => {
             priceData = price;
             volumeData = volume;
+            rsiData = readings;
             prepare();
             document.getElementById('zoom').addEventListener('change', render);
             // Перерисовка трёх картинок в тридцать тысяч пикселей занимает секунды, а событий изменения
@@ -94,7 +96,15 @@ function prepare() {
     const margin = (high - low) * 0.05;
 
     priceRange = {min: low - margin, max: high + margin};
-    rsi = rsiOf(priceData['data'].map(row => row[1]), RSI_PERIOD);
+    // RSI приходит из RsiChart.json: его считает Java тем же IncrementalRsi, что и стратегии.
+    // Строки обоих файлов - одни и те же бары, и разъехаться они могут только если симуляция
+    // нарисовала графики с разным интервалом: тогда лучше сказать об этом, чем врать линией.
+    if (rsiData['data'].length !== priceData['data'].length) {
+        fail('в RsiChart.json ' + rsiData['data'].length + ' точек против ' + priceData['data'].length
+            + ' в PriceChart.json - графики построены с разным интервалом');
+    }
+
+    rsi = rsiData['data'].map(row => row[1]);
 
     span = times.length + ' точек по ' + stepMinutes + ' мин · ' + formatDate(times[0]) + ' → '
         + formatDate(times[times.length - 1]);
@@ -122,50 +132,6 @@ function extremesOf(values) {
     }
 
     return [low, high];
-}
-
-/**
- * RSI Уайлдера по точкам самого графика. Пропуски в цене переносятся вперёд: точка без сделки - это
- * отсутствие движения, а не движение к нулю.
- */
-function rsiOf(prices, period) {
-    const values = new Array(prices.length).fill(null);
-    let before = null;
-    let gain = 0;
-    let loss = 0;
-    let counted = 0;
-
-    for (let at = 0; at < prices.length; at++) {
-        const price = prices[at] === null || prices[at] === undefined ? before : prices[at];
-
-        if (price === null) {
-            continue;
-        }
-
-        if (before !== null) {
-            const change = price - before;
-            const up = Math.max(change, 0);
-            const down = Math.max(-change, 0);
-
-            counted++;
-
-            if (counted <= period) {
-                gain += up / period;
-                loss += down / period;
-            } else {
-                gain += (up - gain) / period;
-                loss += (down - loss) / period;
-            }
-
-            if (counted >= period) {
-                values[at] = loss === 0 ? 100 : 100 - 100 / (1 + gain / loss);
-            }
-        }
-
-        before = price;
-    }
-
-    return values;
 }
 
 function render() {
@@ -235,7 +201,7 @@ function drawRsi(width, everyLabel) {
     const table = new google.visualization.DataTable();
 
     table.addColumn('string', 'Время');
-    table.addColumn('number', 'RSI(' + RSI_PERIOD + ') по ' + stepMinutes + ' мин');
+    table.addColumn('number', labelOf(rsiData) + ' по ' + stepMinutes + ' мин');
     table.addColumn('number', 'перепроданность');
     table.addColumn('number', 'перекупленность');
     table.addRows(labels.map((label, at) => [label, rsi[at], RSI_OVERSOLD, RSI_OVERBOUGHT]));
@@ -266,4 +232,11 @@ function formatDate(time) {
     return new Date(time).toLocaleString('ru-RU', {
         day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
+}
+
+/** Имя ряда так, как его назвала Java: период RSI живёт там, а не здесь. */
+function labelOf(data) {
+    const columns = data['columns'];
+
+    return columns && columns.length > 1 && columns[1]['label'] ? columns[1]['label'] : 'RSI';
 }
