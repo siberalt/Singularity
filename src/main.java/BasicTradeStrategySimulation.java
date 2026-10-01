@@ -24,6 +24,7 @@ import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.RsiChart;
 import com.siberalt.singularity.presenter.google.VolumeChart;
 import com.siberalt.singularity.presenter.google.series.FunctionGroupSeriesProvider;
+import com.siberalt.singularity.presenter.google.series.FunctionSeriesProvider;
 import com.siberalt.singularity.presenter.google.series.OrderSeriesProvider;
 import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.shared.TimeRange;
@@ -34,6 +35,7 @@ import com.siberalt.singularity.strategy.extreme.LastExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.indicator.IncrementalRsi;
+import com.siberalt.singularity.strategy.indicator.Vwap;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetector;
@@ -66,11 +68,14 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class BasicTradeStrategySimulation {
-    private final static String INSTRUMENT_ID = "e6123145-9665-43e0-8413-cd61b8aa9b13"; // Сбербанк
+    private final static String INSTRUMENT_ID = "55371b1f-8f7c-4c12-9d93-386fae5ec12a"; // Сбербанк
+    private final static CandleInterval CANDLE_INTERVAL = CandleInterval.MIN_5; // Сбербанк
+    /** The VWAP line starts over every day (true) or runs from the first candle of the period (false). */
+    private final static boolean VWAP_RESET_DAILY = true;
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
         Instant startTime = Instant.parse("2023-03-25T00:00:00Z");
-        Instant endTime = Instant.parse("2023-08-18T00:00:00Z");
+        Instant endTime = Instant.parse("2023-12-18T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
@@ -299,6 +304,7 @@ public class BasicTradeStrategySimulation {
             Candle::getCloseAsDouble
         );
         priceChart.addSeriesProvider(orderSeriesProvider);
+        priceChart.addSeriesProvider(createVwapSeries(candles));
         List<List<Level<Double>>> selectedSupportLevels = levelPairsSnapshots.stream()
             .map(snapshot -> snapshot.levelPairs().stream().map(LevelPair::support).toList())
             .toList();
@@ -323,15 +329,46 @@ public class BasicTradeStrategySimulation {
             "#CC8400"
         );
         priceChart.setStepInterval(1);
-        priceChart.setInterval(CandleInterval.MIN_5);
+        priceChart.setInterval(CANDLE_INTERVAL);
         priceChart.render(candles);
         VolumeChart volumeChart = new VolumeChart(1);
-        volumeChart.setInterval(CandleInterval.MIN_5);
+        volumeChart.setInterval(CANDLE_INTERVAL);
         volumeChart.render(candles);
         RsiChart rsiChart = new RsiChart(1);
-        rsiChart.setInterval(CandleInterval.MIN_5);
+        rsiChart.setInterval(CANDLE_INTERVAL);
         rsiChart.render(candles);
         Toolkit.getDefaultToolkit().beep();
+    }
+
+    /**
+     * VWAP at every candle of the chart, from the first one or - with {@link #VWAP_RESET_DAILY} - from
+     * the start of each day. The chart addresses candles by their own index, not by their place in the
+     * list, so the function is keyed by that and read at the index of each bar's first candle: a bar
+     * shows the VWAP as it stood when the bar opened.
+     */
+    private static FunctionSeriesProvider createVwapSeries(List<Candle> candles) {
+        FunctionSeriesProvider vwapProvider = new FunctionSeriesProvider("VWAP").setColor("#FF00FF");
+
+        if (candles.size() < 2) {
+            return vwapProvider;
+        }
+
+        double[] vwap = Vwap.seriesOf(candles, Candle::getCloseAsDouble, VWAP_RESET_DAILY);
+        Map<Long, Double> byIndex = new HashMap<>();
+
+        for (int at = 0; at < candles.size(); at++) {
+            if (!Double.isNaN(vwap[at])) {
+                byIndex.put(candles.get(at).getIndex(), vwap[at]);
+            }
+        }
+
+        vwapProvider.addFunction(
+            candles.getFirst().getIndex(),
+            candles.getLast().getIndex(),
+            x -> byIndex.get(Math.round(x))
+        );
+
+        return vwapProvider;
     }
 
     private static LevelDetectorWindowTracker createLevelDetector(double multiplier, ExtremeLocator baseLocator) {

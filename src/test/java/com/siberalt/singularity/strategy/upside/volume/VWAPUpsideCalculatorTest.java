@@ -19,7 +19,7 @@ class VWAPUpsideCalculatorTest {
      * Вспомогательный метод для создания свечи
      */
     private Candle candle(double high, double low, double close, long volume) {
-        return Candle.of(TimePoint.NULL, volume, high, low, 0, close);
+        return Candle.of(TimePoint.NULL, volume, 0, high, low, close);
     }
 
     /**

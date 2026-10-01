@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.upside.volume;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.strategy.indicator.Vwap;
 import com.siberalt.singularity.strategy.upside.Upside;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 
@@ -8,49 +9,63 @@ import java.util.List;
 import java.util.function.Function;
 
 /**
- * Улучшенный VWAPCalculator, возвращающий нормализованный сигнал в диапазоне [-1, 1]
- * на основе статистического отклонения от VWAP (в сигмах).
+ * Калькулятор Upside, возвращающий нормализованный сигнал в диапазоне [-1, 1]
+ * на основе отклонения последней цены от VWAP.
+ * <p>
+ * Сигнал = tanh( (цена - VWAP) / VWAP / typicalDeviation ),
+ * сила (strength) = abs(цена - VWAP) / VWAP.
+ * </p>
+ * <p>
+ * VWAP считается в {@link Vwap}, один расчёт для всего проекта.
+ * Если свечей нет или объём нулевой, возвращается Upside.NEUTRAL.
+ * </p>
  */
 public class VWAPUpsideCalculator implements UpsideCalculator {
-    private Function<Candle, Double> priceExtractor = Candle::getCloseAsDouble;
+    /** Типичное относительное отклонение цены от VWAP: 0.1% - характерно для 1-минутного бара. */
+    public static final double DEFAULT_TYPICAL_DEVIATION = 0.001;
+
+    private final Function<Candle, Double> priceExtractor;
+    private final double typicalDeviation;
+
+    /**
+     * Конструктор с полной настройкой.
+     *
+     * @param priceExtractor   какую цену брать у свечи
+     * @param typicalDeviation относительное отклонение от VWAP, которому соответствует одна "сигма" (> 0)
+     */
+    public VWAPUpsideCalculator(Function<Candle, Double> priceExtractor, double typicalDeviation) {
+        if (!(typicalDeviation > 0)) {
+            throw new IllegalArgumentException("The typical deviation must be positive, got " + typicalDeviation);
+        }
+
+        this.priceExtractor = priceExtractor;
+        this.typicalDeviation = typicalDeviation;
+    }
 
     public VWAPUpsideCalculator(Function<Candle, Double> priceExtractor) {
-        this.priceExtractor = priceExtractor;
+        this(priceExtractor, DEFAULT_TYPICAL_DEVIATION);
+    }
+
+    public VWAPUpsideCalculator(double typicalDeviation) {
+        this(Candle::getCloseAsDouble, typicalDeviation);
     }
 
     public VWAPUpsideCalculator() {
+        this(Candle::getCloseAsDouble, DEFAULT_TYPICAL_DEVIATION);
     }
 
     @Override
     public Upside calculate(List<Candle> candles) {
-        if (candles == null || candles.isEmpty()) {
+        double vwap = Vwap.of(candles, priceExtractor);
+
+        if (Double.isNaN(vwap)) {
             return Upside.NEUTRAL;
         }
 
-        // 1. Рассчитываем VWAP
-        double totalValue = candles.stream().mapToDouble(t -> priceExtractor.apply(t) * t.volume()).sum();
-        double totalVolume = candles.stream().mapToDouble(Candle::volume).sum();
-
-        if (totalVolume == 0) {
-            return Upside.NEUTRAL;
-        }
-
-        double vwap = totalValue / totalVolume;
-        double lastPrice = priceExtractor.apply(candles.get(candles.size() - 1));
+        double lastPrice = priceExtractor.apply(candles.getLast());
         double priceDeviation = (lastPrice - vwap) / vwap; // относительное отклонение
 
-        // 2. Оценка волатильности (простая — среднее |отклонение| за последние N периодов)
-        // Предположим, что `candles` сгруппированы по барам (например, 1 мин), и мы храним историю
-        // Здесь упрощённый подход: используем только текущий бар, но можно расширить
-
-        // Пример: если у вас есть доступ к истории баров, собирайте исторические отклонения
-        // Пока используем фиксированную шкалу: типичное отклонение ~0.1% = 0.001
-        double typicalDeviation = 0.001; // 0.1% — характерно для 1-минутного бара
-
-        // 3. Нормализуем отклонение в "сигмы"
-        double normalizedSignal = priceDeviation / typicalDeviation;
-
-        // 4. Сжимаем через tanh для ограничения в [-1, 1]
-        return new Upside(Math.tanh(normalizedSignal), Math.abs(priceDeviation));
+        // Нормализуем отклонение в "сигмы" и сжимаем через tanh до [-1, 1]
+        return new Upside(Math.tanh(priceDeviation / typicalDeviation), Math.abs(priceDeviation));
     }
 }
