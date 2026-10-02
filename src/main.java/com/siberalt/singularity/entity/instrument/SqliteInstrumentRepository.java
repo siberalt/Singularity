@@ -48,6 +48,25 @@ public class SqliteInstrumentRepository implements InstrumentRepository, Instrum
         this.instruments = instruments;
     }
 
+    /** Под каким uid этого брокера бумага уже числится, если числится. */
+    private Optional<String> listedUnder(String brokerId, long instrumentId) {
+        String sql = """
+            SELECT broker_instrument_id FROM instrument_broker_listing
+            WHERE broker_id = ? AND instrument_id = ?
+            """;
+
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, brokerId);
+            statement.setLong(2, instrumentId);
+
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next() ? Optional.ofNullable(rows.getString(1)) : Optional.empty();
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Не удалось прочитать листинг бумаги " + instrumentId, e);
+        }
+    }
+
     @Override
     public OptionalLong idOf(String brokerInstrumentId) {
         if (brokerInstrumentId == null) {
@@ -109,12 +128,12 @@ public class SqliteInstrumentRepository implements InstrumentRepository, Instrum
             throw new IllegalArgumentException("Листинг заводится под uid конкретного брокера");
         }
 
-        long instrumentId = canonicalIdFor(instrument);
+        long instrumentId = canonicalIdFor(brokerId, instrument);
         String sql = """
             INSERT INTO instrument_broker_listing (instrument_id, broker_id, broker_instrument_id, lot, currency)
             VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(broker_id, broker_instrument_id)
-            DO UPDATE SET instrument_id = excluded.instrument_id, lot = excluded.lot, currency = excluded.currency
+            DO UPDATE SET instrument_id = excluded.instrument_id, lot = excluded.lot, currency = excluded.currency, broker_instrument_id = excluded.broker_instrument_id
             """;
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -131,10 +150,38 @@ public class SqliteInstrumentRepository implements InstrumentRepository, Instrum
         idsByBrokerUid.put(instrument.getUid(), instrumentId);
     }
 
-    private long canonicalIdFor(Instrument instrument) {
-        Optional<CanonicalInstrument> byIsin = instruments.findByIsin(instrument.getIsin());
-        OptionalLong known = byIsin.map(found -> OptionalLong.of(found.getId()))
-            .orElseGet(() -> idOf(instrument.getUid()));
+    /**
+     * Чья это бумага - по uid этого брокера, иначе по ISIN, иначе новая.
+     * <p>
+     * Порядок именно такой, и он важнее, чем выглядит. ISIN - идентификатор самой бумаги, и искать по нему
+     * правильно, но у таблицы листингов есть второе ограничение: {@code UNIQUE(broker_id, instrument_id)} -
+     * один листинг на брокера. Если спросить сперва ISIN, то бумага, пришедшая от брокера с <b>новым uid</b>
+     * при том же ISIN, приводит к вставке второго листинга той же бумаги, и база отвечает
+     * {@code SQLITE_CONSTRAINT_UNIQUE}, в котором не видно ни бумаги, ни причины. Поэтому uid спрашивается
+     * первым: найденный листинг обновится на месте.
+     * <p>
+     * Если же uid неизвестен, а ISIN уже занят бумагой с другим листингом этого брокера - решать нечего и
+     * угадывать нельзя. Это либо переоформленная бумага (и тогда её листинг надо перевести на новый uid
+     * осознанно, вместе со свечами, которые лежат под старым), либо другой инструмент с тем же ISIN -
+     * например другой класс паёв фонда, - и тогда делить с ним одну запись нельзя вовсе. Молча обновить
+     * uid значит переписать владельца уже накопленных свечей, поэтому здесь бросается осмысленная ошибка.
+     */
+    private long canonicalIdFor(String brokerId, Instrument instrument) {
+        OptionalLong byUid = idOf(instrument.getUid());
+        Optional<CanonicalInstrument> byIsin = byUid.isPresent()
+            ? Optional.empty()
+            : instruments.findByIsin(instrument.getIsin());
+
+        byIsin.ifPresent(found -> listedUnder(brokerId, found.getId()).ifPresent(uid -> {
+            throw new IllegalStateException("ISIN " + instrument.getIsin() + " уже принадлежит бумаге "
+                + found.getId() + " (" + found.getName() + "), а у неё листинг с другим uid: " + uid
+                + ", новый - " + instrument.getUid() + ". Если это та же бумага, переоформленная у брокера,"
+                + " переведите её листинг на новый uid вручную - свечи лежат под старым; если это другой"
+                + " инструмент с тем же ISIN, ему нужна своя запись в instrument.");
+        }));
+
+        OptionalLong known = byUid.isPresent() ? byUid
+            : byIsin.map(found -> OptionalLong.of(found.getId())).orElseGet(OptionalLong::empty);
 
         CanonicalInstrument canonical = new CanonicalInstrument()
             .setIsin(instrument.getIsin())

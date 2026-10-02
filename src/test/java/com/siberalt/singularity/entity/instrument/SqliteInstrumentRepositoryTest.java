@@ -157,6 +157,37 @@ class SqliteInstrumentRepositoryTest {
         assertThrows(IllegalArgumentException.class, () -> listings.save(null, share("X", UID, null, 1)));
     }
 
+    /**
+     * Тот же ISIN, но брокер вернул другой uid. Делить одну запись им нельзя: у таблицы листингов
+     * {@code UNIQUE(broker_id, instrument_id)}, и раньше это кончалось SQLITE_CONSTRAINT_UNIQUE, из
+     * которого не видно ни бумаги, ни причины. Теперь видно - и свечи, лежащие под старым uid, не меняют
+     * владельца молча.
+     */
+    @Test
+    void refusesToReuseAPaperWhoseListingAtThisBrokerHasAnotherUid() {
+        listings.save(TINKOFF, share("Крупнейшие компании РФ", UID, "RU000A101X76", 1));
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class, () ->
+            listings.save(TINKOFF, share("Денежный рынок", "8a6af80e-1db8-4264-944d-d70e4b715341",
+                "RU000A101X76", 1)));
+
+        assertTrue(refused.getMessage().contains("RU000A101X76"));
+        assertTrue(refused.getMessage().contains(UID));
+        assertEquals(1, instruments.getAll().size());
+        assertEquals(UID, listings.brokerInstrumentIdOf(TINKOFF,
+            listings.idOf(UID).orElseThrow()).orElseThrow());
+    }
+
+    /** А у другого брокера тот же ISIN по-прежнему заводит второй листинг той же бумаги. */
+    @Test
+    void stillSharesAPaperAcrossBrokersWhenTheUidIsNew() {
+        listings.save(TINKOFF, share("Сбербанк", UID, "RU0009029540", 10));
+        listings.save(OTHER_BROKER, share("Sberbank", "SBER", "RU0009029540", 1));
+
+        assertEquals(listings.idOf(UID).orElseThrow(), listings.idOf("SBER").orElseThrow());
+        assertEquals(1, instruments.getAll().size());
+    }
+
     private List<String> namesOf(Iterable<Instrument> listed) {
         List<String> names = new java.util.ArrayList<>();
 

@@ -339,7 +339,7 @@ public class BasicTradeStrategySimulation {
         volumeChart.setInterval(CANDLE_INTERVAL);
         volumeChart.render(candles);
         RsiChart rsiChart = new RsiChart(1);
-        rsiChart.setPeriod(60);
+        rsiChart.setPeriod(14);
         rsiChart.setInterval(CANDLE_INTERVAL);
         rsiChart.render(candles);
         Toolkit.getDefaultToolkit().beep();
