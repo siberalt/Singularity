@@ -24,6 +24,7 @@ import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.RsiChart;
 import com.siberalt.singularity.presenter.google.VolumeChart;
 import com.siberalt.singularity.presenter.google.series.FunctionGroupSeriesProvider;
+import com.siberalt.singularity.presenter.google.series.BarAxis;
 import com.siberalt.singularity.presenter.google.series.FunctionSeriesProvider;
 import com.siberalt.singularity.presenter.google.series.OrderSeriesProvider;
 import com.siberalt.singularity.service.ConfigFacade;
@@ -35,6 +36,7 @@ import com.siberalt.singularity.strategy.extreme.LastExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.indicator.IncrementalRsi;
+import com.siberalt.singularity.strategy.indicator.Sma;
 import com.siberalt.singularity.strategy.indicator.Vwap;
 import com.siberalt.singularity.strategy.level.Level;
 import com.siberalt.singularity.strategy.level.LevelDetector;
@@ -69,13 +71,13 @@ import java.util.stream.Collectors;
 
 public class BasicTradeStrategySimulation {
     private final static String INSTRUMENT_ID = "55371b1f-8f7c-4c12-9d93-386fae5ec12a"; // Сбербанк
-    private final static CandleInterval CANDLE_INTERVAL = CandleInterval.MIN_1; // Сбербанк
+    private final static CandleInterval CANDLE_INTERVAL = CandleInterval.MIN_30; // Сбербанк
     /** The VWAP line starts over every day (true) or runs from the first candle of the period (false). */
-    private final static boolean VWAP_RESET_DAILY = true;
+    private final static boolean VWAP_RESET_DAILY = false;
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
         Instant startTime = Instant.parse("2026-02-09T00:00:00Z");
-        Instant endTime = Instant.parse("2026-02-11T00:00:00Z");
+        Instant endTime = Instant.parse("2026-04-11T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
@@ -305,6 +307,8 @@ public class BasicTradeStrategySimulation {
         );
         priceChart.addSeriesProvider(orderSeriesProvider);
         priceChart.addSeriesProvider(createVwapSeries(candles));
+        priceChart.addSeriesProvider(createSmaSeries(candles, 50, "#FFA500"));
+        priceChart.addSeriesProvider(createSmaSeries(candles, 200, "#AAAAAA"));
         List<List<Level<Double>>> selectedSupportLevels = levelPairsSnapshots.stream()
             .map(snapshot -> snapshot.levelPairs().stream().map(LevelPair::support).toList())
             .toList();
@@ -347,28 +351,57 @@ public class BasicTradeStrategySimulation {
      * shows the VWAP as it stood when the bar opened.
      */
     private static FunctionSeriesProvider createVwapSeries(List<Candle> candles) {
-        FunctionSeriesProvider vwapProvider = new FunctionSeriesProvider("VWAP").setColor("#FF00FF");
+        return createLineSeries(
+            "VWAP",
+            "#FF00FF",
+            candles.stream().mapToLong(Candle::getIndex).toArray(),
+            Vwap.seriesOf(candles, Candle::getCloseAsDouble, VWAP_RESET_DAILY)
+        );
+    }
 
-        if (candles.size() < 2) {
-            return vwapProvider;
+    /**
+     * A simple moving average of the closes of the chart's own bars, so SMA(50) is fifty bars as drawn
+     * and not fifty minutes. Read at the index of each bar's first candle, which is where the chart
+     * looks.
+     */
+    private static FunctionSeriesProvider createSmaSeries(List<Candle> candles, int period, String color) {
+        BarAxis axis = BarAxis.of(candles, CANDLE_INTERVAL);
+        long[] indices = new long[axis.size()];
+
+        for (int row = 0; row < axis.size(); row++) {
+            indices[row] = axis.indexAt(row);
         }
 
-        double[] vwap = Vwap.seriesOf(candles, Candle::getCloseAsDouble, VWAP_RESET_DAILY);
+        return createLineSeries(
+            "SMA(" + period + ")",
+            color,
+            indices,
+            Sma.seriesOf(axis.bars(), period, Candle::getCloseAsDouble)
+        );
+    }
+
+    /**
+     * A line through {@code values}, one per index; a {@link Double#NaN} leaves a gap. The chart
+     * addresses candles by their own index, not by their place in a list, so the function is keyed by it.
+     */
+    private static FunctionSeriesProvider createLineSeries(String title, String color, long[] indices, double[] values) {
+        FunctionSeriesProvider provider = new FunctionSeriesProvider(title).setColor(color);
+
+        if (indices.length < 2) {
+            return provider;
+        }
+
         Map<Long, Double> byIndex = new HashMap<>();
 
-        for (int at = 0; at < candles.size(); at++) {
-            if (!Double.isNaN(vwap[at])) {
-                byIndex.put(candles.get(at).getIndex(), vwap[at]);
+        for (int at = 0; at < indices.length; at++) {
+            if (!Double.isNaN(values[at])) {
+                byIndex.put(indices[at], values[at]);
             }
         }
 
-        vwapProvider.addFunction(
-            candles.getFirst().getIndex(),
-            candles.getLast().getIndex(),
-            x -> byIndex.get(Math.round(x))
-        );
+        provider.addFunction(indices[0], indices[indices.length - 1], x -> byIndex.get(Math.round(x)));
 
-        return vwapProvider;
+        return provider;
     }
 
     private static LevelDetectorWindowTracker createLevelDetector(double multiplier, ExtremeLocator baseLocator) {
