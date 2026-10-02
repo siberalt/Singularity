@@ -70,14 +70,14 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class BasicTradeStrategySimulation {
-    private final static String INSTRUMENT_ID = "55371b1f-8f7c-4c12-9d93-386fae5ec12a"; // Сбербанк
+    private final static String INSTRUMENT_ID = "e6123145-9665-43e0-8413-cd61b8aa9b13"; // Сбербанк
     private final static CandleInterval CANDLE_INTERVAL = CandleInterval.MIN_30; // Сбербанк
     /** The VWAP line starts over every day (true) or runs from the first candle of the period (false). */
     private final static boolean VWAP_RESET_DAILY = false;
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
-        Instant startTime = Instant.parse("2026-02-09T00:00:00Z");
-        Instant endTime = Instant.parse("2026-04-11T00:00:00Z");
+        Instant startTime = Instant.parse("2025-02-09T00:00:00Z");
+        Instant endTime = Instant.parse("2026-12-11T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
@@ -339,6 +339,7 @@ public class BasicTradeStrategySimulation {
         volumeChart.setInterval(CANDLE_INTERVAL);
         volumeChart.render(candles);
         RsiChart rsiChart = new RsiChart(1);
+        rsiChart.setPeriod(60);
         rsiChart.setInterval(CANDLE_INTERVAL);
         rsiChart.render(candles);
         Toolkit.getDefaultToolkit().beep();
