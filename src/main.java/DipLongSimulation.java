@@ -14,13 +14,18 @@ import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
 import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.shared.TimeRange;
 import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
+import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
+import com.siberalt.singularity.strategy.impl.quantity.TradeCapacity;
+import com.siberalt.singularity.strategy.impl.quantity.TradeMoment;
+import com.siberalt.singularity.strategy.impl.quantity.TradeQuantity;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyBacktester;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyResult;
 import com.siberalt.singularity.strategy.upside.FilterUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.FixedSignalReverserUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.InvertedUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.PriceChangeUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.Upside;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 import com.siberalt.singularity.strategy.upside.WindowUpsideCalculator;
 
@@ -29,8 +34,11 @@ import java.nio.file.Paths;
 import java.sql.DriverManager;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -45,15 +53,18 @@ import java.util.Map;
  * bars. The depth grid found the return proportional to the fall and crossing the cost of a round trip
  * between three and four per cent; four is the shallowest depth with events in the hundreds.
  * <p>
- * Two parts of the measured rule are not here, and both are small:
- * <ul>
- *   <li><b>the stop at ten per cent</b> - the mock broker has no stop orders. On the stand it fired on one
- *   trade in a hundred and cost three tenths of a basis point, so its absence flatters the result by that
- *   much and leaves the worst trade unbounded;</li>
- *   <li><b>the size growing with how far the low sits under its neighbours</b>, capped at three times. The
- *   stand put that at about four basis points a trade over equal sizing; here every trade is the whole
- *   account, which is what the strategy's own sizing does.</li>
- * </ul>
+ * <b>The size growing with the depth of the low</b> is here, under {@code size}. The stand's weight is
+ * {@code 1 + how many per cent the close sits under the median of the pivot lows of the last 2400 printed
+ * minutes} - half a week - and a weight above one means nothing to an account that commits everything to
+ * every trade. So it is read as a share of the account instead: {@code size=depth} puts a base trade on a
+ * third of the balance and the deepest on all of it, capped at three times the base. That makes the
+ * account curve comparable only against the same capital deployed without the weighting, which is what
+ * {@code size=flat} runs - a third of the balance on every trade. {@code size=full} is the whole balance,
+ * as before, and all three are reported.
+ * <p>
+ * One part of the measured rule is not here: <b>the stop at ten per cent</b>, because the mock broker has
+ * no stop orders. On the stand it fired on one trade in a hundred and cost three tenths of a basis point,
+ * so its absence flatters the result by that much and leaves the worst trade unbounded.
  * The hygiene the stand applied by hand is available to the strategy through
  * {@link FilterUpsideCalculator}: with {@code session=1} a window of thirty candles that took more than
  * forty five minutes of wall clock is refused, because a window that long has a break in it. Both are run.
@@ -99,6 +110,9 @@ public class DipLongSimulation {
         int hold = Integer.parseInt(options.getOrDefault("hold", "60"));
         double commission = Double.parseDouble(options.getOrDefault("fee", String.valueOf(COMMISSION)));
         boolean inSession = !options.getOrDefault("session", "0").equals("0");
+        String size = options.getOrDefault("size", "full");
+        int lowWindow = Integer.parseInt(options.getOrDefault("low", "2400"));
+        double cap = Double.parseDouble(options.getOrDefault("cap", "3"));
 
         System.out.printf(Locale.ROOT,
             "%s .. %s: купить падение на %.1f%% от максимума %d свечей, держать %d, комиссия %.3f%% "
@@ -107,6 +121,13 @@ public class DipLongSimulation {
         if (inSession) {
             System.out.println("  окна, перепрыгнувшие перерыв в торгах, отвергаются");
         }
+
+        System.out.println(switch (size) {
+            case "depth" -> String.format(Locale.ROOT, "  размер позиции: от 1/%.0f счёта до всего счёта, "
+                + "пропорционально тому, насколько ниже медианы минимумов за %d баров", cap, lowWindow);
+            case "flat" -> String.format(Locale.ROOT, "  размер позиции: 1/%.0f счёта на каждую сделку", cap);
+            default -> "  размер позиции: весь счёт на каждую сделку";
+        });
 
         RsiLimitEntrySimulation.Market market = RsiLimitEntrySimulation.Market.of(candles, INSTRUMENTS,
             from, to);
@@ -150,17 +171,23 @@ public class DipLongSimulation {
                             window.getLast().getTime()).toMinutes() <= 3L * span / 2);
                     }
 
-                    new BasicTradeStrategy(simulated, uid, accountId,
-                        new WindowUpsideCalculator(
-                            FixedSignalReverserUpsideCalculator.ofRises(
-                                new InvertedUpsideCalculator(falls), hold, 1),
-                            2 * span
-                        ),
-                        candles)
-                        .setLookbackCandles(60 * 24)
+                    UpsideCalculator signals = new WindowUpsideCalculator(
+                        FixedSignalReverserUpsideCalculator.ofRises(
+                            new InvertedUpsideCalculator(falls), hold, 1),
+                        2 * span
+                    );
+                    // Outside the window calculator, which hands its delegate only 2 * span bars: the
+                    // weight needs half a week of them.
+                    UpsideCalculator sized = size.equals("depth")
+                        ? new DepthSizedUpsideCalculator(signals, lowWindow, cap)
+                        : signals;
+
+                    new BasicTradeStrategy(simulated, uid, accountId, sized, candles)
+                        .setLookbackCandles(Math.max(60 * 24, lowWindow + 2L * span))
                         .setBuyThreshold(0.9)
                         .setSellThreshold(-0.9)
                         .setStep(1)
+                        .setTradeQuantity(shareOf(size, cap))
                         .run(observer);
                 },
                 broker,
@@ -195,6 +222,142 @@ public class DipLongSimulation {
             .toList());
         row("окно через перерыв", all.stream().filter(Trade::overBreak).toList());
         row("в день отсечки", all.stream().filter(Trade::exDay).toList());
+
+        if (!DepthSizedUpsideCalculator.SHARES.isEmpty()) {
+            double[] sorted = DepthSizedUpsideCalculator.SHARES.stream()
+                .mapToDouble(Double::doubleValue)
+                .sorted()
+                .toArray();
+
+            System.out.printf(Locale.ROOT,
+                "%nдоля счёта на сделку: медиана %.0f%%, среднее %.0f%%, на пределе %.0f%% сделок%n",
+                100 * sorted[sorted.length / 2],
+                100 * Arrays.stream(sorted).average().orElse(0),
+                100.0 * Arrays.stream(sorted).filter(share -> share >= 0.999).count() / sorted.length);
+        }
+    }
+
+    /**
+     * How much of the account one buy commits. A sell always closes the whole position, whatever opened it.
+     * <p>
+     * {@code depth} reads the share off the signal's second channel, where
+     * {@link DepthSizedUpsideCalculator} wrote it; {@code flat} spends the same share on every trade, which
+     * is the control the weighted run has to beat; {@code full} is the default sizing - everything, every
+     * time.
+     */
+    static TradeQuantity shareOf(String size, double cap) {
+        return new TradeQuantity() {
+            @Override
+            public long toBuy(TradeMoment moment, TradeCapacity capacity) {
+                double share = switch (size) {
+                    case "depth" -> moment.upside().strength();
+                    case "flat" -> 1 / cap;
+                    default -> 1;
+                };
+
+                return (long) (capacity.totalLots() * Math.min(1, Math.max(0, share)));
+            }
+
+            @Override
+            public long toSell(TradeMoment moment, TradeCapacity capacity) {
+                return capacity.positionLots();
+            }
+        };
+    }
+
+    /**
+     * The rule's signal with the share of the account written into its second channel: the deeper the close
+     * sits under the median of the window's pivot lows, the larger the position.
+     * <p>
+     * The weight the stand measured is {@code 1 + per cent below that median}, which is a number above one
+     * and means nothing to an account with no leverage. Divided by its cap it becomes a share: at the cap
+     * the trade is the whole balance, without any depth it is one cap-th of it. Capping is not a detail -
+     * the per cent below the median has no upper bound, and one unusual signal would otherwise ask for a
+     * position the account cannot take.
+     * <p>
+     * Only a buy is touched. The closing signal keeps its own strength, because what closes a position is
+     * the position, not a share of the balance.
+     * <p>
+     * It keeps the long window itself and hands the delegate only the candles it was given. That is not a
+     * detail either: {@link BasicTradeStrategy} empties its list after every bar, so a calculator is given
+     * one candle at a time and whatever window it needs is a window it accumulated - which is what
+     * {@link WindowUpsideCalculator} is for. Wrapping that one in another of half a week would re-add two
+     * and a half thousand candles on every bar of every instrument, so the two windows are kept side by
+     * side instead of nested.
+     */
+    static class DepthSizedUpsideCalculator implements UpsideCalculator {
+        /**
+         * The share each buy asked for, over every instrument. Without it the weighted run cannot be
+         * compared with the one that commits everything: the whole point is earning the same on less.
+         */
+        static final List<Double> SHARES = Collections.synchronizedList(new ArrayList<>());
+
+        private static final int PIVOT = 2;
+
+        private final UpsideCalculator delegate;
+        private final int window;
+        private final double cap;
+        private final Deque<Candle> seen = new ArrayDeque<>();
+
+        DepthSizedUpsideCalculator(UpsideCalculator delegate, int window, double cap) {
+            this.delegate = delegate;
+            this.window = window;
+            this.cap = cap;
+        }
+
+        @Override
+        public Upside calculate(List<Candle> lastCandles) {
+            seen.addAll(lastCandles);
+
+            while (seen.size() > window + 1) {
+                seen.pollFirst();
+            }
+
+            Upside upside = delegate.calculate(lastCandles);
+
+            if (upside.signal() <= 0) {
+                return upside;
+            }
+
+            double share = Math.min(1, (1 + belowMedian(seen.stream().toList())) / cap);
+
+            SHARES.add(share);
+
+            return new Upside(upside.signal(), share);
+        }
+
+        /** How many per cent the last close sits under the median of the window's pivot lows, or zero. */
+        private double belowMedian(List<Candle> lastCandles) {
+            int last = lastCandles.size() - 1;
+
+            if (last < window) {
+                return 0;
+            }
+
+            double now = lastCandles.get(last).getCloseAsDouble();
+            List<Double> lows = new ArrayList<>();
+
+            for (int at = last - PIVOT; at >= last - window + PIVOT; at--) {
+                boolean low = true;
+
+                for (int step = 1; step <= PIVOT; step++) {
+                    low &= lastCandles.get(at).getLowAsDouble() < lastCandles.get(at - step).getLowAsDouble()
+                        && lastCandles.get(at).getLowAsDouble() < lastCandles.get(at + step).getLowAsDouble();
+                }
+
+                if (low) {
+                    lows.add(lastCandles.get(at).getLowAsDouble());
+                }
+            }
+
+            if (lows.size() < 4 || now <= 0) {
+                return 0;
+            }
+
+            double[] sorted = lows.stream().mapToDouble(Double::doubleValue).sorted().toArray();
+
+            return Math.max(0, 100 * (sorted[sorted.length / 2] / now - 1));
+        }
     }
 
     /** The mean excess and the error across instruments, which is the error the stand reports. */
