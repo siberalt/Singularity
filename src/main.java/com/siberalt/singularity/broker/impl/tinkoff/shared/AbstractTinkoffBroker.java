@@ -1,7 +1,7 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared;
 
 import com.siberalt.singularity.broker.contract.execution.EventSubscriptionBroker;
-import com.siberalt.singularity.broker.contract.service.instrument.InstrumentService;
+import com.siberalt.singularity.broker.contract.service.instrument.DividendInstrumentService;
 import com.siberalt.singularity.broker.contract.service.market.MarketDataService;
 import com.siberalt.singularity.broker.contract.service.operation.OperationsService;
 import com.siberalt.singularity.broker.contract.service.order.OrderService;
@@ -29,7 +29,7 @@ public abstract class AbstractTinkoffBroker implements EventSubscriptionBroker, 
     protected final MarketDataService marketDataService;
     protected final OperationsService operationsService;
     protected final UserService userService;
-    protected final InstrumentService instrumentService;
+    protected final DividendInstrumentService instrumentService;
     protected final SubscriptionManager subscriptionManager;
 
     protected AbstractTinkoffBroker(TinkoffServices services) {
@@ -68,7 +68,7 @@ public abstract class AbstractTinkoffBroker implements EventSubscriptionBroker, 
     }
 
     @Override
-    public InstrumentService getInstrumentService() {
+    public DividendInstrumentService getInstrumentService() {
         return instrumentService;
     }
 

@@ -1,6 +1,6 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared;
 
-import com.siberalt.singularity.broker.contract.service.instrument.InstrumentService;
+import com.siberalt.singularity.broker.contract.service.instrument.DividendInstrumentService;
 import com.siberalt.singularity.broker.contract.service.market.MarketDataService;
 import com.siberalt.singularity.broker.contract.service.operation.OperationsService;
 import com.siberalt.singularity.broker.contract.service.order.OrderService;
@@ -32,7 +32,7 @@ public class TinkoffServicesFactory {
     private TinkoffServiceFactory<MarketDataService> marketDataServiceFactory = new TinkoffMarketDataServiceFactory();
     private TinkoffServiceFactory<OperationsService> operationsServiceFactory = new TinkoffOperationsServiceFactory();
     private TinkoffServiceFactory<UserService> userServiceFactory = new TinkoffUserServiceFactory();
-    private TinkoffServiceFactory<InstrumentService> instrumentServiceFactory = new TinkoffInstrumentServiceFactory();
+    private TinkoffServiceFactory<DividendInstrumentService> instrumentServiceFactory = new TinkoffInstrumentServiceFactory();
     // Knows no instruments until told: live candles of unregistered instruments are dropped with an
     // error - see instrumentIds.
     private TinkoffServiceFactory<SubscriptionManager> subscriptionManagerFactory =
@@ -58,7 +58,7 @@ public class TinkoffServicesFactory {
         return this;
     }
 
-    public TinkoffServicesFactory instrumentServiceFactory(TinkoffServiceFactory<InstrumentService> factory) {
+    public TinkoffServicesFactory instrumentServiceFactory(TinkoffServiceFactory<DividendInstrumentService> factory) {
         this.instrumentServiceFactory = factory;
         return this;
     }

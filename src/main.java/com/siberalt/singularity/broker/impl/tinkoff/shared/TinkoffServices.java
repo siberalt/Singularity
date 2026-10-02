@@ -1,6 +1,6 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared;
 
-import com.siberalt.singularity.broker.contract.service.instrument.InstrumentService;
+import com.siberalt.singularity.broker.contract.service.instrument.DividendInstrumentService;
 import com.siberalt.singularity.broker.contract.service.market.MarketDataService;
 import com.siberalt.singularity.broker.contract.service.operation.OperationsService;
 import com.siberalt.singularity.broker.contract.service.order.OrderService;
@@ -21,7 +21,7 @@ public record TinkoffServices(
     MarketDataService marketDataService,
     OperationsService operationsService,
     UserService userService,
-    InstrumentService instrumentService,
+    DividendInstrumentService instrumentService,
     SubscriptionManager subscriptionManager
 ) {
 }

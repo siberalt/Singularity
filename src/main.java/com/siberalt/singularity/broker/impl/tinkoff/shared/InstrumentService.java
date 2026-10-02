@@ -1,13 +1,18 @@
 package com.siberalt.singularity.broker.impl.tinkoff.shared;
 
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
+import com.siberalt.singularity.broker.contract.service.instrument.DividendInstrumentService;
+import com.siberalt.singularity.broker.contract.service.instrument.request.GetDividendsRequest;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetRequest;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetTradableRequest;
+import com.siberalt.singularity.broker.contract.service.instrument.response.GetDividendsResponse;
 import com.siberalt.singularity.broker.contract.service.instrument.response.GetResponse;
 import com.siberalt.singularity.broker.contract.service.instrument.response.GetTradableResponse;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.exception.ExceptionConverter;
+import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.DividendTranslator;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.InstrumentTranslator;
 import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.ShareTranslator;
+import com.siberalt.singularity.broker.impl.tinkoff.shared.translation.TimestampTranslator;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import ru.tinkoff.piapi.contract.v1.FindInstrumentRequest;
 import ru.tinkoff.piapi.contract.v1.InstrumentIdType;
@@ -20,7 +25,7 @@ import ru.tinkoff.piapi.contract.v1.Share;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class InstrumentService implements com.siberalt.singularity.broker.contract.service.instrument.InstrumentService {
+public class InstrumentService implements DividendInstrumentService {
     protected InstrumentsServiceGrpc.InstrumentsServiceBlockingStub instrumentsService;
 
     public InstrumentService(InstrumentsServiceGrpc.InstrumentsServiceBlockingStub instrumentsService) {
@@ -74,5 +79,24 @@ public class InstrumentService implements com.siberalt.singularity.broker.contra
             .collect(Collectors.toList());
 
         return new GetTradableResponse().setInstruments(instruments);
+    }
+
+    @Override
+    public GetDividendsResponse getDividends(GetDividendsRequest request) throws AbstractException {
+        var dividendsResponse = ExceptionConverter.rethrowContractExceptionOnError(
+            () -> instrumentsService.getDividends(
+                ru.tinkoff.piapi.contract.v1.GetDividendsRequest.newBuilder()
+                    .setInstrumentId(request.getInstrumentUid())
+                    .setFrom(TimestampTranslator.toTinkoff(request.getFrom()))
+                    .setTo(TimestampTranslator.toTinkoff(request.getTo()))
+                    .build()
+            )
+        );
+
+        return new GetDividendsResponse().setDividends(
+            dividendsResponse.getDividendsList().stream()
+                .map(DividendTranslator::toContract)
+                .collect(Collectors.toList())
+        );
     }
 }
