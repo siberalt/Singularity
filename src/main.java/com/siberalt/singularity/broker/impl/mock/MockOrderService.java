@@ -1,5 +1,10 @@
 package com.siberalt.singularity.broker.impl.mock;
 
+import com.siberalt.singularity.broker.contract.service.margin.MarginContext;
+import com.siberalt.singularity.broker.contract.service.margin.MarginRequirement;
+import com.siberalt.singularity.broker.impl.mock.shared.operation.Margin;
+import com.siberalt.singularity.broker.impl.mock.shared.operation.UncoveredShortsMargin;
+import com.siberalt.singularity.broker.contract.service.margin.MarginPolicy;
 import com.siberalt.singularity.broker.contract.service.exception.AbstractException;
 import com.siberalt.singularity.broker.contract.service.exception.ErrorCode;
 import com.siberalt.singularity.broker.contract.service.exception.ExceptionBuilder;
@@ -43,7 +48,6 @@ public class MockOrderService implements OrderService {
     protected OrderExecutor orderExecutor;
     protected PendingOrderHandler pendingOrderHandler;
     protected Duration executionLatency = Duration.ZERO;
-    protected boolean shortsAllowed;
 
     public MockOrderService(
         Clock clock,
@@ -215,13 +219,63 @@ public class MockOrderService implements OrderService {
      * measuring, and the borrow of an hour is a fraction of a basis point.
      */
     public MockOrderService setShortsAllowed(boolean shortsAllowed) {
-        this.shortsAllowed = shortsAllowed;
+        operationsService.setMargin(!shortsAllowed ? null
+            : balance -> new UncoveredShortsMargin(balance, contextOf(MarginPolicy.CASH_ONLY)));
 
         if (pendingOrderHandler instanceof SimulatedPendingOrderHandler simulated) {
             simulated.setShortsAllowed(shortsAllowed);
         }
 
         return this;
+    }
+
+    /**
+     * Turns the account into a margin one: cover is demanded by {@code marginPolicy}, money may go
+     * negative, and both directions are checked by the same inequality.
+     * <p>
+     * This replaces {@link #setShortsAllowed(boolean)} rather than extending it. That flag switched the
+     * sell-side check off and left nothing in its place; this installs an account that knows what a short
+     * costs in cover, so the lots no longer need reserving either - the cover is the reservation.
+     * <p>
+     * What it still does not do, and a caller measuring a long hold should know: funding is not charged
+     * here and positions are not liquidated when cover runs out. Those are the next two pieces; until they
+     * land, a position held past a margin breach simply stands.
+     */
+    public MockOrderService setMarginPolicy(MarginPolicy marginPolicy) {
+        operationsService.setMargin(marginPolicy == null ? null
+            : balance -> new Margin(balance, contextOf(marginPolicy), true));
+
+        if (pendingOrderHandler instanceof SimulatedPendingOrderHandler simulated) {
+            simulated.setShortsAllowed(marginPolicy != null);
+        }
+
+        return this;
+    }
+
+    /**
+     * Where a balance's margin gets its prices and rates: the simulation's own market data and the
+     * instrument service, which a balance has no business knowing about directly.
+     */
+    protected MarginContext contextOf(MarginPolicy marginPolicy) {
+        return new MarginContext() {
+            @Override
+            public double priceOf(String instrumentUid) {
+                Candle candle = marketDataService.currentCandle(instrumentUid);
+
+                return candle == null ? 0 : candle.getCloseAsDouble();
+            }
+
+            @Override
+            public MarginRequirement requirementOf(String instrumentUid) {
+                try {
+                    return marginPolicy.of(instrumentService.get(GetRequest.of(instrumentUid))
+                        .getInstrument());
+                } catch (AbstractException e) {
+                    // An instrument the broker cannot even look up is not one to lend against.
+                    return MarginRequirement.CASH;
+                }
+            }
+        };
     }
 
     protected Candle requireCurrentCandle(String instrumentUid) throws AbstractException {
@@ -298,7 +352,25 @@ public class MockOrderService implements OrderService {
         return toServiceResponse(order);
     }
 
+    /**
+     * Whether the account may take this order on.
+     * <p>
+     * With a margin account configured the question is one inequality for both directions - would what the
+     * account holds still be covered after the fill - and {@link Margin}, the balance's own component, answers it. Without one the
+     * old pair of checks stands: enough money for a buy, enough lots for a sell. The two are kept apart
+     * deliberately rather than unified behind a cash-only margin policy, because they are not the same rule:
+     * a cash account here refuses a short outright, while full cover would allow one that is paid for in
+     * full, and five years of measurements were taken with the former.
+     */
     protected void checkAccountCanCover(Order order) throws AbstractException {
+        Margin margin = operationsService.getAccountBalance(order.getAccountId()).getMargin();
+
+        if (margin != null) {
+            checkMarginCovers(order, margin);
+
+            return;
+        }
+
         if (order.getDirection() == OrderDirection.BUY) {
             checkEnoughOfMoneyToBuy(order, orderExecutor.quote(order, order.getLotsRequested()));
 
@@ -306,6 +378,27 @@ public class MockOrderService implements OrderService {
         }
 
         checkEnoughOfPositionToSell(order);
+    }
+
+    /**
+     * The margin rule: equity after the fill has to cover what the account would then hold.
+     * <p>
+     * Priced at the current candle's close, which is what {@link Margin} marks positions at. The
+     * fill itself goes through at that price moved by the spread and the slippage, so the check is off by
+     * those - a few hundredths of a per cent against risk rates of tens of per cent. Using the mark keeps
+     * the two sides of the inequality in the same units, which matters more here than the last decimal.
+     */
+    protected void checkMarginCovers(Order order, Margin margin) throws AbstractException {
+        Instrument instrument = order.getInstrument();
+        long lots = order.getLotsRequested();
+        long shares = (order.getDirection() == OrderDirection.BUY ? lots : -lots) * instrument.getLot();
+        Quotation price = requireCurrentCandle(instrument.getUid()).close();
+        Quotation commission = orderExecutor.quote(order, lots).commission();
+
+        if (!margin.covers(instrument.getUid(), instrument.getCurrency(), shares, price.toDouble(),
+            commission.toDouble())) {
+            throw ExceptionBuilder.create(ErrorCode.INSUFFICIENT_BALANCE);
+        }
     }
 
     /**
@@ -447,11 +540,12 @@ public class MockOrderService implements OrderService {
         }
     }
 
+    /**
+     * A cash account can only sell what it holds. Whether a sale may go beyond the position is no longer
+     * asked here: an account that may short has a margin, and {@link #checkAccountCanCover} never reaches
+     * this method.
+     */
     protected void checkEnoughOfPositionToSell(Order order) throws AbstractException {
-        if (shortsAllowed) {
-            return;
-        }
-
         Position position = operationsService.getPositionByInstrumentId(
             order.getAccountId(),
             order.getInstrument().getUid()

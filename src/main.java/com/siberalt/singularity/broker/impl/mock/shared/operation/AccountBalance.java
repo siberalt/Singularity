@@ -18,11 +18,43 @@ public class AccountBalance {
     protected Map<String, Money> availableMonies = new HashMap<>();
     protected Map<String, Money> blockedMonies = new HashMap<>();
     protected Map<String, Position> positions = new HashMap<>();
+    protected Margin margin;
 
     public AccountBalance(String accountId, Clock clock, String brokerId) {
         this.accountId = accountId;
         this.clock = clock;
         this.brokerId = brokerId;
+    }
+
+    /**
+     * What this balance is worth and what the broker has claimed of it - absent until a margin account is
+     * asked for.
+     * <p>
+     * A component rather than a service beside the balance, because equity is the balance's own money and
+     * positions read together. See {@link Margin}.
+     */
+    public AccountBalance setMargin(Margin margin) {
+        this.margin = margin;
+
+        return this;
+    }
+
+    public Margin getMargin() {
+        return margin;
+    }
+
+    /**
+     * Whether the money balance may go below zero.
+     * <p>
+     * A cash balance that cannot go negative is an invariant of a cash account, not of every account: a
+     * long bought partly with the broker's money <i>is</i> a negative cash balance, and without credit the
+     * mock broker could represent a short (a negative position) but not a leveraged long. Where it is
+     * allowed, the limit stops being this class's business and becomes the margin's, which refuses the
+     * order before it ever reaches the ledger; the invariant here remains as the last line of defence for
+     * accounts that have no credit at all.
+     */
+    public boolean isCreditAllowed() {
+        return margin != null && margin.isCreditAllowed();
     }
 
     public String getAccountId() {
@@ -56,7 +88,7 @@ public class AccountBalance {
                 .computeIfAbsent(currencyIso, this::getAvailableMoney)
                 .add(transaction.amount());
 
-            if (projected.getQuotation().isNegative()) {
+            if (projected.getQuotation().isNegative() && !isCreditAllowed()) {
                 result.add(
                     toTransaction(transaction)
                         .setStatus(TransactionStatus.FAILED)
@@ -227,7 +259,7 @@ public class AccountBalance {
         Money currentBalance = moneyBalance.getOrDefault(currencyIso, Money.of(currencyIso, Quotation.ZERO));
         Money updatedBalance = updater.apply(currentBalance);
 
-        if (updatedBalance.getQuotation().isNegative()) {
+        if (updatedBalance.getQuotation().isNegative() && !isCreditAllowed()) {
             throw new IllegalStateException(
                 String.format(
                     "Balance of account %s in %s would go negative: %s -> %s",

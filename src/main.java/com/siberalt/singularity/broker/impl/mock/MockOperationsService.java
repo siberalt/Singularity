@@ -14,12 +14,14 @@ import com.siberalt.singularity.entity.position.Position;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.AccountBalance;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.OpenPosition;
+import com.siberalt.singularity.broker.impl.mock.shared.operation.Margin;
 import com.siberalt.singularity.entity.instrument.Instrument;
 import com.siberalt.singularity.shared.TimeRange;
 import com.siberalt.singularity.strategy.context.Clock;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Function;
 
 public class MockOperationsService implements OperationsService {
     private final Map<String, AccountBalance> accountBalances = new HashMap<>();
@@ -28,6 +30,7 @@ public class MockOperationsService implements OperationsService {
     private final MockInstrumentService instrumentService;
     private final MockUserService userService;
     private final ReadOperationRepository operationRepository;
+    private Function<AccountBalance, Margin> margin;
 
     public MockOperationsService(
         Clock clock,
@@ -91,6 +94,19 @@ public class MockOperationsService implements OperationsService {
         checkAccountExists(accountId);
 
         return getOrCreateBalance(accountId).getAvailableMoney(currencyIso);
+    }
+
+    /**
+     * Gives every balance of this broker a margin, built per balance - the ledger half of a margin account.
+     * Null takes it away and returns the broker to cash accounting.
+     * <p>
+     * A factory rather than one object because a margin belongs to the balance it measures: handing the
+     * same one to two accounts would have it reporting the first account's equity for both.
+     */
+    public void setMargin(Function<AccountBalance, Margin> margin) {
+        this.margin = margin;
+        accountBalances.values().forEach(balance ->
+            balance.setMargin(margin == null ? null : margin.apply(balance)));
     }
 
     public void addMoney(String accountId, Money money) throws AbstractException {
@@ -204,7 +220,11 @@ public class MockOperationsService implements OperationsService {
 
     private AccountBalance getOrCreateBalance(String accountId) {
         if (!accountBalances.containsKey(accountId)) {
-            accountBalances.put(accountId, new AccountBalance(accountId, clock, brokerId));
+            AccountBalance opened = new AccountBalance(accountId, clock, brokerId);
+
+            // Маржа - свойство брокера, поэтому счёт, открытый позже, её наследует.
+            accountBalances.put(accountId,
+                opened.setMargin(margin == null ? null : margin.apply(opened)));
         }
 
         return accountBalances.get(accountId);

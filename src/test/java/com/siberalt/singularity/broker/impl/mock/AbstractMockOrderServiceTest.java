@@ -17,6 +17,8 @@ import com.siberalt.singularity.broker.contract.service.order.response.PostOrder
 import com.siberalt.singularity.broker.contract.service.user.AccessLevel;
 import com.siberalt.singularity.broker.contract.service.user.Account;
 import com.siberalt.singularity.broker.contract.service.user.AccountType;
+import com.siberalt.singularity.broker.contract.service.margin.MarginPolicy;
+import com.siberalt.singularity.broker.contract.service.margin.MarginRequirement;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.broker.impl.mock.config.InstrumentConfig;
@@ -549,6 +551,78 @@ public abstract class AbstractMockOrderServiceTest {
         addMoney(openPrice.multiply(100));
         assertBuyFilled(validCandle, OrderType.MARKET, 10, openPrice);
         assertEquals(0, freePositionLots());
+    }
+
+    /**
+     * Маржинальный счёт: одно неравенство вместо двух проверок, и обе стороны по нему работают.
+     * <p>
+     * Ставка 20% - значит на рубль своих денег можно держать позицию на пять рублей, в любую сторону. Раньше
+     * такого счёта не было вовсе: лонг ограничивался наличными, а шорт - флагом, который просто отключал
+     * проверку.
+     */
+    @Test
+    public void testMarginAccountCoversBothSidesByOneRule() throws AbstractException {
+        Candle validCandle = createCandle(currentTime, 10, 15, 5, 10, 100000);
+        long lot = config.getInstrument().getLot();
+
+        broker.getOrderService().setMarginPolicy(instrument -> MarginRequirement.of(0.2));
+        addMoney(Quotation.of(1000));
+
+        // Своих 1000 под ставку 20% - позиция до 5000, около 500 бумаг по 10. Границу берём с запасом в обе
+        // стороны, чтобы тест проверял правило, а не округление комиссии.
+        long affordable = 400 / lot;
+        long beyond = 700 / lot;
+
+        assertThrowsWithErrorCode(
+            InvalidRequestException.class,
+            ErrorCode.INSUFFICIENT_BALANCE,
+            () -> postBuy(validCandle, OrderType.MARKET, beyond, validCandle.close())
+        );
+        assertBuyFilled(validCandle, OrderType.MARKET, affordable, validCandle.close());
+
+        // Деньги ушли в минус - это и есть плечо, которого прежний счёт выразить не мог.
+        assertTrue(broker.getOperationsService()
+            .getAvailableMoney(testAccount.getId(), "RUB").getQuotation().isNegative());
+    }
+
+    @Test
+    public void testMarginAccountLimitsAShortByCoverRatherThanAFlag() throws AbstractException {
+        Candle validCandle = createCandle(currentTime, 10, 15, 5, 10, 100000);
+        long lot = config.getInstrument().getLot();
+
+        broker.getOrderService().setMarginPolicy(instrument -> MarginRequirement.of(0.2));
+        addMoney(Quotation.of(1000));
+
+        long affordable = 400 / lot;
+        long beyond = 700 / lot;
+
+        assertThrowsWithErrorCode(
+            InvalidRequestException.class,
+            ErrorCode.INSUFFICIENT_BALANCE,
+            () -> postSell(validCandle, OrderType.MARKET, beyond, validCandle.close())
+        );
+        assertSellFilled(validCandle, OrderType.MARKET, affordable, validCandle.close());
+        assertEquals(-affordable * lot, freePositionLots());
+    }
+
+    /** Полное покрытие - это отказ от плеча: позиция не больше собственных денег. */
+    @Test
+    public void testCashOnlyPolicyAllowsNoLeverage() throws AbstractException {
+        Candle validCandle = createCandle(currentTime, 10, 15, 5, 10, 100000);
+        long lot = config.getInstrument().getLot();
+
+        broker.getOrderService().setMarginPolicy(MarginPolicy.CASH_ONLY);
+        addMoney(Quotation.of(1000));
+
+        long affordable = 90 / lot;
+        long beyond = 500 / lot;
+
+        assertThrowsWithErrorCode(
+            InvalidRequestException.class,
+            ErrorCode.INSUFFICIENT_BALANCE,
+            () -> postBuy(validCandle, OrderType.MARKET, beyond, validCandle.close())
+        );
+        assertBuyFilled(validCandle, OrderType.MARKET, affordable, validCandle.close());
     }
 
     @Test
