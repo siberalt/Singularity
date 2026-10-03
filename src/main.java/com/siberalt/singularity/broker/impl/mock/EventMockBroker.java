@@ -2,6 +2,8 @@ package com.siberalt.singularity.broker.impl.mock;
 
 import com.siberalt.singularity.broker.contract.execution.EventSubscriptionBroker;
 import com.siberalt.singularity.broker.contract.simulation.SimulationBroker;
+import com.siberalt.singularity.broker.contract.service.order.CommissionTransactionSpecProvider;
+import com.siberalt.singularity.broker.contract.service.order.commission.CommissionPolicy;
 import com.siberalt.singularity.broker.impl.mock.factory.DefaultEventOrderServiceFactory;
 import com.siberalt.singularity.broker.impl.mock.factory.MockServicesFactory;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
@@ -225,6 +227,20 @@ public class EventMockBroker extends MockBroker implements EventSubscriptionBrok
 
         public Builder setCommissionRatio(double commissionRatio) {
             this.commissionRatio = commissionRatio;
+            return this;
+        }
+
+        /**
+         * The tariff, as a {@link CommissionPolicy} rather than one ratio - per-side rates, a floor per
+         * fill, anything a broker actually charges.
+         * <p>
+         * Set this and {@link #setCommissionRatio} no longer has any effect: the policy replaces the whole
+         * calculation rather than feeding it a number.
+         */
+        public Builder setCommissionPolicy(CommissionPolicy policy) {
+            this.orderServiceFactory = new DefaultEventOrderServiceFactory(
+                new CommissionTransactionSpecProvider(policy), null);
+
             return this;
         }
 
