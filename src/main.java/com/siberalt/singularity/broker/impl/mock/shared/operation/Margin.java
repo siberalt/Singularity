@@ -4,6 +4,8 @@ import com.siberalt.singularity.broker.contract.service.margin.MarginContext;
 import com.siberalt.singularity.broker.contract.service.margin.MarginRequirement;
 import com.siberalt.singularity.entity.position.Position;
 
+import java.time.Instant;
+
 /**
  * What the balance it belongs to is worth, and how much of it the broker has claimed as cover.
  * <p>
@@ -32,6 +34,7 @@ public class Margin {
     private final AccountBalance balance;
     private final MarginContext context;
     private final boolean creditAllowed;
+    private Instant accruedAt;
 
     public Margin(AccountBalance balance, MarginContext context, boolean creditAllowed) {
         if (balance == null) {
@@ -75,7 +78,53 @@ public class Margin {
 
     /** Whether what is held has stopped being covered - the condition for a margin call. */
     public boolean breachesMaintenance(String currencyIso) {
-        return equity(currencyIso) < maintenance();
+        return shortfall(currencyIso) > 0;
+    }
+
+    /**
+     * How much cover is missing, zero when none is. This is what a margin call has to make disappear, and
+     * it does not fall by the value of what is sold: selling frees the whole of that position's
+     * requirement, so closing a position worth {@code v} at rate {@code d} removes {@code v * d} of the
+     * shortfall while leaving equity where it was.
+     */
+    public double shortfall(String currencyIso) {
+        return Math.max(0, maintenance() - equity(currencyIso));
+    }
+
+    /**
+     * Money on loan from the broker: a cash balance below zero and nothing else. A long bought partly with
+     * borrowed money is exactly this, and it is what interest is charged on.
+     */
+    public double borrowedMoney(String currencyIso) {
+        return Math.max(0, -balance.getAvailableMoney(currencyIso).getQuotation().toDouble());
+    }
+
+    /**
+     * Shares on loan, valued at the market: the worth of every short position. This is what a borrow fee is
+     * charged on, and it is quite separate from borrowed money - an account can be short while holding cash,
+     * and then it pays for the stock and not for the cash.
+     */
+    public double borrowedShares() {
+        double borrowed = 0;
+
+        for (Position position : balance.getPositions()) {
+            if (position.getBalance() < 0) {
+                borrowed += -position.getBalance() * context.priceOf(position.getInstrumentUid());
+            }
+        }
+
+        return borrowed;
+    }
+
+    /** When funding was last charged up to; null until the first accrual sets it. */
+    public Instant getAccruedAt() {
+        return accruedAt;
+    }
+
+    public Margin setAccruedAt(Instant accruedAt) {
+        this.accruedAt = accruedAt;
+
+        return this;
     }
 
     /**

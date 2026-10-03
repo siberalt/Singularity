@@ -17,6 +17,8 @@ import com.siberalt.singularity.broker.contract.service.order.response.PostOrder
 import com.siberalt.singularity.broker.contract.service.user.AccessLevel;
 import com.siberalt.singularity.broker.contract.service.user.Account;
 import com.siberalt.singularity.broker.contract.service.user.AccountType;
+import com.siberalt.singularity.broker.contract.service.margin.FixedRateFunding;
+import com.siberalt.singularity.broker.contract.service.margin.FundingPolicy;
 import com.siberalt.singularity.broker.contract.service.margin.MarginPolicy;
 import com.siberalt.singularity.broker.contract.service.margin.MarginRequirement;
 import com.siberalt.singularity.broker.contract.value.money.Money;
@@ -605,6 +607,91 @@ public abstract class AbstractMockOrderServiceTest {
         assertEquals(-affordable * lot, freePositionLots());
     }
 
+    /**
+     * Плата за заём: процент на отрицательные деньги и комиссия за занятые бумаги начисляются по времени.
+     * <p>
+     * Начисление ленивое - оно происходит в момент сведения счёта, а не само собой, - поэтому тест двигает
+     * часы и сводит счёт явно, как это делала бы симуляция на каждом баре.
+     */
+    @Test
+    public void testMarginAccountChargesForBorrowedMoneyOverTime() throws AbstractException {
+        Candle validCandle = createCandle(currentTime, 10, 15, 5, 10, 100000);
+        long lot = config.getInstrument().getLot();
+        String currency = config.getInstrument().getCurrency();
+
+        broker.getOrderService().setMarginPolicy(instrument -> MarginRequirement.of(0.2));
+        // 100% годовых, чтобы счёт был виден на глаз, и без маржин-колла: проверяем начисление отдельно.
+        broker.getOrderService()
+            .settleWith(new FixedRateFunding(1.0), new FixedRateFunding(1.0))
+            .setCallsMargin(false);
+        addMoney(Quotation.of(1000));
+        assertBuyFilled(validCandle, OrderType.MARKET, 300 / lot, validCandle.close());
+
+        Quotation borrowedBefore = broker.getOperationsService()
+            .getAvailableMoney(testAccount.getId(), currency).getQuotation();
+
+        assertTrue(borrowedBefore.isNegative(), "куплено с плечом, деньги должны быть в минусе");
+
+        // Год вперёд: заём под 100% годовых должен стоить ровно столько же, сколько занято.
+        when(clock.currentTime()).thenReturn(currentTime.plus(java.time.Duration.ofDays(365)));
+        broker.getOrderService().getMarginSettlement().settle(testAccount.getId(), currency);
+
+        double after = broker.getOperationsService()
+            .getAvailableMoney(testAccount.getId(), currency).getQuotation().toDouble();
+
+        assertEquals(2 * borrowedBefore.toDouble(), after, 1.0);
+    }
+
+    /** На счёте без займа начислять нечего, сколько бы времени ни прошло. */
+    @Test
+    public void testMarginAccountChargesNothingWithoutALoan() throws AbstractException {
+        String currency = config.getInstrument().getCurrency();
+
+        broker.getOrderService().setMarginPolicy(instrument -> MarginRequirement.of(0.2));
+        broker.getOrderService().settleWith(new FixedRateFunding(1.0), new FixedRateFunding(1.0));
+        addMoney(Quotation.of(1000));
+
+        when(clock.currentTime()).thenReturn(currentTime.plus(java.time.Duration.ofDays(365)));
+        broker.getOrderService().getMarginSettlement().settle(testAccount.getId(), currency);
+
+        assertEquals(1000, broker.getOperationsService()
+            .getAvailableMoney(testAccount.getId(), currency).getQuotation().toDouble(), 1e-6);
+    }
+
+    /**
+     * Маржин-колл: цена ушла против позиции, обеспечения не хватает - брокер закрывает её сам.
+     * <p>
+     * Купили с плечом по 10, цена упала до 6. Своих было 1000, позиция 3000; на падении 40% убыток 1200,
+     * то есть собственных средств не осталось вовсе, а поддерживающий уровень требует 15% от 1800.
+     */
+    @Test
+    public void testMarginCallClosesAPositionThatLostItsCover() throws AbstractException {
+        Candle entryCandle = createCandle(currentTime, 10, 15, 5, 10, 100000);
+        long lot = config.getInstrument().getLot();
+        String currency = config.getInstrument().getCurrency();
+
+        broker.getOrderService().setMarginPolicy(
+            instrument -> new MarginRequirement(0.2, 0.2, 0.15, 0.15));
+        broker.getOrderService().settleWith(FundingPolicy.FREE, FundingPolicy.FREE);
+        addMoney(Quotation.of(1000));
+        assertBuyFilled(entryCandle, OrderType.MARKET, 300 / lot, entryCandle.close());
+
+        assertEquals(300 / lot * lot, freePositionLots());
+
+        Instant later = currentTime.plus(java.time.Duration.ofHours(1));
+        Candle crashCandle = createCandle(later, 6, 6, 6, 6, 100000);
+
+        when(candleStorage.findBeforeOrEqual(idOf(config.getInstrument().getUid()), later, 1))
+            .thenReturn(List.of(crashCandle));
+        when(clock.currentTime()).thenReturn(later);
+
+        int closed = broker.getOrderService().getMarginSettlement()
+            .settle(testAccount.getId(), currency);
+
+        assertEquals(1, closed, "позиция должна быть закрыта принудительно");
+        assertEquals(0, freePositionLots());
+    }
+
     /** Полное покрытие - это отказ от плеча: позиция не больше собственных денег. */
     @Test
     public void testCashOnlyPolicyAllowsNoLeverage() throws AbstractException {
@@ -767,7 +854,7 @@ public abstract class AbstractMockOrderServiceTest {
         InstrumentConfig instrumentConfig = config.getInstrument();
         MockOperationsService operationsService = broker.getOperationsService();
 
-        Money moneyBefore = operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
+        Money moneyBefore = broker.getOperationsService().getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
         Quotation instrumentPrice = priceCandle.open();
 
         PostOrderResponse response = postBuy(priceCandle, orderType, quantity, priceLimit);
@@ -783,7 +870,7 @@ public abstract class AbstractMockOrderServiceTest {
 
         assertEquals(
             moneyBefore.subtract(Money.of(instrumentConfig.getCurrency(), totalPrice)),
-            operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency())
+            broker.getOperationsService().getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency())
         );
 
         return response;
@@ -798,7 +885,7 @@ public abstract class AbstractMockOrderServiceTest {
         InstrumentConfig instrumentConfig = config.getInstrument();
         MockOperationsService operationsService = broker.getOperationsService();
 
-        Money moneyBefore = operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
+        Money moneyBefore = broker.getOperationsService().getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
         long lotsBefore = freePositionLots();
         Quotation instrumentPrice = priceCandle.open();
 
@@ -817,7 +904,7 @@ public abstract class AbstractMockOrderServiceTest {
         assertEquals(lotsBefore - quantity, freePositionLots());
         assertEquals(
             moneyBefore.add(Money.of(instrumentConfig.getCurrency(), totalBalanceChange)),
-            operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency())
+            broker.getOperationsService().getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency())
         );
 
         return response;
@@ -835,7 +922,7 @@ public abstract class AbstractMockOrderServiceTest {
         InstrumentConfig instrumentConfig = config.getInstrument();
         MockOperationsService operationsService = broker.getOperationsService();
 
-        Money moneyBefore = operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
+        Money moneyBefore = broker.getOperationsService().getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
         long lotsBefore = freePositionLots();
         Quotation instrumentPrice = priceCandle.open();
 
@@ -852,7 +939,7 @@ public abstract class AbstractMockOrderServiceTest {
 
         assertEquals(
             moneyBefore.subtract(Money.of(instrumentConfig.getCurrency(), reservedMoney)),
-            operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency())
+            broker.getOperationsService().getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency())
         );
         assertEquals(lotsBefore, freePositionLots());
 
@@ -867,7 +954,7 @@ public abstract class AbstractMockOrderServiceTest {
         InstrumentConfig instrumentConfig = config.getInstrument();
         MockOperationsService operationsService = broker.getOperationsService();
 
-        Money moneyBefore = operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
+        Money moneyBefore = broker.getOperationsService().getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency());
         long lotsBefore = freePositionLots();
         long blockedBefore = blockedPositionLots();
 
@@ -880,7 +967,7 @@ public abstract class AbstractMockOrderServiceTest {
 
         assertEquals(
             moneyBefore,
-            operationsService.getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency())
+            broker.getOperationsService().getAvailableMoney(testAccount.getId(), instrumentConfig.getCurrency())
         );
         assertEquals(lotsBefore - reservedLots, freePositionLots());
         assertEquals(blockedBefore + reservedLots, blockedPositionLots());

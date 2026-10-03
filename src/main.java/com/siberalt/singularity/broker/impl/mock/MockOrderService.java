@@ -1,5 +1,6 @@
 package com.siberalt.singularity.broker.impl.mock;
 
+import com.siberalt.singularity.broker.contract.service.margin.FundingPolicy;
 import com.siberalt.singularity.broker.contract.service.margin.MarginContext;
 import com.siberalt.singularity.broker.contract.service.margin.MarginRequirement;
 import com.siberalt.singularity.broker.impl.mock.shared.operation.Margin;
@@ -48,6 +49,9 @@ public class MockOrderService implements OrderService {
     protected OrderExecutor orderExecutor;
     protected PendingOrderHandler pendingOrderHandler;
     protected Duration executionLatency = Duration.ZERO;
+    protected MarginSettlement settlement;
+    /** True while a margin call's own orders are going through - see {@link #postForLiquidation}. */
+    protected boolean liquidating;
 
     public MockOrderService(
         Clock clock,
@@ -241,6 +245,51 @@ public class MockOrderService implements OrderService {
      * here and positions are not liquidated when cover runs out. Those are the next two pieces; until they
      * land, a position held past a margin breach simply stands.
      */
+    /**
+     * What a margin account is charged for its loans and what happens when its cover runs out.
+     * <p>
+     * Separate from {@link #setMarginPolicy} because the two are independent: an account can demand cover
+     * and charge nothing for it (which is what every measurement here did before funding existed), or be
+     * charged without being liquidated. Null leaves the account uncharged and never called.
+     */
+    public MockOrderService setMarginSettlement(MarginSettlement settlement) {
+        this.settlement = settlement;
+
+        return this;
+    }
+
+    public MarginSettlement getMarginSettlement() {
+        return settlement;
+    }
+
+    /** A settlement built on this service, with the funding to charge - the usual way to get one. */
+    public MarginSettlement settleWith(FundingPolicy moneyFunding, FundingPolicy stockFunding) {
+        MarginSettlement built = new MarginSettlement(clock, operationsService, instrumentService, this)
+            .setMoneyFunding(moneyFunding)
+            .setStockFunding(stockFunding);
+
+        setMarginSettlement(built);
+
+        return built;
+    }
+
+    /**
+     * Posts an order on behalf of a margin call, with the cover check and settlement stood down.
+     * <p>
+     * Package-private on purpose: nothing outside the broker has any business placing an order that is not
+     * checked. The flag is cleared in a finally block because an order that throws must not leave the
+     * service permanently unchecked.
+     */
+    PostOrderResponse postForLiquidation(PostOrderRequest request) throws AbstractException {
+        liquidating = true;
+
+        try {
+            return post(request);
+        } finally {
+            liquidating = false;
+        }
+    }
+
     public MockOrderService setMarginPolicy(MarginPolicy marginPolicy) {
         operationsService.setMargin(marginPolicy == null ? null
             : balance -> new Margin(balance, contextOf(marginPolicy), true));
@@ -363,6 +412,17 @@ public class MockOrderService implements OrderService {
      * full, and five years of measurements were taken with the former.
      */
     protected void checkAccountCanCover(Order order) throws AbstractException {
+        // An order placed by a margin call is never refused: it closes a position, so it can only lower
+        // the cover demanded - and refusing it would leave the breach it was sent to end. It also must not
+        // settle again, or settlement would call itself.
+        if (liquidating) {
+            return;
+        }
+
+        if (settlement != null) {
+            settlement.settle(order.getAccountId(), order.getInstrument().getCurrency());
+        }
+
         Margin margin = operationsService.getAccountBalance(order.getAccountId()).getMargin();
 
         if (margin != null) {
