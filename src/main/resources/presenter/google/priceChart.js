@@ -10,6 +10,7 @@ let volumeData = null;
 let labels = null;
 let rsi = null;
 let rsiData = null;
+let macdData = null;
 let stepMinutes = 0;
 let span = '';
 let resizing = null;
@@ -31,11 +32,12 @@ const LEFT = 80;
 const RIGHT = 30;
 
 function start() {
-    Promise.all([load('PriceChart.json'), load('VolumeChart.json'), load('RsiChart.json')])
-        .then(([price, volume, readings]) => {
+    Promise.all([load('PriceChart.json'), load('VolumeChart.json'), load('RsiChart.json'), load('MacdChart.json')])
+        .then(([price, volume, readings, macd]) => {
             priceData = price;
             volumeData = volume;
             rsiData = readings;
+            macdData = macd;
             prepare();
             document.getElementById('zoom').addEventListener('change', render);
             // Перерисовка трёх картинок в тридцать тысяч пикселей занимает секунды, а событий изменения
@@ -104,6 +106,11 @@ function prepare() {
             + ' в PriceChart.json - графики построены с разным интервалом');
     }
 
+    if (macdData['data'].length !== priceData['data'].length) {
+        fail('в MacdChart.json ' + macdData['data'].length + ' точек против ' + priceData['data'].length
+            + ' в PriceChart.json - графики построены с разным интервалом');
+    }
+
     rsi = rsiData['data'].map(row => row[1]);
 
     span = times.length + ' точек по ' + stepMinutes + ' мин · ' + formatDate(times[0]) + ' → '
@@ -146,6 +153,7 @@ function render() {
 
     drawChart('price_chart', priceData, width, everyLabel, {vAxis: {textStyle: AXIS_TEXT, viewWindow: priceRange}});
     drawRsi(width, everyLabel);
+    drawChart('macd_chart', macdData, width, everyLabel, {vAxis: {textStyle: AXIS_TEXT}});
     // Объём измеряется миллионами штук, и полностью выписанное число съедает поле оси у всех трёх.
     drawChart('volume_chart', volumeData, width, everyLabel, {
         vAxis: {textStyle: AXIS_TEXT, format: 'short'},

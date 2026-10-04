@@ -21,6 +21,7 @@ import com.siberalt.singularity.entity.operation.ReadOperationRepository;
 import com.siberalt.singularity.entity.order.InMemoryOrderRepository;
 import com.siberalt.singularity.entity.order.OrderRepository;
 import com.siberalt.singularity.presenter.google.PriceChart;
+import com.siberalt.singularity.presenter.google.MacdChart;
 import com.siberalt.singularity.presenter.google.RsiChart;
 import com.siberalt.singularity.presenter.google.VolumeChart;
 import com.siberalt.singularity.presenter.google.series.FunctionGroupSeriesProvider;
@@ -55,6 +56,7 @@ import com.siberalt.singularity.strategy.upside.level.KeyLevelsUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.level.SimpleLevelBasedUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.level.adaptive.AdaptiveUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.subrange.CalendarPeriodFilterDecorator;
+import com.siberalt.singularity.strategy.upside.trend.MacdUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.trend.MovingAverageCrossUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.volume.VWAPUpsideCalculator;
 import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
@@ -77,7 +79,7 @@ public class BasicTradeStrategySimulation {
     private final static boolean VWAP_RESET_DAILY = false;
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
-        Instant startTime = Instant.parse("2025-01-01T00:00:00Z");
+        Instant startTime = Instant.parse("2024-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2026-12-11T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
@@ -221,7 +223,7 @@ public class BasicTradeStrategySimulation {
             new AggregatingUpsideCalculator(
                 CandleInterval.DAY,
                 new WindowUpsideCalculator(
-                    MovingAverageCrossUpsideCalculator.goldenCross(),
+                    new MacdUpsideCalculator(),
                     200
                 )
             ),
@@ -315,7 +317,7 @@ public class BasicTradeStrategySimulation {
             Candle::getCloseAsDouble
         );
         priceChart.addSeriesProvider(orderSeriesProvider);
-        priceChart.addSeriesProvider(createVwapSeries(candles));
+        // priceChart.addSeriesProvider(createVwapSeries(candles));
         priceChart.addSeriesProvider(createSmaSeries(candles, 50, "#FFA500"));
         priceChart.addSeriesProvider(createSmaSeries(candles, 200, "#AAAAAA"));
         List<List<Level<Double>>> selectedSupportLevels = levelPairsSnapshots.stream()
@@ -351,6 +353,10 @@ public class BasicTradeStrategySimulation {
         rsiChart.setPeriod(14);
         rsiChart.setInterval(CANDLE_INTERVAL);
         rsiChart.render(candles);
+        MacdChart macdChart = new MacdChart(1);
+        macdChart.setPeriods(12, 26, 9);
+        macdChart.setInterval(CANDLE_INTERVAL);
+        macdChart.render(candles);
         Toolkit.getDefaultToolkit().beep();
     }
 
