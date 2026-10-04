@@ -20,7 +20,9 @@ import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyBacktester;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyResult;
+import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 import com.siberalt.singularity.strategy.upside.WindowUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.trend.MacdUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.trend.MovingAverageCrossUpsideCalculator;
 
 import java.nio.file.Files;
@@ -64,6 +66,20 @@ public class GoldenCrossSimulation {
     private static final double COMMISSION = 0.0005;
     private static final Money INITIAL = Money.of("RUB", 1_000_000.00);
 
+    /** Чем мерить тренд в этом прогоне - единственное, что отличает варианты друг от друга. */
+    static UpsideCalculator trendOf(String macd, boolean ema, int fast, int slow, int signal) {
+        if (macd.equals("line")) {
+            return new MacdUpsideCalculator(fast, slow, signal, MacdUpsideCalculator.Source.LINE);
+        }
+
+        if (macd.equals("histogram")) {
+            return new MacdUpsideCalculator(fast, slow, signal, MacdUpsideCalculator.Source.HISTOGRAM);
+        }
+
+        return ema ? MovingAverageCrossUpsideCalculator.ofEma(fast, slow)
+            : MovingAverageCrossUpsideCalculator.ofSma(fast, slow);
+    }
+
     public static void main(String[] args) throws Exception {
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml")));
@@ -85,11 +101,19 @@ public class GoldenCrossSimulation {
         int fast = Integer.parseInt(options.getOrDefault("fast", "50"));
         int slow = Integer.parseInt(options.getOrDefault("slow", "200"));
         boolean ema = options.getOrDefault("ema", "0").equals("1");
+        // macd=line - сторона самой линии (пересечение двух EMA), macd=histogram - сторона зазора между
+        // линией и её средней. Пусто - пересечение простых средних, как было.
+        String macd = options.getOrDefault("macd", "");
+        int signalPeriod = Integer.parseInt(options.getOrDefault("signal", "20"));
+        // Окно, которое копит WindowUpsideCalculator. Для SMA хватает периода медленной средней, а EMA
+        // зависит от всей истории - усечённое окно даёт другой индикатор, и это надо уметь проверить.
+        int window = Integer.parseInt(options.getOrDefault("window", String.valueOf(slow + 20)));
         ReadCandleRepository candles = new AggregatingCandleRepository(minutes, CandleInterval.DAY);
 
         System.out.printf(Locale.ROOT,
-            "%s .. %s: пересечение %s(%d) и %s(%d) на дневных свечах, комиссия %.3f%% за сторону%n",
-            FROM, TO, ema ? "EMA" : "SMA", fast, ema ? "EMA" : "SMA", slow, 100 * COMMISSION);
+            "%s .. %s: %s(%d, %d) на дневных свечах, комиссия %.3f%% за сторону%n", FROM, TO,
+            macd.isEmpty() ? (ema ? "пересечение EMA" : "пересечение SMA") : "MACD по " + macd,
+            fast, slow, 100 * COMMISSION);
         System.out.printf("%4s %12s %8s %8s %11s %10s%n",
             "id", "счёт", "сделок", "плюс", "средняя %", "в рынке");
 
@@ -123,10 +147,9 @@ public class GoldenCrossSimulation {
             StrategyResult result = new StrategyBacktester<EventMockBroker>(
                 (range, accountId, simulated, observer) -> new BasicTradeStrategy(simulated, uid, accountId,
                     // Окно копит сам калькулятор окна: стратегия отдаёт свечи по одной и очищает список.
-                    new WindowUpsideCalculator(ema ? MovingAverageCrossUpsideCalculator.ofEma(fast, slow)
-                        : MovingAverageCrossUpsideCalculator.ofSma(fast, slow), slow + 20),
+                    new WindowUpsideCalculator(trendOf(macd, ema, fast, slow, signalPeriod), window),
                     candles)
-                    .setLookbackCandles(slow + 20L)
+                    .setLookbackCandles(window)
                     .setBuyThreshold(1)
                     .setSellThreshold(-1)
                     .setStep(1)
@@ -139,6 +162,16 @@ public class GoldenCrossSimulation {
 
             List<RsiLimitEntrySimulation.Trade> trades = RsiLimitEntrySimulation.tradesOf(
                 operations.getByAccountId(result.accountId(), new TimeRange(FROM, TO)));
+
+            if (!options.getOrDefault("dump", "0").equals("0")) {
+                System.out.printf("  %-12s %-12s %9s%n", "вход", "выход", "итог %");
+
+                for (RsiLimitEntrySimulation.Trade trade : trades) {
+                    System.out.printf(Locale.ROOT, "  %-12s %-12s %+8.2f%n",
+                        trade.entry().toString().substring(0, 10),
+                        trade.exit().toString().substring(0, 10), trade.percent());
+                }
+            }
             long held = trades.stream()
                 .mapToLong(trade -> Duration.between(trade.entry(), trade.exit()).toDays())
                 .sum();
