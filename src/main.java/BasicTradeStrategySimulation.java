@@ -71,12 +71,12 @@ import java.util.stream.Collectors;
 
 public class BasicTradeStrategySimulation {
     private final static String INSTRUMENT_ID = "e6123145-9665-43e0-8413-cd61b8aa9b13"; // Сбербанк
-    private final static CandleInterval CANDLE_INTERVAL = CandleInterval.MIN_30; // Сбербанк
+    private final static CandleInterval CANDLE_INTERVAL = CandleInterval.HOUR_4; // Сбербанк
     /** The VWAP line starts over every day (true) or runs from the first candle of the period (false). */
     private final static boolean VWAP_RESET_DAILY = false;
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
-        Instant startTime = Instant.parse("2026-07-01T00:00:00Z");
+        Instant startTime = Instant.parse("2025-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2026-12-11T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
