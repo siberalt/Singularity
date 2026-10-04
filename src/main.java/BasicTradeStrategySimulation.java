@@ -55,6 +55,7 @@ import com.siberalt.singularity.strategy.upside.level.KeyLevelsUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.level.SimpleLevelBasedUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.level.adaptive.AdaptiveUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.subrange.CalendarPeriodFilterDecorator;
+import com.siberalt.singularity.strategy.upside.trend.MovingAverageCrossUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.volume.VWAPUpsideCalculator;
 import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
 import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
@@ -71,7 +72,7 @@ import java.util.stream.Collectors;
 
 public class BasicTradeStrategySimulation {
     private final static String INSTRUMENT_ID = "e6123145-9665-43e0-8413-cd61b8aa9b13"; // Сбербанк
-    private final static CandleInterval CANDLE_INTERVAL = CandleInterval.HOUR_4; // Сбербанк
+    private final static CandleInterval CANDLE_INTERVAL = CandleInterval.DAY; // Сбербанк
     /** The VWAP line starts over every day (true) or runs from the first candle of the period (false). */
     private final static boolean VWAP_RESET_DAILY = false;
 
@@ -208,23 +209,31 @@ public class BasicTradeStrategySimulation {
         ExtremeLocator maximaBaseLocator,
         ExtremeLocator minimaBaseLocator
     ) {
-        FilterUpsideCalculator filterUpsideCalculator = new FilterUpsideCalculator(
-            new PriceChangeUpsideCalculator(30, 7, 100),
-            lastCandles ->  true // IncrementalRsi.of(lastCandles, 12) <= 70
-        );
+//        FilterUpsideCalculator filterUpsideCalculator = new FilterUpsideCalculator(
+//            new PriceChangeUpsideCalculator(30, 7, 100),
+//            lastCandles ->  true // IncrementalRsi.of(lastCandles, 12) <= 70
+//        );
 
         BasicTradeStrategy strategy = new BasicTradeStrategy(
             broker,
             INSTRUMENT_ID,
             accountId,
-            new WindowUpsideCalculator(
-                //new PriceChangeUpsideCalculator(10, 3.5, 0.5),
-                new EntryExitUpsideCalculator(
-                    filterUpsideCalculator,
-                    new PriceChangeUpsideCalculator(10, 100, 4)
-                ).setMaxWaitBars(30),
-                100
+            new AggregatingUpsideCalculator(
+                CandleInterval.DAY,
+                new WindowUpsideCalculator(
+                    MovingAverageCrossUpsideCalculator.goldenCross(),
+                    200
+                )
             ),
+
+//            new WindowUpsideCalculator(
+//                //new PriceChangeUpsideCalculator(10, 3.5, 0.5),
+//                new EntryExitUpsideCalculator(
+//                    filterUpsideCalculator,
+//                    new PriceChangeUpsideCalculator(10, 100, 4)
+//                ).setMaxWaitBars(30),
+//                100
+//            ),
 //            new WindowUpsideCalculator(
 //                new UpsideSignalAmplifier(slopeUpsideCalculator, 0.95, 0.95),
 //                100
@@ -243,7 +252,7 @@ public class BasicTradeStrategySimulation {
 //            ),
             candleRepository
         );
-        strategy.setLookbackCandles(60 * 24);
+        strategy.setLookbackCandles(60 * 24 * 300);
         strategy.setBuyThreshold(0.9);
         strategy.setSellThreshold(-0.9);
         strategy.setStep(1);
