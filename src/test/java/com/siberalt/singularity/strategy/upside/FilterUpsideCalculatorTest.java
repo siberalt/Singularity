@@ -11,6 +11,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FilterUpsideCalculatorTest {
     private static final List<Candle> ANY_CANDLES = List.of(
@@ -176,6 +177,44 @@ class FilterUpsideCalculatorTest {
         assertFalse(both.holds(ANY_CANDLES, () -> {
             throw new AssertionError("Первое условие уже отказало");
         }));
+    }
+
+    /**
+     * Условие на одной стороне: покупка спрашивается, продажа проходит. Это рабочая форма фильтра в
+     * правиле, где один калькулятор и открывает, и закрывает позицию.
+     */
+    @Test
+    void should_AskOnlyAboutBuys_WhenTheConditionIsGivenASide() {
+        SignalCondition never = ((SignalCondition) (candles, signal) -> false).onlyForBuys();
+
+        assertFalse(never.holds(ANY_CANDLES, () -> of(1)));
+        assertTrue(never.holds(ANY_CANDLES, () -> of(-1)));
+        assertTrue(never.holds(ANY_CANDLES, () -> Upside.NEUTRAL));
+        assertTrue(never.holds(ANY_CANDLES, () -> null));
+    }
+
+    @Test
+    void should_AskOnlyAboutSells_WhenTheSideIsTheOtherOne() {
+        SignalCondition never = ((SignalCondition) (candles, signal) -> false).onlyForSells();
+
+        assertTrue(never.holds(ANY_CANDLES, () -> of(1)));
+        assertFalse(never.holds(ANY_CANDLES, () -> of(-1)));
+    }
+
+    /** И сторона стоит одного вызова делегата, а не двух: условие получает уже готовый ответ. */
+    @Test
+    void should_StillAskTheDelegateOnce_WhenTheConditionHasASide() {
+        List<Integer> asked = new ArrayList<>();
+        UpsideCalculator delegate = candles -> {
+            asked.add(1);
+
+            return of(1);
+        };
+        var calculator = new FilterUpsideCalculator(delegate,
+            ((SignalCondition) (candles, signal) -> signal.get().strength() > 0).onlyForBuys());
+
+        assertEquals(of(1), calculator.calculate(ANY_CANDLES));
+        assertEquals(1, asked.size());
     }
 
     @Test

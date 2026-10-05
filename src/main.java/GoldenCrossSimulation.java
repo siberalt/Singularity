@@ -21,6 +21,7 @@ import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyBacktester;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyResult;
 import com.siberalt.singularity.strategy.upside.FilterUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.SignalCondition;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 import com.siberalt.singularity.strategy.upside.WindowUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.condition.Deadband;
@@ -74,15 +75,24 @@ public class GoldenCrossSimulation {
      * <p>
      * Порядок не произволен. Мёртвая зона читает силу самого сигнала, поэтому стоит прямо на нём. RSI
      * читает только сторону, поэтому стоит снаружи и спрашивает сигнал лишь тогда, когда зона его
-     * пропустила - за этим и нужен {@link com.siberalt.singularity.strategy.upside.SignalCondition}.
+     * пропустила - за этим и нужен {@link SignalCondition}.
      * <p>
      * Оба фильтра выключены, пока их не попросили: {@code deadband=0} и {@code rsi=} пустой.
      */
-    static UpsideCalculator filtered(UpsideCalculator trend, double deadband, RsiSide rsi) {
+    static UpsideCalculator filtered(UpsideCalculator trend, double deadband, String deadbandOn,
+                                     RsiSide rsi) {
         UpsideCalculator filteredTrend = trend;
 
         if (deadband > 0) {
-            filteredTrend = new FilterUpsideCalculator(filteredTrend, new Deadband(deadband));
+            // Сторона решает многое: на обе стороны зона задерживает и закрытие позиции, а это измерено
+            // в двадцать семь пунктов на одной сделке.
+            SignalCondition zone = switch (deadbandOn) {
+                case "entry" -> new Deadband(deadband).onlyForBuys();
+                case "exit" -> new Deadband(deadband).onlyForSells();
+                default -> new Deadband(deadband);
+            };
+
+            filteredTrend = new FilterUpsideCalculator(filteredTrend, zone);
         }
 
         if (rsi != null) {
@@ -137,6 +147,8 @@ public class GoldenCrossSimulation {
         // Мёртвая зона в долях цены: 0.002 - линия должна отойти от нуля на 0.2% цены, иначе её сторона
         // считается шумом. Ноль - зоны нет.
         double deadband = Double.parseDouble(options.getOrDefault("deadband", "0"));
+        // На какую сторону действует зона: both - на обе, entry - только на вход, exit - только на выход.
+        String deadbandOn = options.getOrDefault("deadbandOn", "both");
         int rsiPeriod = Integer.parseInt(options.getOrDefault("rsiPeriod", "14"));
         // rsi=50 - покупать только в нижней половине, продавать только в верхней. rsi=50,0 - то же самое
         // для входа, но любой выход пропускается: в этом правиле сигнал и открывает, и закрывает позицию,
@@ -152,7 +164,8 @@ public class GoldenCrossSimulation {
             macd.isEmpty() ? (ema ? "пересечение EMA" : "пересечение SMA") : "MACD по " + macd,
             fast, slow, 100 * COMMISSION);
         System.out.printf(Locale.ROOT, "фильтры: мёртвая зона %s, RSI %s%n",
-            deadband > 0 ? String.format(Locale.ROOT, "%.3f%% цены", 100 * deadband) : "нет",
+            deadband > 0 ? String.format(Locale.ROOT, "%.3f%% цены на %s", 100 * deadband, deadbandOn)
+                : "нет",
             rsi == null ? "нет" : "(" + options.get("rsi") + "), период " + rsiPeriod);
         System.out.printf("%4s %12s %8s %8s %11s %10s%n",
             "id", "счёт", "сделок", "плюс", "средняя %", "в рынке");
@@ -188,7 +201,8 @@ public class GoldenCrossSimulation {
                 (range, accountId, simulated, observer) -> new BasicTradeStrategy(simulated, uid, accountId,
                     // Окно копит сам калькулятор окна: стратегия отдаёт свечи по одной и очищает список.
                     new WindowUpsideCalculator(
-                        filtered(trendOf(macd, ema, fast, slow, signalPeriod), deadband, rsi), window),
+                        filtered(trendOf(macd, ema, fast, slow, signalPeriod), deadband, deadbandOn, rsi),
+                        window),
                     candles)
                     .setLookbackCandles(window)
                     .setBuyThreshold(1)

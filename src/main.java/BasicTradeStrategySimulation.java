@@ -319,7 +319,7 @@ public class BasicTradeStrategySimulation {
         priceChart.addSeriesProvider(orderSeriesProvider);
         // priceChart.addSeriesProvider(createVwapSeries(candles));
         priceChart.addSeriesProvider(createSmaSeries(candles, 50, "#FFA500"));
-        priceChart.addSeriesProvider(createSmaSeries(candles, 200, "#AAAAAA"));
+        // priceChart.addSeriesProvider(createSmaSeries(candles, 200, "#AAAAAA"));
         List<List<Level<Double>>> selectedSupportLevels = levelPairsSnapshots.stream()
             .map(snapshot -> snapshot.levelPairs().stream().map(LevelPair::support).toList())
             .toList();
