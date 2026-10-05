@@ -56,7 +56,7 @@ public class BarAxis {
             long bucketOf = aggregator.bucketOf(candle, interval);
 
             if (bucketOf != current && !bucket.isEmpty()) {
-                bars.add(aggregator.merge(bucket));
+                bars.add(aggregator.merge(bucket, interval));
                 coverage.add(coverageOf(bucket, current, width));
                 bucket = new ArrayList<>();
             }
@@ -66,7 +66,7 @@ public class BarAxis {
         }
 
         if (!bucket.isEmpty()) {
-            bars.add(aggregator.merge(bucket));
+            bars.add(aggregator.merge(bucket, interval));
             coverage.add(coverageOf(bucket, current, width));
         }
 

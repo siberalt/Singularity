@@ -319,7 +319,7 @@ public class RsiLimitEntryStrategy implements Strategy {
 
             if (bucket != currentBucket) {
                 if (!bar.isEmpty()) {
-                    onBarClosed(aggregator.merge(bar));
+                    onBarClosed(aggregator.merge(bar, interval));
                 }
 
                 bar.clear();

@@ -59,7 +59,7 @@ public class AggregatingUpsideCalculator implements UpsideCalculator {
 
             if (bucket != openBucket) {
                 if (!openBar.isEmpty()) {
-                    upside = delegate.calculate(List.of(aggregator.merge(openBar)));
+                    upside = delegate.calculate(List.of(aggregator.merge(openBar, interval)));
                 }
 
                 openBar.clear();

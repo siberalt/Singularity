@@ -79,9 +79,68 @@ class CandleAggregatorTest {
         assertThrows(IllegalArgumentException.class, () -> aggregator.aggregate(minute, CandleInterval.UNSPECIFIED));
     }
 
+    /**
+     * Собранный бар нумеруется своим ведром, а не первой узкой свечой: это свой ряд, и в ряду минуток у
+     * него нет места. Узкие свечи здесь вообще без индекса, и бар всё равно пронумерован - номер берётся
+     * из времени.
+     */
+    @Test
+    void numbersABarByItsBucketRatherThanByItsFirstCandle() {
+        Candle hour = aggregator.aggregate(
+            List.of(minute(0, 10, 12, 13, 9, 100), minute(1, 12, 11, 14, 8, 200)),
+            CandleInterval.HOUR
+        ).getFirst();
+
+        assertEquals(Candle.DEFAULT_INDEX, minute(0, 10, 12, 13, 9, 100).getIndex());
+        assertEquals(HOUR_START.toEpochMilli() / 3_600_000, hour.getIndex());
+    }
+
+    /** С какой стороны бар ни собирай - целиком или по одному, - номер у него один и тот же. */
+    @Test
+    void numbersTheSameBarAlikeWhicheverSideItIsAssembledFrom() {
+        List<Candle> bucket = List.of(minute(0, 10, 12, 13, 9, 100), minute(1, 12, 11, 14, 8, 200));
+
+        assertEquals(
+            aggregator.aggregate(bucket, CandleInterval.HOUR).getFirst().getIndex(),
+            aggregator.merge(bucket, CandleInterval.HOUR).getIndex()
+        );
+    }
+
+    /**
+     * Нумерация не плотная, и это не дефект: пропуск в данных остаётся пропуском и в номерах, иначе бар
+     * после пропуска встал бы на место, которое ему не принадлежит.
+     */
+    @Test
+    void leavesTheGapInTheNumbersToo() {
+        List<Candle> hours = aggregator.aggregate(
+            List.of(minute(0, 10, 12, 13, 9, 100), minute(3 * 60, 20, 22, 23, 19, 100)),
+            CandleInterval.HOUR
+        );
+
+        assertEquals(3, hours.getLast().getIndex() - hours.getFirst().getIndex());
+    }
+
+    /**
+     * Один и тот же час у разных бумаг получает один и тот же номер. Нумерация строк в базе идёт по
+     * инструменту и такого никогда не давала.
+     */
+    @Test
+    void numbersTheSameHourAlikeForEveryInstrument() {
+        Candle mine = aggregator.merge(List.of(minute(0, 10, 12, 13, 9, 100)), CandleInterval.HOUR);
+        Candle other = aggregator.merge(
+            List.of(minute(INSTRUMENT + 1, 0, 50, 52, 53, 49, 100)), CandleInterval.HOUR);
+
+        assertEquals(mine.getIndex(), other.getIndex());
+    }
+
     private Candle minute(int offset, double open, double close, double high, double low, long volume) {
+        return minute(INSTRUMENT, offset, open, close, high, low, volume);
+    }
+
+    private Candle minute(long instrument, int offset, double open, double close, double high, double low,
+                          long volume) {
         return new Candle(
-            INSTRUMENT,
+            instrument,
             new TimePoint(HOUR_START.plusSeconds(offset * 60L)),
             Quotation.of(open),
             Quotation.of(close),

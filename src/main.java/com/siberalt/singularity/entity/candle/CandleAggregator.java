@@ -12,6 +12,32 @@ import java.util.List;
  * <p>
  * Bars are bucketed by the wall clock rather than counted off, so a gap in the data leaves a gap in
  * the result instead of shifting every bar after it into the wrong period.
+ * <p>
+ * <b>A rolled-up bar is numbered by its own bucket, not by the first narrow candle in it.</b> The
+ * number is {@link #bucketOf}, which is what the bucketing already computes, so it is the same for a
+ * bar whichever side it is assembled from - whole in {@link #aggregate} or one at a time through
+ * {@link #merge} - and the same in every window it appears in. That stability is what the index is
+ * for: {@link com.siberalt.singularity.strategy.extreme.cache.CachingExtremeLocator} keys the
+ * stretches it has already scanned by the index of their first and last bar, across calls.
+ * <p>
+ * Keeping the narrow candle's index instead, as this used to, put the wide bar in the narrow series'
+ * coordinates, where the step between two neighbouring wide bars is the length of a session - three
+ * hundred and sixty of them after a short day, five hundred and forty after a full one. Anything
+ * measuring a distance in bars had to average that out: {@link BarSpacing} did, and the reach of
+ * {@link com.siberalt.singularity.strategy.extreme.ProximityGroupingExtremeLocator} was slack by a
+ * day or two because of it.
+ * <p>
+ * Two things the new number is not. It is <b>not dense</b>: a stretch with no trading in it is a step
+ * of more than one, so a position in a list is still something to search for rather than subtract.
+ * Rarely, as it turns out - of the 1878 steps between this base's daily bars for one share, 1791 are
+ * exactly one and the average is 1.108, because the exchange has traded weekends since 2025 - but
+ * rarely is not never, and the 87 that are not would land on the wrong bar. And it is
+ * <b>not the database's numbering</b>, which is a row number per instrument; this one counts buckets
+ * of wall-clock time, so the same day carries the same number for every instrument, which per-
+ * instrument row numbers never gave.
+ * <p>
+ * The bar's <b>time</b> is left as the first narrow candle's, not the start of the bucket: the clock
+ * a simulation runs on is read from it, and moving it would move the whole run.
  */
 public class CandleAggregator {
     /**
@@ -32,7 +58,7 @@ public class CandleAggregator {
 
             if (candleBucket != currentBucket) {
                 if (!bucket.isEmpty()) {
-                    result.add(merge(bucket));
+                    result.add(merge(bucket, interval));
                 }
 
                 bucket = new ArrayList<>();
@@ -43,7 +69,7 @@ public class CandleAggregator {
         }
 
         if (!bucket.isEmpty()) {
-            result.add(merge(bucket));
+            result.add(merge(bucket, interval));
         }
 
         return result;
@@ -59,8 +85,17 @@ public class CandleAggregator {
         return Math.floorDiv(candle.getTime().toEpochMilli(), interval.getDuration().toMillis());
     }
 
-    /** Rolls a run of candles known to belong together into the single candle they make up. */
-    public Candle merge(List<Candle> bucket) {
+    /**
+     * Rolls a run of candles known to belong together into the single candle they make up.
+     * <p>
+     * The interval is not optional, and not only to number the bar: a run of candles does not say how
+     * wide the bar it makes up is, and the one thing a caller could not supply - the bucket number -
+     * is the one thing that places the bar in the right series.
+     *
+     * @param bucket   candles of one bucket, ordered oldest first
+     * @param interval the width of the bar they make up
+     */
+    public Candle merge(List<Candle> bucket, CandleInterval interval) {
         Candle first = bucket.getFirst();
         Candle last = bucket.getLast();
         Quotation high = first.high();
@@ -85,7 +120,7 @@ public class CandleAggregator {
 
         return new Candle(
             first.instrumentId(),
-            first.timePoint(),
+            new TimePoint(bucketOf(first, interval), first.getTime()),
             first.open(),
             last.close(),
             high,
