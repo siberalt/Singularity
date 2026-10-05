@@ -2,12 +2,14 @@ package com.siberalt.singularity.strategy.upside;
 
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.TimePoint;
+import com.siberalt.singularity.strategy.market.MarketCondition;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class FilterUpsideCalculatorTest {
@@ -99,11 +101,93 @@ class FilterUpsideCalculatorTest {
         assertEquals(of(1), calculator.calculate(ANY_CANDLES));
     }
 
+    /**
+     * Условие может заглянуть в сигнал, но делегата это разбудит один раз, сколько бы раз условие ни
+     * спросило. Иначе расчёт платится дважды, а делегат с состоянием на второй вызов ответит другое.
+     */
+    @Test
+    void should_AskTheDelegateOnce_WhenTheConditionReadsTheSignalToo() {
+        List<Integer> asked = new ArrayList<>();
+        UpsideCalculator delegate = candles -> {
+            asked.add(1);
+
+            return of(1);
+        };
+        var calculator = new FilterUpsideCalculator(delegate, (candles, signal) -> {
+            signal.get();
+            signal.get();
+
+            return signal.get().signal() > 0;
+        });
+
+        assertEquals(of(1), calculator.calculate(ANY_CANDLES));
+        assertEquals(1, asked.size());
+    }
+
+    /** И наружу уходит ровно то, что видело условие, а не свежий вызов делегата. */
+    @Test
+    void should_ReturnTheReading_TheConditionSaw() {
+        double[] next = {1};
+        UpsideCalculator counting = candles -> of(next[0]++);
+        List<Upside> seen = new ArrayList<>();
+        var calculator = new FilterUpsideCalculator(counting, (candles, signal) -> {
+            seen.add(signal.get());
+
+            return true;
+        });
+
+        Upside answered = calculator.calculate(ANY_CANDLES);
+
+        assertEquals(of(1), seen.getFirst());
+        assertEquals(seen.getFirst(), answered);
+    }
+
+    /** Условию, которому сигнал не нужен, он и не достаётся: делегат молчит, даже когда фильтр пропускает. */
+    @Test
+    void should_LeaveTheDelegateAlone_WhenASignalConditionNeverLooks() {
+        List<Integer> asked = new ArrayList<>();
+        UpsideCalculator delegate = candles -> {
+            asked.add(1);
+
+            return of(1);
+        };
+
+        assertEquals(Upside.NEUTRAL,
+            new FilterUpsideCalculator(delegate, (candles, signal) -> false).calculate(ANY_CANDLES));
+        assertEquals(List.of(), asked);
+    }
+
+    /** Условие о рынке - частный случай условия о сигнале, и сигнала оно не касается. */
+    @Test
+    void should_TakeAMarketCondition_AsASignalConditionThatIgnoresTheSignal() {
+        assertEquals(of(1), SignalCondition.of(candles -> true).holds(ANY_CANDLES, () -> of(1))
+            ? of(1) : Upside.NEUTRAL);
+        assertFalse(SignalCondition.of(candles -> false).holds(ANY_CANDLES, () -> {
+            throw new AssertionError("Условию о рынке сигнал не нужен");
+        }));
+    }
+
+    /** Второе условие не спрашивают, если первое отказало, - и сигнал тогда тоже остаётся непрошенным. */
+    @Test
+    void should_ShortCircuit_WhenTheFirstConditionRefuses() {
+        SignalCondition both = SignalCondition.of(candles -> false)
+            .and((candles, signal) -> signal.get().signal() > 0);
+
+        assertFalse(both.holds(ANY_CANDLES, () -> {
+            throw new AssertionError("Первое условие уже отказало");
+        }));
+    }
+
     @Test
     void should_Throw_WhenEitherHalfIsMissing() {
         assertThrows(IllegalArgumentException.class,
             () -> new FilterUpsideCalculator(null, candles -> true));
         assertThrows(IllegalArgumentException.class,
-            () -> new FilterUpsideCalculator(saying(of(1)), null));
+            () -> new FilterUpsideCalculator(saying(of(1)), (MarketCondition) null));
+        assertThrows(IllegalArgumentException.class,
+            () -> new FilterUpsideCalculator(saying(of(1)), (SignalCondition) null));
+        assertThrows(IllegalArgumentException.class, () -> SignalCondition.of(null));
+        assertThrows(IllegalArgumentException.class,
+            () -> SignalCondition.of(candles -> true).and(null));
     }
 }

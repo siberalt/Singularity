@@ -20,8 +20,11 @@ import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyBacktester;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyResult;
+import com.siberalt.singularity.strategy.upside.FilterUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.UpsideCalculator;
 import com.siberalt.singularity.strategy.upside.WindowUpsideCalculator;
+import com.siberalt.singularity.strategy.upside.condition.Deadband;
+import com.siberalt.singularity.strategy.upside.condition.RsiSide;
 import com.siberalt.singularity.strategy.upside.trend.MacdUpsideCalculator;
 import com.siberalt.singularity.strategy.upside.trend.MovingAverageCrossUpsideCalculator;
 
@@ -66,6 +69,29 @@ public class GoldenCrossSimulation {
     private static final double COMMISSION = 0.0005;
     private static final Money INITIAL = Money.of("RUB", 1_000_000.00);
 
+    /**
+     * Сигнал, пропущенный через фильтры этого прогона: мёртвая зона внутри, RSI снаружи.
+     * <p>
+     * Порядок не произволен. Мёртвая зона читает силу самого сигнала, поэтому стоит прямо на нём. RSI
+     * читает только сторону, поэтому стоит снаружи и спрашивает сигнал лишь тогда, когда зона его
+     * пропустила - за этим и нужен {@link com.siberalt.singularity.strategy.upside.SignalCondition}.
+     * <p>
+     * Оба фильтра выключены, пока их не попросили: {@code deadband=0} и {@code rsi=} пустой.
+     */
+    static UpsideCalculator filtered(UpsideCalculator trend, double deadband, RsiSide rsi) {
+        UpsideCalculator filteredTrend = trend;
+
+        if (deadband > 0) {
+            filteredTrend = new FilterUpsideCalculator(filteredTrend, new Deadband(deadband));
+        }
+
+        if (rsi != null) {
+            filteredTrend = new FilterUpsideCalculator(filteredTrend, rsi);
+        }
+
+        return filteredTrend;
+    }
+
     /** Чем мерить тренд в этом прогоне - единственное, что отличает варианты друг от друга. */
     static UpsideCalculator trendOf(String macd, boolean ema, int fast, int slow, int signal) {
         if (macd.equals("line")) {
@@ -108,12 +134,26 @@ public class GoldenCrossSimulation {
         // Окно, которое копит WindowUpsideCalculator. Для SMA хватает периода медленной средней, а EMA
         // зависит от всей истории - усечённое окно даёт другой индикатор, и это надо уметь проверить.
         int window = Integer.parseInt(options.getOrDefault("window", String.valueOf(slow + 20)));
+        // Мёртвая зона в долях цены: 0.002 - линия должна отойти от нуля на 0.2% цены, иначе её сторона
+        // считается шумом. Ноль - зоны нет.
+        double deadband = Double.parseDouble(options.getOrDefault("deadband", "0"));
+        int rsiPeriod = Integer.parseInt(options.getOrDefault("rsiPeriod", "14"));
+        // rsi=50 - покупать только в нижней половине, продавать только в верхней. rsi=50,0 - то же самое
+        // для входа, но любой выход пропускается: в этом правиле сигнал и открывает, и закрывает позицию,
+        // поэтому симметричный фильтр вето́ит выход по мёртвому кресту ровно на падении, когда RSI низкий.
+        String[] levels = options.getOrDefault("rsi", "").split(",");
+        RsiSide rsi = levels[0].isEmpty() ? null : new RsiSide(rsiPeriod,
+            Double.parseDouble(levels[0]),
+            Double.parseDouble(levels.length > 1 ? levels[1] : levels[0]));
         ReadCandleRepository candles = new AggregatingCandleRepository(minutes, CandleInterval.DAY);
 
         System.out.printf(Locale.ROOT,
             "%s .. %s: %s(%d, %d) на дневных свечах, комиссия %.3f%% за сторону%n", FROM, TO,
             macd.isEmpty() ? (ema ? "пересечение EMA" : "пересечение SMA") : "MACD по " + macd,
             fast, slow, 100 * COMMISSION);
+        System.out.printf(Locale.ROOT, "фильтры: мёртвая зона %s, RSI %s%n",
+            deadband > 0 ? String.format(Locale.ROOT, "%.3f%% цены", 100 * deadband) : "нет",
+            rsi == null ? "нет" : "(" + options.get("rsi") + "), период " + rsiPeriod);
         System.out.printf("%4s %12s %8s %8s %11s %10s%n",
             "id", "счёт", "сделок", "плюс", "средняя %", "в рынке");
 
@@ -147,7 +187,8 @@ public class GoldenCrossSimulation {
             StrategyResult result = new StrategyBacktester<EventMockBroker>(
                 (range, accountId, simulated, observer) -> new BasicTradeStrategy(simulated, uid, accountId,
                     // Окно копит сам калькулятор окна: стратегия отдаёт свечи по одной и очищает список.
-                    new WindowUpsideCalculator(trendOf(macd, ema, fast, slow, signalPeriod), window),
+                    new WindowUpsideCalculator(
+                        filtered(trendOf(macd, ema, fast, slow, signalPeriod), deadband, rsi), window),
                     candles)
                     .setLookbackCandles(window)
                     .setBuyThreshold(1)
