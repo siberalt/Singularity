@@ -79,7 +79,7 @@ public class BasicTradeStrategySimulation {
     private final static boolean VWAP_RESET_DAILY = false;
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
-        Instant startTime = Instant.parse("2023-06-01T00:00:00Z");
+        Instant startTime = Instant.parse("2023-01-01T00:00:00Z");
         Instant endTime = Instant.parse("2026-12-11T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
@@ -221,10 +221,14 @@ public class BasicTradeStrategySimulation {
             INSTRUMENT_ID,
             accountId,
             new AggregatingUpsideCalculator(
-                CandleInterval.DAY,
+                CandleInterval.HOUR,
                 new WindowUpsideCalculator(
-                    new MacdUpsideCalculator(),
-                    200
+//                    new FilterUpsideCalculator(
+//                        new SlopeUpsideCalculator(6),
+//                        (lastCandles, upside) -> Math.abs(upside.get().signal()) >= 0.99
+//                    ),
+                    new PriceChangeUpsideCalculator(2, 3,2),
+                    20
                 )
             ),
 
