@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.upside;
 
 import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.strategy.market.MarketCondition;
 
 import java.util.List;
 
@@ -38,6 +39,11 @@ import java.util.List;
  * run. An exit condition that may simply never occur - a level that is never reached, a reading the
  * instrument does not visit in a quiet year - therefore wants {@link #setMaxWaitBars a limit}, after
  * which this calculator closes the position itself rather than waiting for an opinion that is not coming.
+ * <p>
+ * A limit that is a date rather than a count of bars goes in {@link #setDeadline} instead. Both close the
+ * position without asking the exit delegate, and for the same reason it is this class that does it: the
+ * direction the position points is known here and nowhere else, so one condition closes a long and a short
+ * alike - which a delegate handing out a signed signal cannot do.
  */
 public class EntryExitUpsideCalculator implements UpsideCalculator {
     private final UpsideCalculator entry;
@@ -47,6 +53,9 @@ public class EntryExitUpsideCalculator implements UpsideCalculator {
     private final double minSignal;
 
     private int maxWaitBars = Integer.MAX_VALUE;
+
+    /** Срок, не зависящий от мнения выходного делегата; по умолчанию его нет. */
+    private MarketCondition deadline = lastCandles -> false;
 
     /** Which way the open position points, zero while there is none. */
     private double direction;
@@ -98,6 +107,32 @@ public class EntryExitUpsideCalculator implements UpsideCalculator {
         return this;
     }
 
+    /**
+     * Условие, по которому позицию закрывают независимо от мнения выходного делегата.
+     * <p>
+     * Тот же срок, что {@link #setMaxWaitBars}, только измеряемый не барами, а состоянием рынка - и этим
+     * он решает задачу, которую калькулятором выхода не решить. Закрывающий сигнал синтезирует эта обёртка,
+     * а она одна здесь знает, куда смотрит открытая позиция, поэтому одно и то же условие закрывает и лонг,
+     * и шорт. Делегат выхода на такое не способен: он выдаёт знак, не зная стороны, и закрывал бы только
+     * одну из них.
+     * <p>
+     * Пример, ради которого это и сделано, - {@link com.siberalt.singularity.strategy.market.ExDateWindow}:
+     * «не держать под дивидендную отсечку» не мнение о рынке, а срок, и держать его надо для любой стороны.
+     * <p>
+     * Проверяется он со следующего после входа бара - как и мнение делегата, и по той же причине: бар входа
+     * отвечает вход, иначе позиция закрылась бы в момент открытия, заплатив круг ни за что. Поэтому вход,
+     * сделанный внутри окна, сроком не перекрывается, и запрет на вход - отдельное правило.
+     */
+    public EntryExitUpsideCalculator setDeadline(MarketCondition deadline) {
+        if (deadline == null) {
+            throw new IllegalArgumentException("Нет условия, по которому закрывать позицию");
+        }
+
+        this.deadline = deadline;
+
+        return this;
+    }
+
     @Override
     public Upside calculate(List<Candle> lastCandles) {
         if (direction != 0) {
@@ -106,7 +141,7 @@ public class EntryExitUpsideCalculator implements UpsideCalculator {
 
             waited++;
 
-            if (!closes && waited < maxWaitBars) {
+            if (!closes && waited < maxWaitBars && !deadline.holds(lastCandles)) {
                 return Upside.NEUTRAL;
             }
 

@@ -20,4 +20,16 @@ import java.util.List;
 @FunctionalInterface
 public interface MarketCondition {
     boolean holds(List<Candle> lastCandles);
+
+    /**
+     * The same condition the other way round.
+     * <p>
+     * Worth having because a condition and its refusal are often both wanted at once, for different jobs:
+     * {@link com.siberalt.singularity.strategy.market.ExDateWindow} closes a position while it holds and
+     * refuses to open one while it does not, and writing the window twice - once each way - is how the two
+     * come to disagree about where it starts.
+     */
+    default MarketCondition negated() {
+        return lastCandles -> !holds(lastCandles);
+    }
 }

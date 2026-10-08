@@ -4,7 +4,12 @@ import com.siberalt.singularity.broker.contract.service.instrument.common.Instru
 import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.impl.decorator.PositionRiskManagerUpsideCalculator;
+import com.siberalt.singularity.broker.contract.service.instrument.DividendInstrumentService;
+import com.siberalt.singularity.broker.contract.service.instrument.common.Dividend;
+import com.siberalt.singularity.broker.contract.service.instrument.request.GetDividendsRequest;
 import com.siberalt.singularity.broker.impl.mock.EventMockBroker;
+import com.siberalt.singularity.broker.impl.tinkoff.shared.AbstractTinkoffBroker;
+import com.siberalt.singularity.broker.impl.tinkoff.shared.factory.TinkoffInstrumentServiceFactory;
 import com.siberalt.singularity.configuration.ConfigInterface;
 import com.siberalt.singularity.configuration.YamlConfig;
 import com.siberalt.singularity.entity.candle.*;
@@ -44,6 +49,9 @@ import com.siberalt.singularity.strategy.level.LevelDetector;
 import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetector;
 import com.siberalt.singularity.strategy.level.selector.*;
 import com.siberalt.singularity.strategy.level.track.*;
+import com.siberalt.singularity.strategy.market.AnnouncedDividendCalendar;
+import com.siberalt.singularity.strategy.market.DividendCalendar;
+import com.siberalt.singularity.strategy.market.ExDateWindow;
 import com.siberalt.singularity.strategy.market.position.BaseEntryPriceCalculator;
 import com.siberalt.singularity.strategy.simulation.runner.AnalysisReport;
 import com.siberalt.singularity.strategy.simulation.runner.EffectivenessAnalyzer;
@@ -61,6 +69,8 @@ import com.siberalt.singularity.strategy.upside.trend.MovingAverageCrossUpsideCa
 import com.siberalt.singularity.strategy.upside.volume.VWAPUpsideCalculator;
 import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
 import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
+import ru.ttech.piapi.core.connector.ConnectorConfiguration;
+import ru.ttech.piapi.core.connector.ServiceStubFactory;
 
 import java.awt.*;
 import java.io.IOException;
@@ -115,6 +125,8 @@ public class BasicTradeStrategySimulation {
         var levelSelector = new StrongestLevelPairSelector(2);
         LevelPairSelectorWindowTracker selectorTracker = new LevelPairSelectorWindowTracker(levelSelector);
 
+        DividendCalendar dividends = tinkoffDividends(instruments, startTime, endTime);
+
         double commission = 0.0005;
         Money initialInvestment = Money.of("RUB", 1000000.00);
 
@@ -135,7 +147,8 @@ public class BasicTradeStrategySimulation {
                 resistanceTracker,
                 selectorTracker,
                 maximumLocator,
-                minimumLocator
+                minimumLocator,
+                dividends
             );
             strategy.run(observer);
         };
@@ -200,6 +213,49 @@ public class BasicTradeStrategySimulation {
         }
     }
 
+    /**
+     * Календарь отсечек с Тинькофф: один запрос на весь период прогона, дальше читается снимок.
+     * <p>
+     * Один, а не по мере надобности, и это существенно. {@link
+     * com.siberalt.singularity.strategy.market.BrokerDividendCalendar} перезапрашивает брокера раз в сутки
+     * <i>симулируемого</i> времени - на прогоне с 2023 по 2026 это около тысячи четырёхсот запросов, каждый
+     * с одним и тем же ответом: что брокер знает сегодня про март 2023-го, от даты вопроса не зависит.
+     * Перезапрос там нужен для живой торговли, где объявления приходят со временем; здесь он не нужен.
+     * <p>
+     * От подглядывания в будущее защищает не частота запросов, а {@code declaredDate} внутри
+     * {@link AnnouncedDividendCalendar}: дивиденд, объявленный позже бара, на этом баре не виден, сколько
+     * бы раз его ни скачивали.
+     * <p>
+     * Запрос идёт с запасом в год назад от начала: которой из своих дат брокер фильтрует диапазон -
+     * объявления, отсечки или выплаты, - контракт не обещает, и дивиденд, объявленный до начала прогона, но
+     * с отсечкой внутри него, терять нельзя.
+     */
+    private static DividendCalendar tinkoffDividends(SqliteInstrumentRepository instruments,
+                                                     Instant from, Instant to)
+        throws IOException, AbstractException, java.sql.SQLException {
+        ConfigInterface tinkoffConfiguration = new YamlConfig(
+            Files.newInputStream(Paths.get("src/test/resources/broker/tinkoff/test-settings.yaml")));
+        Properties properties = new Properties();
+
+        properties.put("token", tinkoffConfiguration.get("readonlyToken"));
+
+        DividendInstrumentService service = new TinkoffInstrumentServiceFactory()
+            .create(ServiceStubFactory.create(ConnectorConfiguration.loadFromProperties(properties)));
+        long instrumentId = instruments.idOf(INSTRUMENT_ID).orElseThrow();
+        List<Dividend> paid = service.getDividends(
+            GetDividendsRequest.of(INSTRUMENT_ID, from.minus(Duration.ofDays(365)), to)).getDividends();
+
+        AnnouncedDividendCalendar calendar = new AnnouncedDividendCalendar(
+            Map.of(instrumentId, paid));
+
+        // Печатается, потому что иначе «правило ни разу не сработало» не отличить от «отсечек не было»:
+        // declaredDate у брокера - не публичное объявление, и приходит он иногда уже после дня покупки.
+        System.out.printf("Отсечек с Тинькофф по %s: %d, без дат %d, объявлено слишком поздно %d%n",
+            INSTRUMENT_ID, paid.size(), calendar.skipped(), calendar.tooLate());
+
+        return calendar;
+    }
+
     private static Strategy createLevelsStrategy(
         ReadOperationRepository readOperationRepository,
         ReadCandleRepository candleRepository,
@@ -209,12 +265,20 @@ public class BasicTradeStrategySimulation {
         LevelDetector resistanceDetector,
         LevelPairSelector selectorTracker,
         ExtremeLocator maximaBaseLocator,
-        ExtremeLocator minimaBaseLocator
+        ExtremeLocator minimaBaseLocator,
+        DividendCalendar dividends
     ) {
 //        FilterUpsideCalculator filterUpsideCalculator = new FilterUpsideCalculator(
 //            new PriceChangeUpsideCalculator(30, 7, 100),
 //            lastCandles ->  true // IncrementalRsi.of(lastCandles, 12) <= 70
 //        );
+
+        UpsideCalculator priceChange = new PriceChangeUpsideCalculator(2, 3, 2);
+        // Срок закрывает позицию под отсечку независимо от мнения выхода, и закрывает любую сторону:
+        // направление позиции знает только сама обёртка. Окно по умолчанию - день покупки и день перед
+        // ним, потому что гэп приходит на следующий день, а заявка доходит через бар.
+        UpsideCalculator entryExit = new EntryExitUpsideCalculator(priceChange, priceChange)
+            .setDeadline(new ExDateWindow(dividends));
 
         BasicTradeStrategy strategy = new BasicTradeStrategy(
             broker,
@@ -227,7 +291,7 @@ public class BasicTradeStrategySimulation {
 //                        new SlopeUpsideCalculator(6),
 //                        (lastCandles, upside) -> Math.abs(upside.get().signal()) >= 0.99
 //                    ),
-                    new PriceChangeUpsideCalculator(2, 3,2),
+                    entryExit,
                     20
                 )
             ),
