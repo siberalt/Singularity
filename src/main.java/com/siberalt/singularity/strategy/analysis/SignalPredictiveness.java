@@ -1,8 +1,8 @@
 package com.siberalt.singularity.strategy.analysis;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.strategy.upside.Upside;
-import com.siberalt.singularity.strategy.upside.UpsideCalculator;
+import com.siberalt.singularity.strategy.signal.Signal;
+import com.siberalt.singularity.strategy.signal.SignalSource;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -92,7 +92,7 @@ public class SignalPredictiveness {
      * @param candles    ordered oldest first, one instrument, one interval
      * @param calculator the signal under test, given the same shape of window a strategy gives it
      */
-    public PredictivenessReport measure(List<Candle> candles, UpsideCalculator calculator) {
+    public PredictivenessReport measure(List<Candle> candles, SignalSource calculator) {
         int size = candles.size();
         int maxHorizon = 0;
 
@@ -109,11 +109,11 @@ public class SignalPredictiveness {
                 continue;
             }
 
-            Upside upside = calculator.calculate(candles.subList(bar - lookbackCandles + 1, bar + 1));
-            signal[bar] = upside.signal();
+            Signal reading = calculator.calculate(candles.subList(bar - lookbackCandles + 1, bar + 1));
+            signal[bar] = reading.confidence();
             evaluated++;
 
-            if (upside.signal() != 0) {
+            if (reading.confidence() != 0) {
                 firedBars++;
             }
         }

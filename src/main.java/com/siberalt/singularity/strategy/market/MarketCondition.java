@@ -11,7 +11,7 @@ import java.util.List;
  * is worth acting on at all can depend on the state of the market, and that state is measurable without
  * reference to the signal. A session that has barely traded, a spread too wide to cross, an hour the
  * instrument is known not to move in - each is a fact about the market, and
- * {@link com.siberalt.singularity.strategy.upside.FilterUpsideCalculator} turns any of them into a veto.
+ * {@link com.siberalt.singularity.strategy.signal.FilterSignalSource} turns any of them into a veto.
  * <p>
  * As with a coefficient, it has to be something the market is doing rather than something the signal
  * thinks. A condition that reads the signal's own strength is not a filter but a second threshold on it,

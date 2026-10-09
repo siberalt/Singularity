@@ -20,14 +20,14 @@ import com.siberalt.singularity.simulation.time.SimpleSimulationClock;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyBacktester;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyResult;
-import com.siberalt.singularity.strategy.upside.FilterUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.SignalCondition;
-import com.siberalt.singularity.strategy.upside.UpsideCalculator;
-import com.siberalt.singularity.strategy.upside.WindowUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.condition.Deadband;
-import com.siberalt.singularity.strategy.upside.condition.RsiSide;
-import com.siberalt.singularity.strategy.upside.trend.MacdUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.trend.MovingAverageCrossUpsideCalculator;
+import com.siberalt.singularity.strategy.signal.FilterSignalSource;
+import com.siberalt.singularity.strategy.signal.SignalCondition;
+import com.siberalt.singularity.strategy.signal.SignalSource;
+import com.siberalt.singularity.strategy.signal.WindowSignalSource;
+import com.siberalt.singularity.strategy.signal.condition.Deadband;
+import com.siberalt.singularity.strategy.signal.condition.RsiSide;
+import com.siberalt.singularity.strategy.signal.trend.MacdSignalSource;
+import com.siberalt.singularity.strategy.signal.trend.MovingAverageCrossSignalSource;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -54,7 +54,7 @@ import java.util.Map;
  * симуляции идут днями, что для правила с удержанием в месяцы и есть правильная гранулярность; цена этого —
  * внутридневной информации нет, залив идёт по дневной цене.
  * <p>
- * Сигнал — {@link MovingAverageCrossUpsideCalculator}: сторона, а не сила, поэтому пороги покупки и продажи
+ * Сигнал — {@link MovingAverageCrossSignalSource}: сторона, а не сила, поэтому пороги покупки и продажи
  * стоят на единице. Окно стратегии — 220 дневных баров: двести на медленную среднюю и запас, чтобы первый
  * же бар после прогрева давал ответ.
  * <p>
@@ -79,9 +79,9 @@ public class GoldenCrossSimulation {
      * <p>
      * Оба фильтра выключены, пока их не попросили: {@code deadband=0} и {@code rsi=} пустой.
      */
-    static UpsideCalculator filtered(UpsideCalculator trend, double deadband, String deadbandOn,
+    static SignalSource filtered(SignalSource trend, double deadband, String deadbandOn,
                                      RsiSide rsi) {
-        UpsideCalculator filteredTrend = trend;
+        SignalSource filteredTrend = trend;
 
         if (deadband > 0) {
             // Сторона решает многое: на обе стороны зона задерживает и закрытие позиции, а это измерено
@@ -92,28 +92,28 @@ public class GoldenCrossSimulation {
                 default -> new Deadband(deadband);
             };
 
-            filteredTrend = new FilterUpsideCalculator(filteredTrend, zone);
+            filteredTrend = new FilterSignalSource(filteredTrend, zone);
         }
 
         if (rsi != null) {
-            filteredTrend = new FilterUpsideCalculator(filteredTrend, rsi);
+            filteredTrend = new FilterSignalSource(filteredTrend, rsi);
         }
 
         return filteredTrend;
     }
 
     /** Чем мерить тренд в этом прогоне - единственное, что отличает варианты друг от друга. */
-    static UpsideCalculator trendOf(String macd, boolean ema, int fast, int slow, int signal) {
+    static SignalSource trendOf(String macd, boolean ema, int fast, int slow, int signal) {
         if (macd.equals("line")) {
-            return new MacdUpsideCalculator(fast, slow, signal, MacdUpsideCalculator.Source.LINE);
+            return new MacdSignalSource(fast, slow, signal, MacdSignalSource.Source.LINE);
         }
 
         if (macd.equals("histogram")) {
-            return new MacdUpsideCalculator(fast, slow, signal, MacdUpsideCalculator.Source.HISTOGRAM);
+            return new MacdSignalSource(fast, slow, signal, MacdSignalSource.Source.HISTOGRAM);
         }
 
-        return ema ? MovingAverageCrossUpsideCalculator.ofEma(fast, slow)
-            : MovingAverageCrossUpsideCalculator.ofSma(fast, slow);
+        return ema ? MovingAverageCrossSignalSource.ofEma(fast, slow)
+            : MovingAverageCrossSignalSource.ofSma(fast, slow);
     }
 
     public static void main(String[] args) throws Exception {
@@ -141,7 +141,7 @@ public class GoldenCrossSimulation {
         // линией и её средней. Пусто - пересечение простых средних, как было.
         String macd = options.getOrDefault("macd", "");
         int signalPeriod = Integer.parseInt(options.getOrDefault("signal", "20"));
-        // Окно, которое копит WindowUpsideCalculator. Для SMA хватает периода медленной средней, а EMA
+        // Окно, которое копит WindowSignalSource. Для SMA хватает периода медленной средней, а EMA
         // зависит от всей истории - усечённое окно даёт другой индикатор, и это надо уметь проверить.
         int window = Integer.parseInt(options.getOrDefault("window", String.valueOf(slow + 20)));
         // Мёртвая зона в долях цены: 0.002 - линия должна отойти от нуля на 0.2% цены, иначе её сторона
@@ -200,7 +200,7 @@ public class GoldenCrossSimulation {
             StrategyResult result = new StrategyBacktester<EventMockBroker>(
                 (range, accountId, simulated, observer) -> new BasicTradeStrategy(simulated, uid, accountId,
                     // Окно копит сам калькулятор окна: стратегия отдаёт свечи по одной и очищает список.
-                    new WindowUpsideCalculator(
+                    new WindowSignalSource(
                         filtered(trendOf(macd, ema, fast, slow, signalPeriod), deadband, deadbandOn, rsi),
                         window),
                     candles)

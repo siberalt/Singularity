@@ -16,11 +16,11 @@ package com.siberalt.singularity.strategy.impl.quantity;
 public class SignalScaledQuantity implements TradeQuantity {
     @Override
     public long toBuy(TradeMoment moment, TradeCapacity capacity) {
-        return (long) (capacity.affordableLots() * moment.upside().signal());
+        return (long) (capacity.affordableLots() * moment.signal().confidence());
     }
 
     @Override
     public long toSell(TradeMoment moment, TradeCapacity capacity) {
-        return (long) (capacity.positionLots() * Math.abs(moment.upside().signal()));
+        return (long) (capacity.positionLots() * Math.abs(moment.signal().confidence()));
     }
 }

@@ -8,7 +8,7 @@ import java.util.List;
  * Wilder's RSI, taking closes one at a time and remembering where it got to.
  * <p>
  * The one place this is written down. It had been written three times - in
- * {@link com.siberalt.singularity.strategy.upside.RSIUpsideCalculator}, in
+ * {@link com.siberalt.singularity.strategy.signal.RSISignalSource}, in
  * {@link com.siberalt.singularity.strategy.impl.RsiLimitEntryStrategy} and in a simulation - which is
  * three chances for the readings that a measurement is based on and the readings a strategy trades on to
  * drift apart without anyone noticing. They agreed, as it happens; keeping them agreeing was the reason

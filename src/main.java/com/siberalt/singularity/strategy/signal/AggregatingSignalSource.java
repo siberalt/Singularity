@@ -1,0 +1,74 @@
+package com.siberalt.singularity.strategy.signal;
+
+import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
+import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.CandleAggregator;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Rolls the candles up to a wider interval and passes on only the bars that have closed, so a
+ * calculator written for one timeframe can be run on another without either it or the strategy
+ * knowing.
+ * <p>
+ * Between one wide bar and the next it answers {@link Signal#NEUTRAL}, and that is the point rather
+ * than a gap: a strategy fed minute candles asks for a decision every minute, and a signal read
+ * from hourly bars has nothing new to say until the hour is out. Answering with the previous hour's
+ * verdict would have the strategy act on it sixty times and pay sixty round trips for one decision.
+ * <p>
+ * Only closed bars are passed on. The hour in progress is held back until a candle from the next
+ * one arrives, so the wide bar the signal reads is one whose high, low, close and volume are all
+ * settled - a bar still forming would have the calculator reading a partial volume as a real one.
+ */
+public class AggregatingSignalSource implements SignalSource {
+    private final CandleInterval interval;
+    private final SignalSource delegate;
+    private final CandleAggregator aggregator = new CandleAggregator();
+    private final List<Candle> openBar = new ArrayList<>();
+    private long openBucket = Long.MIN_VALUE;
+    private Instant lastSeen;
+
+    /**
+     * @param interval the width to roll up to
+     * @param delegate the calculator underneath, which sees one candle per closed interval and can
+     *                 keep its own window over them - a {@link WindowSignalSource} placed here
+     *                 holds that many wide bars, not that many of the original ones
+     */
+    public AggregatingSignalSource(CandleInterval interval, SignalSource delegate) {
+        this.interval = interval;
+        this.delegate = delegate;
+    }
+
+    @Override
+    public Signal calculate(List<Candle> lastCandles) {
+        Signal signal = Signal.NEUTRAL;
+
+        for (Candle candle : lastCandles) {
+            // Only what has not been seen. A caller may hand over a window rather than a feed - the
+            // strategies here pass the last day of candles on every candle - and counting those
+            // minutes again would build each wide bar several times over and fill the window behind
+            // this one with copies of the same hour.
+            if (lastSeen != null && !candle.getTime().isAfter(lastSeen)) {
+                continue;
+            }
+
+            lastSeen = candle.getTime();
+            long bucket = aggregator.bucketOf(candle, interval);
+
+            if (bucket != openBucket) {
+                if (!openBar.isEmpty()) {
+                    signal = delegate.calculate(List.of(aggregator.merge(openBar, interval)));
+                }
+
+                openBar.clear();
+                openBucket = bucket;
+            }
+
+            openBar.add(candle);
+        }
+
+        return signal;
+    }
+}

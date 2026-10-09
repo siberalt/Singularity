@@ -1,0 +1,232 @@
+package com.siberalt.singularity.strategy.signal;
+
+import com.siberalt.singularity.entity.candle.Candle;
+import com.siberalt.singularity.entity.candle.TimePoint;
+import com.siberalt.singularity.strategy.market.MarketCondition;
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class FilterSignalSourceTest {
+    private static final List<Candle> ANY_CANDLES = List.of(
+        Candle.of(TimePoint.NULL, 100, 100, 100, 100, 100)
+    );
+
+    private Signal of(double signal) {
+        return new Signal(signal, 1);
+    }
+
+    private SignalSource saying(Signal signal) {
+        return candles -> signal;
+    }
+
+    @Test
+    void should_PassTheSignalThrough_WhenTheFilterHolds() {
+        var calculator = new FilterSignalSource(saying(new Signal(0.8, 0.5)), candles -> true);
+
+        assertEquals(new Signal(0.8, 0.5), calculator.calculate(ANY_CANDLES));
+    }
+
+    @Test
+    void should_ReturnNeutral_WhenTheFilterRefuses() {
+        var calculator = new FilterSignalSource(saying(of(1)), candles -> false);
+
+        assertEquals(Signal.NEUTRAL, calculator.calculate(ANY_CANDLES));
+    }
+
+    /** Both ways round: a filter is not a side. */
+    @Test
+    void should_PassAFallThrough_AsReadily() {
+        var calculator = new FilterSignalSource(saying(of(-1)), candles -> true);
+
+        assertEquals(of(-1), calculator.calculate(ANY_CANDLES));
+    }
+
+    /** A filter has nothing to add to silence, so the delegate's own NEUTRAL comes out unchanged. */
+    @Test
+    void should_KeepTheDelegatesSilence_WhenTheFilterHolds() {
+        var calculator = new FilterSignalSource(saying(Signal.NEUTRAL), candles -> true);
+
+        assertEquals(Signal.NEUTRAL, calculator.calculate(ANY_CANDLES));
+    }
+
+    @Test
+    void should_NotAskTheDelegate_WhenTheFilterRefuses() {
+        List<Integer> asked = new ArrayList<>();
+        var calculator = new FilterSignalSource(candles -> {
+            asked.add(1);
+
+            return of(1);
+        }, candles -> false);
+
+        calculator.calculate(ANY_CANDLES);
+
+        assertEquals(List.of(), asked);
+    }
+
+    /** The filter reads the same candles the signal does. */
+    @Test
+    void should_HandTheCandlesToTheFilter() {
+        List<List<Candle>> seen = new ArrayList<>();
+        var calculator = new FilterSignalSource(saying(of(1)), candles -> {
+            seen.add(candles);
+
+            return true;
+        });
+
+        calculator.calculate(ANY_CANDLES);
+
+        assertEquals(List.of(ANY_CANDLES), seen);
+    }
+
+    /** Asked on every bar, so a condition that comes and goes lets the signal through and stops it again. */
+    @Test
+    void should_AskTheFilter_OnEveryBar() {
+        boolean[] holds = {true};
+        var calculator = new FilterSignalSource(saying(of(1)), candles -> holds[0]);
+
+        assertEquals(of(1), calculator.calculate(ANY_CANDLES));
+
+        holds[0] = false;
+
+        assertEquals(Signal.NEUTRAL, calculator.calculate(ANY_CANDLES));
+
+        holds[0] = true;
+
+        assertEquals(of(1), calculator.calculate(ANY_CANDLES));
+    }
+
+    /**
+     * Условие может заглянуть в сигнал, но делегата это разбудит один раз, сколько бы раз условие ни
+     * спросило. Иначе расчёт платится дважды, а делегат с состоянием на второй вызов ответит другое.
+     */
+    @Test
+    void should_AskTheDelegateOnce_WhenTheConditionReadsTheSignalToo() {
+        List<Integer> asked = new ArrayList<>();
+        SignalSource delegate = candles -> {
+            asked.add(1);
+
+            return of(1);
+        };
+        var calculator = new FilterSignalSource(delegate, (candles, signal) -> {
+            signal.get();
+            signal.get();
+
+            return signal.get().confidence() > 0;
+        });
+
+        assertEquals(of(1), calculator.calculate(ANY_CANDLES));
+        assertEquals(1, asked.size());
+    }
+
+    /** И наружу уходит ровно то, что видело условие, а не свежий вызов делегата. */
+    @Test
+    void should_ReturnTheReading_TheConditionSaw() {
+        double[] next = {1};
+        SignalSource counting = candles -> of(next[0]++);
+        List<Signal> seen = new ArrayList<>();
+        var calculator = new FilterSignalSource(counting, (candles, signal) -> {
+            seen.add(signal.get());
+
+            return true;
+        });
+
+        Signal answered = calculator.calculate(ANY_CANDLES);
+
+        assertEquals(of(1), seen.getFirst());
+        assertEquals(seen.getFirst(), answered);
+    }
+
+    /** Условию, которому сигнал не нужен, он и не достаётся: делегат молчит, даже когда фильтр пропускает. */
+    @Test
+    void should_LeaveTheDelegateAlone_WhenASignalConditionNeverLooks() {
+        List<Integer> asked = new ArrayList<>();
+        SignalSource delegate = candles -> {
+            asked.add(1);
+
+            return of(1);
+        };
+
+        assertEquals(Signal.NEUTRAL,
+            new FilterSignalSource(delegate, (candles, signal) -> false).calculate(ANY_CANDLES));
+        assertEquals(List.of(), asked);
+    }
+
+    /** Условие о рынке - частный случай условия о сигнале, и сигнала оно не касается. */
+    @Test
+    void should_TakeAMarketCondition_AsASignalConditionThatIgnoresTheSignal() {
+        assertEquals(of(1), SignalCondition.of(candles -> true).holds(ANY_CANDLES, () -> of(1))
+            ? of(1) : Signal.NEUTRAL);
+        assertFalse(SignalCondition.of(candles -> false).holds(ANY_CANDLES, () -> {
+            throw new AssertionError("Условию о рынке сигнал не нужен");
+        }));
+    }
+
+    /** Второе условие не спрашивают, если первое отказало, - и сигнал тогда тоже остаётся непрошенным. */
+    @Test
+    void should_ShortCircuit_WhenTheFirstConditionRefuses() {
+        SignalCondition both = SignalCondition.of(candles -> false)
+            .and((candles, signal) -> signal.get().confidence() > 0);
+
+        assertFalse(both.holds(ANY_CANDLES, () -> {
+            throw new AssertionError("Первое условие уже отказало");
+        }));
+    }
+
+    /**
+     * Условие на одной стороне: покупка спрашивается, продажа проходит. Это рабочая форма фильтра в
+     * правиле, где один калькулятор и открывает, и закрывает позицию.
+     */
+    @Test
+    void should_AskOnlyAboutBuys_WhenTheConditionIsGivenASide() {
+        SignalCondition never = ((SignalCondition) (candles, signal) -> false).onlyForBuys();
+
+        assertFalse(never.holds(ANY_CANDLES, () -> of(1)));
+        assertTrue(never.holds(ANY_CANDLES, () -> of(-1)));
+        assertTrue(never.holds(ANY_CANDLES, () -> Signal.NEUTRAL));
+        assertTrue(never.holds(ANY_CANDLES, () -> null));
+    }
+
+    @Test
+    void should_AskOnlyAboutSells_WhenTheSideIsTheOtherOne() {
+        SignalCondition never = ((SignalCondition) (candles, signal) -> false).onlyForSells();
+
+        assertTrue(never.holds(ANY_CANDLES, () -> of(1)));
+        assertFalse(never.holds(ANY_CANDLES, () -> of(-1)));
+    }
+
+    /** И сторона стоит одного вызова делегата, а не двух: условие получает уже готовый ответ. */
+    @Test
+    void should_StillAskTheDelegateOnce_WhenTheConditionHasASide() {
+        List<Integer> asked = new ArrayList<>();
+        SignalSource delegate = candles -> {
+            asked.add(1);
+
+            return of(1);
+        };
+        var calculator = new FilterSignalSource(delegate,
+            ((SignalCondition) (candles, signal) -> signal.get().strength() > 0).onlyForBuys());
+
+        assertEquals(of(1), calculator.calculate(ANY_CANDLES));
+        assertEquals(1, asked.size());
+    }
+
+    @Test
+    void should_Throw_WhenEitherHalfIsMissing() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new FilterSignalSource(null, candles -> true));
+        assertThrows(IllegalArgumentException.class,
+            () -> new FilterSignalSource(saying(of(1)), (MarketCondition) null));
+        assertThrows(IllegalArgumentException.class,
+            () -> new FilterSignalSource(saying(of(1)), (SignalCondition) null));
+        assertThrows(IllegalArgumentException.class, () -> SignalCondition.of(null));
+        assertThrows(IllegalArgumentException.class,
+            () -> SignalCondition.of(candles -> true).and(null));
+    }
+}

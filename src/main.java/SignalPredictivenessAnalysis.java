@@ -9,22 +9,22 @@ import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.strategy.analysis.PredictivenessReport;
 import com.siberalt.singularity.strategy.analysis.SignalPredictiveness;
 import com.siberalt.singularity.strategy.analysis.VarianceRatio;
-import com.siberalt.singularity.strategy.upside.RangeSwitchUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.SmoothSwitchUpsideCalculator;
+import com.siberalt.singularity.strategy.signal.RangeSwitchSignalSource;
+import com.siberalt.singularity.strategy.signal.SmoothSwitchSignalSource;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.cache.CachingExtremeLocator;
 import com.siberalt.singularity.strategy.level.linear.StatelessClusterLevelDetector;
 import com.siberalt.singularity.strategy.market.MarketCoefficient;
 import com.siberalt.singularity.strategy.level.selector.StrongestLevelPairSelector;
-import com.siberalt.singularity.strategy.upside.InvertedUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.KeyLevelsUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.SimpleLevelBasedUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.MeanReversionUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.SlopeUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.VolumeImbalanceUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.Upside;
-import com.siberalt.singularity.strategy.upside.UpsideCalculator;
+import com.siberalt.singularity.strategy.signal.InvertedSignalSource;
+import com.siberalt.singularity.strategy.signal.level.KeyLevelsSignalSource;
+import com.siberalt.singularity.strategy.signal.level.SimpleLevelBasedSignalSource;
+import com.siberalt.singularity.strategy.signal.MeanReversionSignalSource;
+import com.siberalt.singularity.strategy.signal.SlopeSignalSource;
+import com.siberalt.singularity.strategy.signal.VolumeImbalanceSignalSource;
+import com.siberalt.singularity.strategy.signal.Signal;
+import com.siberalt.singularity.strategy.signal.SignalSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -35,7 +35,7 @@ import java.util.Map;
 
 /**
  * Measures what a signal knows about the future, on real candles, before any strategy is built on
- * it. Run this on a new {@link UpsideCalculator} before running a simulation with it: a simulation
+ * it. Run this on a new {@link SignalSource} before running a simulation with it: a simulation
  * that comes back negative cannot tell you whether the signal was wrong or the sizing was, and this
  * can.
  * <p>
@@ -155,50 +155,50 @@ public class SignalPredictivenessAnalysis {
 
         for (int period : calculatorPeriods()) {
             String family = System.getProperty("signal", "slope");
-            UpsideCalculator calculator = switch (family) {
-                case "flow" -> new VolumeImbalanceUpsideCalculator(period);
-                case "reversion" -> new MeanReversionUpsideCalculator(period)
+            SignalSource calculator = switch (family) {
+                case "flow" -> new VolumeImbalanceSignalSource(period);
+                case "reversion" -> new MeanReversionSignalSource(period)
                     .setMinStraightness(Double.parseDouble(System.getProperty("straight", "0")));
                 // Where the price sits between the levels the recent history clustered around:
                 // near support reads as something to buy, near resistance as something to sell.
-                case "levels" -> new KeyLevelsUpsideCalculator(
+                case "levels" -> new KeyLevelsSignalSource(
                     StatelessClusterLevelDetector.createDefault(1.4, cached(PivotPointExtremeLocator.ofMinimums(period))),
                     StatelessClusterLevelDetector.createDefault(1.4, cached(PivotPointExtremeLocator.ofMaximums(period))),
-                    new SimpleLevelBasedUpsideCalculator(),
+                    new SimpleLevelBasedSignalSource(),
                     new StrongestLevelPairSelector(2),
-                    window -> Upside.NEUTRAL
+                    window -> Signal.NEUTRAL
                 );
                 // Which way a trend read should be taken is a property of the market rather than of
                 // the signal: above one the moves carry on, below it they come back. Measured, not
                 // guessed - see VarianceRatio - and here it picks one branch outright.
-                case "switch" -> new RangeSwitchUpsideCalculator(
+                case "switch" -> new RangeSwitchSignalSource(
                     varianceRatio(),
                     List.of(
-                        RangeSwitchUpsideCalculator.Branch.below(1, inverted(new SlopeUpsideCalculator(period))),
-                        RangeSwitchUpsideCalculator.Branch.from(1, new SlopeUpsideCalculator(period))
+                        RangeSwitchSignalSource.Branch.below(1, inverted(new SlopeSignalSource(period))),
+                        RangeSwitchSignalSource.Branch.from(1, new SlopeSignalSource(period))
                     )
                 );
                 // The same question answered by degrees: near a ratio of one the two readings cancel
                 // and the signal fades, instead of flipping between bars on a coefficient's jitter.
                 // {-Dwidth=0} makes it the switch again.
-                case "blend" -> new SmoothSwitchUpsideCalculator(
+                case "blend" -> new SmoothSwitchSignalSource(
                     varianceRatio(),
                     List.of(
-                        SmoothSwitchUpsideCalculator.weighted(
-                            new SlopeUpsideCalculator(period),
-                            SmoothSwitchUpsideCalculator.rising(1, blendWidth())
+                        SmoothSwitchSignalSource.weighted(
+                            new SlopeSignalSource(period),
+                            SmoothSwitchSignalSource.rising(1, blendWidth())
                         ),
-                        SmoothSwitchUpsideCalculator.weighted(
-                            inverted(new SlopeUpsideCalculator(period)),
-                            SmoothSwitchUpsideCalculator.falling(1, blendWidth())
+                        SmoothSwitchSignalSource.weighted(
+                            inverted(new SlopeSignalSource(period)),
+                            SmoothSwitchSignalSource.falling(1, blendWidth())
                         )
                     )
                 );
-                default -> new SlopeUpsideCalculator(period);
+                default -> new SlopeSignalSource(period);
             };
 
             if (Boolean.getBoolean("invert")) {
-                calculator = new InvertedUpsideCalculator(calculator);
+                calculator = new InvertedSignalSource(calculator);
             }
             long startedAt = System.currentTimeMillis();
             PredictivenessReport report = new SignalPredictiveness()
@@ -299,8 +299,8 @@ public class SignalPredictivenessAnalysis {
         return Double.parseDouble(System.getProperty("width", "0.15"));
     }
 
-    private static UpsideCalculator inverted(UpsideCalculator calculator) {
-        return new InvertedUpsideCalculator(calculator);
+    private static SignalSource inverted(SignalSource calculator) {
+        return new InvertedSignalSource(calculator);
     }
 
     /**

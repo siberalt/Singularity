@@ -1,6 +1,6 @@
 package com.siberalt.singularity.strategy.impl.quantity;
 
-import com.siberalt.singularity.strategy.upside.Upside;
+import com.siberalt.singularity.strategy.signal.Signal;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -36,6 +36,6 @@ class SignalScaledQuantityTest {
     }
 
     private TradeMoment moment(double signal) {
-        return new TradeMoment(1L, NOW, new Upside(signal, 1.0));
+        return new TradeMoment(1L, NOW, new Signal(signal, 1.0));
     }
 }

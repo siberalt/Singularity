@@ -23,12 +23,12 @@ import com.siberalt.singularity.strategy.impl.quantity.TradeMoment;
 import com.siberalt.singularity.strategy.impl.quantity.TradeQuantity;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyBacktester;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyResult;
-import com.siberalt.singularity.strategy.upside.FilterUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.FixedSignalReverserUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.InvertedUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.PriceChangeUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.UpsideCalculator;
-import com.siberalt.singularity.strategy.upside.WindowUpsideCalculator;
+import com.siberalt.singularity.strategy.signal.FilterSignalSource;
+import com.siberalt.singularity.strategy.signal.FixedReverserSignalSource;
+import com.siberalt.singularity.strategy.signal.InvertedSignalSource;
+import com.siberalt.singularity.strategy.signal.PriceChangeSignalSource;
+import com.siberalt.singularity.strategy.signal.SignalSource;
+import com.siberalt.singularity.strategy.signal.WindowSignalSource;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -55,7 +55,7 @@ import java.util.Map;
  * borrow is a fraction of a basis point, so the omission is small - but on a thin name the availability is
  * not a detail, and no simulation here can speak to it.
  * <p>
- * The signal is {@link PriceChangeUpsideCalculator} as it now reads a window: the rise measured from the
+ * The signal is {@link PriceChangeSignalSource} as it now reads a window: the rise measured from the
  * lowest price in it, and counted only while the window still ends on its own highest. Its threshold is
  * therefore not the stand's seven per cent - a rise of seven from the window's low is a move of about five
  * and a half between its ends - so ten is the number that trades what the stand measured at seven.
@@ -147,14 +147,14 @@ public class PriceChangeShortSimulation {
 
             StrategyResult result = new StrategyBacktester<EventMockBroker>(
                 (range, accountId, simulated, observer) -> {
-                    UpsideCalculator rises = new PriceChangeUpsideCalculator(span, rise, 100);
+                    SignalSource rises = new PriceChangeSignalSource(span, rise, 100);
 
                     if (inSession) {
                         // The hygiene the stand did by hand: a window of span candles that took more than
                         // half again as long in wall-clock minutes has a break in it, and a break is the
                         // largest price change there is. The filter goes around what opens the trade, not
-                        // around the reverser that closes it - see FilterUpsideCalculator.
-                        rises = new FilterUpsideCalculator(rises, window -> window.size() > span
+                        // around the reverser that closes it - see FilterSignalSource.
+                        rises = new FilterSignalSource(rises, window -> window.size() > span
                             && Duration.between(window.get(window.size() - 1 - span).getTime(),
                             window.getLast().getTime()).toMinutes() <= 3L * span / 2);
                     }
@@ -162,11 +162,11 @@ public class PriceChangeShortSimulation {
                     // The calculator says "it has risen" with +1; inverted that is -1, a sell, which is
                     // the side the reverser has to be told about - it reads the sign of the signal, not
                     // the direction of the price. Its own +1, hold bars later, buys the short back.
-                    UpsideCalculator sell = new InvertedUpsideCalculator(rises);
+                    SignalSource sell = new InvertedSignalSource(rises);
 
                     new BasicTradeStrategy(simulated, uid, accountId,
-                        new WindowUpsideCalculator(
-                            FixedSignalReverserUpsideCalculator.ofFalls(sell, hold, 1),
+                        new WindowSignalSource(
+                            FixedReverserSignalSource.ofFalls(sell, hold, 1),
                             2 * span
                         ),
                         candles)

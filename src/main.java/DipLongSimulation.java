@@ -21,13 +21,13 @@ import com.siberalt.singularity.strategy.impl.quantity.TradeMoment;
 import com.siberalt.singularity.strategy.impl.quantity.TradeQuantity;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyBacktester;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyResult;
-import com.siberalt.singularity.strategy.upside.FilterUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.FixedSignalReverserUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.InvertedUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.PriceChangeUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.Upside;
-import com.siberalt.singularity.strategy.upside.UpsideCalculator;
-import com.siberalt.singularity.strategy.upside.WindowUpsideCalculator;
+import com.siberalt.singularity.strategy.signal.FilterSignalSource;
+import com.siberalt.singularity.strategy.signal.FixedReverserSignalSource;
+import com.siberalt.singularity.strategy.signal.InvertedSignalSource;
+import com.siberalt.singularity.strategy.signal.PriceChangeSignalSource;
+import com.siberalt.singularity.strategy.signal.Signal;
+import com.siberalt.singularity.strategy.signal.SignalSource;
+import com.siberalt.singularity.strategy.signal.WindowSignalSource;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -48,7 +48,7 @@ import java.util.Map;
  * The dip rule run through the event simulator, one instrument at a time.
  * <p>
  * What the stand measured, and what this runs: a fall of four per cent or more from the highest price of
- * the last thirty candles - read by {@link PriceChangeUpsideCalculator}, from the window's high, counted
+ * the last thirty candles - read by {@link PriceChangeSignalSource}, from the window's high, counted
  * only while the part after that high holds nothing below the end - bought at the market and held sixty
  * bars. The depth grid found the return proportional to the fall and crossing the cost of a round trip
  * between three and four per cent; four is the shallowest depth with events in the hundreds.
@@ -66,7 +66,7 @@ import java.util.Map;
  * no stop orders. On the stand it fired on one trade in a hundred and cost three tenths of a basis point,
  * so its absence flatters the result by that much and leaves the worst trade unbounded.
  * The hygiene the stand applied by hand is available to the strategy through
- * {@link FilterUpsideCalculator}: with {@code session=1} a window of thirty candles that took more than
+ * {@link FilterSignalSource}: with {@code session=1} a window of thirty candles that took more than
  * forty five minutes of wall clock is refused, because a window that long has a break in it. Both are run.
  * <p>
  * Costs are the broker's own and by side: commission 0.05% each way, half a spread 0.015%, slippage 0.06%.
@@ -163,23 +163,23 @@ public class DipLongSimulation {
                     // The calculator says "it has fallen" with -1; inverted that is +1, a buy, so the
                     // reverser is told about rises: it reads the sign of the signal, not the direction of
                     // the price. Its own -1, hold bars later, sells the position out.
-                    UpsideCalculator falls = new PriceChangeUpsideCalculator(span, 100, fall);
+                    SignalSource falls = new PriceChangeSignalSource(span, 100, fall);
 
                     if (inSession) {
-                        falls = new FilterUpsideCalculator(falls, window -> window.size() > span
+                        falls = new FilterSignalSource(falls, window -> window.size() > span
                             && Duration.between(window.get(window.size() - 1 - span).getTime(),
                             window.getLast().getTime()).toMinutes() <= 3L * span / 2);
                     }
 
-                    UpsideCalculator signals = new WindowUpsideCalculator(
-                        FixedSignalReverserUpsideCalculator.ofRises(
-                            new InvertedUpsideCalculator(falls), hold, 1),
+                    SignalSource signals = new WindowSignalSource(
+                        FixedReverserSignalSource.ofRises(
+                            new InvertedSignalSource(falls), hold, 1),
                         2 * span
                     );
                     // Outside the window calculator, which hands its delegate only 2 * span bars: the
                     // weight needs half a week of them.
-                    UpsideCalculator sized = size.equals("depth")
-                        ? new DepthSizedUpsideCalculator(signals, lowWindow, cap)
+                    SignalSource sized = size.equals("depth")
+                        ? new DepthSizedSignalSource(signals, lowWindow, cap)
                         : signals;
 
                     new BasicTradeStrategy(simulated, uid, accountId, sized, candles)
@@ -223,8 +223,8 @@ public class DipLongSimulation {
         row("окно через перерыв", all.stream().filter(Trade::overBreak).toList());
         row("в день отсечки", all.stream().filter(Trade::exDay).toList());
 
-        if (!DepthSizedUpsideCalculator.SHARES.isEmpty()) {
-            double[] sorted = DepthSizedUpsideCalculator.SHARES.stream()
+        if (!DepthSizedSignalSource.SHARES.isEmpty()) {
+            double[] sorted = DepthSizedSignalSource.SHARES.stream()
                 .mapToDouble(Double::doubleValue)
                 .sorted()
                 .toArray();
@@ -241,7 +241,7 @@ public class DipLongSimulation {
      * How much of the account one buy commits. A sell always closes the whole position, whatever opened it.
      * <p>
      * {@code depth} reads the share off the signal's second channel, where
-     * {@link DepthSizedUpsideCalculator} wrote it; {@code flat} spends the same share on every trade, which
+     * {@link DepthSizedSignalSource} wrote it; {@code flat} spends the same share on every trade, which
      * is the control the weighted run has to beat; {@code full} is the default sizing - everything, every
      * time.
      */
@@ -250,7 +250,7 @@ public class DipLongSimulation {
             @Override
             public long toBuy(TradeMoment moment, TradeCapacity capacity) {
                 double share = switch (size) {
-                    case "depth" -> moment.upside().strength();
+                    case "depth" -> moment.signal().strength();
                     case "flat" -> 1 / cap;
                     default -> 1;
                 };
@@ -281,11 +281,11 @@ public class DipLongSimulation {
      * It keeps the long window itself and hands the delegate only the candles it was given. That is not a
      * detail either: {@link BasicTradeStrategy} empties its list after every bar, so a calculator is given
      * one candle at a time and whatever window it needs is a window it accumulated - which is what
-     * {@link WindowUpsideCalculator} is for. Wrapping that one in another of half a week would re-add two
+     * {@link WindowSignalSource} is for. Wrapping that one in another of half a week would re-add two
      * and a half thousand candles on every bar of every instrument, so the two windows are kept side by
      * side instead of nested.
      */
-    static class DepthSizedUpsideCalculator implements UpsideCalculator {
+    static class DepthSizedSignalSource implements SignalSource {
         /**
          * The share each buy asked for, over every instrument. Without it the weighted run cannot be
          * compared with the one that commits everything: the whole point is earning the same on less.
@@ -294,36 +294,36 @@ public class DipLongSimulation {
 
         private static final int PIVOT = 2;
 
-        private final UpsideCalculator delegate;
+        private final SignalSource delegate;
         private final int window;
         private final double cap;
         private final Deque<Candle> seen = new ArrayDeque<>();
 
-        DepthSizedUpsideCalculator(UpsideCalculator delegate, int window, double cap) {
+        DepthSizedSignalSource(SignalSource delegate, int window, double cap) {
             this.delegate = delegate;
             this.window = window;
             this.cap = cap;
         }
 
         @Override
-        public Upside calculate(List<Candle> lastCandles) {
+        public Signal calculate(List<Candle> lastCandles) {
             seen.addAll(lastCandles);
 
             while (seen.size() > window + 1) {
                 seen.pollFirst();
             }
 
-            Upside upside = delegate.calculate(lastCandles);
+            Signal signal = delegate.calculate(lastCandles);
 
-            if (upside.signal() <= 0) {
-                return upside;
+            if (signal.confidence() <= 0) {
+                return signal;
             }
 
             double share = Math.min(1, (1 + belowMedian(seen.stream().toList())) / cap);
 
             SHARES.add(share);
 
-            return new Upside(upside.signal(), share);
+            return new Signal(signal.confidence(), share);
         }
 
         /** How many per cent the last close sits under the median of the window's pivot lows, or zero. */

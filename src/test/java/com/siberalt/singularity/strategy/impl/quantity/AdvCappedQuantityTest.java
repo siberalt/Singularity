@@ -4,7 +4,7 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.entity.candle.TimePoint;
-import com.siberalt.singularity.strategy.upside.Upside;
+import com.siberalt.singularity.strategy.signal.Signal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -163,6 +163,6 @@ class AdvCappedQuantityTest {
     }
 
     private TradeMoment moment(double signal) {
-        return new TradeMoment(INSTRUMENT, NOW, new Upside(signal, 1.0));
+        return new TradeMoment(INSTRUMENT, NOW, new Signal(signal, 1.0));
     }
 }

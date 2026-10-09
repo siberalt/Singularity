@@ -3,7 +3,7 @@ import com.siberalt.singularity.broker.contract.service.exception.AbstractExcept
 import com.siberalt.singularity.broker.contract.service.instrument.common.InstrumentType;
 import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
 import com.siberalt.singularity.broker.contract.value.money.Money;
-import com.siberalt.singularity.broker.impl.decorator.PositionRiskManagerUpsideCalculator;
+import com.siberalt.singularity.broker.impl.decorator.PositionRiskManagerSignalSource;
 import com.siberalt.singularity.broker.contract.service.instrument.DividendInstrumentService;
 import com.siberalt.singularity.broker.contract.service.instrument.common.Dividend;
 import com.siberalt.singularity.broker.contract.service.instrument.request.GetDividendsRequest;
@@ -58,15 +58,15 @@ import com.siberalt.singularity.strategy.simulation.runner.EffectivenessAnalyzer
 import com.siberalt.singularity.strategy.simulation.runner.StrategyResult;
 import com.siberalt.singularity.strategy.simulation.runner.SimulationBrokerFactory;
 import com.siberalt.singularity.strategy.simulation.runner.StrategyStarter;
-import com.siberalt.singularity.strategy.upside.*;
-import com.siberalt.singularity.strategy.upside.extreme.MaximinUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.KeyLevelsUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.SimpleLevelBasedUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.level.adaptive.AdaptiveUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.subrange.CalendarPeriodFilterDecorator;
-import com.siberalt.singularity.strategy.upside.trend.MacdUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.trend.MovingAverageCrossUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.volume.VWAPUpsideCalculator;
+import com.siberalt.singularity.strategy.signal.*;
+import com.siberalt.singularity.strategy.signal.extreme.MaximinSignalSource;
+import com.siberalt.singularity.strategy.signal.level.KeyLevelsSignalSource;
+import com.siberalt.singularity.strategy.signal.level.SimpleLevelBasedSignalSource;
+import com.siberalt.singularity.strategy.signal.level.adaptive.AdaptiveSignalSource;
+import com.siberalt.singularity.strategy.signal.subrange.CalendarPeriodFilterDecorator;
+import com.siberalt.singularity.strategy.signal.trend.MacdSignalSource;
+import com.siberalt.singularity.strategy.signal.trend.MovingAverageCrossSignalSource;
+import com.siberalt.singularity.strategy.signal.volume.VWAPSignalSource;
 import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
 import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 import ru.ttech.piapi.core.connector.ConnectorConfiguration;
@@ -268,55 +268,55 @@ public class BasicTradeStrategySimulation {
         ExtremeLocator minimaBaseLocator,
         DividendCalendar dividends
     ) {
-//        FilterUpsideCalculator filterUpsideCalculator = new FilterUpsideCalculator(
-//            new PriceChangeUpsideCalculator(30, 7, 100),
+//        FilterSignalSource filterSignalSource = new FilterSignalSource(
+//            new PriceChangeSignalSource(30, 7, 100),
 //            lastCandles ->  true // IncrementalRsi.of(lastCandles, 12) <= 70
 //        );
 
-        UpsideCalculator priceChange = new PriceChangeUpsideCalculator(2, 3, 2);
+        SignalSource priceChange = new PriceChangeSignalSource(2, 3, 2);
         // Срок закрывает позицию под отсечку независимо от мнения выхода, и закрывает любую сторону:
         // направление позиции знает только сама обёртка. Окно по умолчанию - день покупки и день перед
         // ним, потому что гэп приходит на следующий день, а заявка доходит через бар.
-        UpsideCalculator entryExit = new EntryExitUpsideCalculator(priceChange, priceChange)
+        SignalSource entryExit = new EntryExitSignalSource(priceChange, priceChange)
             .setDeadline(new ExDateWindow(dividends));
 
         BasicTradeStrategy strategy = new BasicTradeStrategy(
             broker,
             INSTRUMENT_ID,
             accountId,
-            new AggregatingUpsideCalculator(
+            new AggregatingSignalSource(
                 CandleInterval.HOUR,
-                new WindowUpsideCalculator(
-//                    new FilterUpsideCalculator(
-//                        new SlopeUpsideCalculator(6),
-//                        (lastCandles, upside) -> Math.abs(upside.get().signal()) >= 0.99
+                new WindowSignalSource(
+//                    new FilterSignalSource(
+//                        new SlopeSignalSource(6),
+//                        (lastCandles, signal) -> Math.abs(signal.get().confidence()) >= 0.99
 //                    ),
                     entryExit,
                     20
                 )
             ),
 
-//            new WindowUpsideCalculator(
-//                //new PriceChangeUpsideCalculator(10, 3.5, 0.5),
-//                new EntryExitUpsideCalculator(
-//                    filterUpsideCalculator,
-//                    new PriceChangeUpsideCalculator(10, 100, 4)
+//            new WindowSignalSource(
+//                //new PriceChangeSignalSource(10, 3.5, 0.5),
+//                new EntryExitSignalSource(
+//                    filterSignalSource,
+//                    new PriceChangeSignalSource(10, 100, 4)
 //                ).setMaxWaitBars(30),
 //                100
 //            ),
-//            new WindowUpsideCalculator(
-//                new UpsideSignalAmplifier(slopeUpsideCalculator, 0.95, 0.95),
+//            new WindowSignalSource(
+//                new SignalAmplifier(slopeSignalSource, 0.95, 0.95),
 //                100
 //            ),
-//            new WindowUpsideCalculator(
-//                FixedSignalReverserUpsideCalculator.ofRises(
-//                    new UpsideSignalAmplifier(slopeUpsideCalculator, 0.95, 0.95), 800, 1
+//            new WindowSignalSource(
+//                FixedReverserSignalSource.ofRises(
+//                    new SignalAmplifier(slopeSignalSource, 0.95, 0.95), 800, 1
 //                ),
 //                100
 //            ),
-//            new WindowUpsideCalculator(
-//                FixedSignalReverserUpsideCalculator.ofFalls(
-//                    new UpsideSignalAmplifier(slopeUpsideCalculator, 0.95, 0.9), 5, 1
+//            new WindowSignalSource(
+//                FixedReverserSignalSource.ofFalls(
+//                    new SignalAmplifier(slopeSignalSource, 0.95, 0.9), 5, 1
 //                ),
 //                100
 //            ),

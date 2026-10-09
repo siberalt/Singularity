@@ -3,8 +3,8 @@ package com.siberalt.singularity.strategy.analysis;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.TimePoint;
-import com.siberalt.singularity.strategy.upside.Upside;
-import com.siberalt.singularity.strategy.upside.UpsideCalculator;
+import com.siberalt.singularity.strategy.signal.Signal;
+import com.siberalt.singularity.strategy.signal.SignalSource;
 
 import org.junit.jupiter.api.Test;
 
@@ -21,10 +21,10 @@ class SignalPredictivenessTest {
     private static final double STEP = 0.01;
 
     /** Reads the last candle's own body, which is all these tests need a calculator to do. */
-    private static final UpsideCalculator BODY_SIGN = candles -> {
+    private static final SignalSource BODY_SIGN = candles -> {
         Candle last = candles.getLast();
 
-        return new Upside(Math.signum(last.getCloseAsDouble() - last.getOpenAsDouble()), 1);
+        return new Signal(Math.signum(last.getCloseAsDouble() - last.getOpenAsDouble()), 1);
     };
 
     /**

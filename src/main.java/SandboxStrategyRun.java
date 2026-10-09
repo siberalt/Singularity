@@ -7,7 +7,7 @@ import com.siberalt.singularity.broker.contract.service.order.LoggingOrderServic
 import com.siberalt.singularity.broker.contract.service.user.Account;
 import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
-import com.siberalt.singularity.broker.impl.decorator.PositionRiskManagerUpsideCalculator;
+import com.siberalt.singularity.broker.impl.decorator.PositionRiskManagerSignalSource;
 import com.siberalt.singularity.broker.impl.tinkoff.sandbox.TinkoffSandboxBroker;
 import com.siberalt.singularity.broker.impl.tinkoff.sandbox.TinkoffSandboxBrokerFactory;
 import com.siberalt.singularity.broker.impl.tinkoff.sandbox.TinkoffSandboxService;
@@ -28,10 +28,10 @@ import com.siberalt.singularity.strategy.Strategy;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.market.position.BaseEntryPriceCalculator;
 import com.siberalt.singularity.strategy.observer.Observer;
-import com.siberalt.singularity.strategy.upside.SlopeUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.ThresholdSwitchUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.UpsideSignalAmplifier;
-import com.siberalt.singularity.strategy.upside.WindowUpsideCalculator;
+import com.siberalt.singularity.strategy.signal.SlopeSignalSource;
+import com.siberalt.singularity.strategy.signal.ThresholdSwitchSignalSource;
+import com.siberalt.singularity.strategy.signal.SignalAmplifier;
+import com.siberalt.singularity.strategy.signal.WindowSignalSource;
 import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
 import ru.ttech.piapi.core.connector.ConnectorConfiguration;
 
@@ -133,17 +133,17 @@ public class SandboxStrategyRun {
         EventSubscriptionBroker broker,
         String accountId
     ) {
-        PositionRiskManagerUpsideCalculator riskManagerUpsideCalculator = new PositionRiskManagerUpsideCalculator(
+        PositionRiskManagerSignalSource riskManagerSignalSource = new PositionRiskManagerSignalSource(
             accountId,
             INSTRUMENT_UID,
             new BaseEntryPriceCalculator(new BrokerOperationRepository(broker.getOperationsService())),
             ATRVolatilityCalculator.ofMultiplier(2)
         );
-        SlopeUpsideCalculator slopeUpsideCalculator = new SlopeUpsideCalculator(5);
+        SlopeSignalSource slopeSignalSource = new SlopeSignalSource(5);
 
-        ThresholdSwitchUpsideCalculator switcherUpsideCalculator = new ThresholdSwitchUpsideCalculator(
-            new UpsideSignalAmplifier(slopeUpsideCalculator, 0.9, 0.9),
-            riskManagerUpsideCalculator,
+        ThresholdSwitchSignalSource switcherSignalSource = new ThresholdSwitchSignalSource(
+            new SignalAmplifier(slopeSignalSource, 0.9, 0.9),
+            riskManagerSignalSource,
             0.8,
             -0.8
         );
@@ -152,7 +152,7 @@ public class SandboxStrategyRun {
             broker,
             INSTRUMENT_UID,
             accountId,
-            new WindowUpsideCalculator(switcherUpsideCalculator, 60 * 24),
+            new WindowSignalSource(switcherSignalSource, 60 * 24),
             candleRepository
         );
         strategy.setLookbackCandles(60 * 24);

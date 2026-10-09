@@ -1,6 +1,6 @@
 package com.siberalt.singularity.strategy.impl.quantity;
 
-import com.siberalt.singularity.strategy.upside.Upside;
+import com.siberalt.singularity.strategy.signal.Signal;
 
 import java.time.Instant;
 
@@ -11,10 +11,10 @@ import java.time.Instant;
  *                     read by, which is what every measure of recent activity here reads
  * @param at           the moment of the decision - the candle the strategy just reacted to, which
  *                     is what any measure of recent market activity has to be taken as of
- * @param upside       the calculation the decision rests on, whole. Not just its signal: how much
- *                     to trade is exactly the question that wants {@link Upside#strength()} as well,
+ * @param signal       the calculation the decision rests on, whole. Not just its signal: how much
+ *                     to trade is exactly the question that wants {@link Signal#strength()} as well,
  *                     and a sizing that wanted to weigh conviction against confidence should not
  *                     have to be given a wider contract first
  */
-public record TradeMoment(long instrumentId, Instant at, Upside upside) {
+public record TradeMoment(long instrumentId, Instant at, Signal signal) {
 }

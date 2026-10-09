@@ -5,10 +5,10 @@ import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.TimePoint;
-import com.siberalt.singularity.strategy.upside.EntryExitUpsideCalculator;
-import com.siberalt.singularity.strategy.upside.SignalCondition;
-import com.siberalt.singularity.strategy.upside.Upside;
-import com.siberalt.singularity.strategy.upside.UpsideCalculator;
+import com.siberalt.singularity.strategy.signal.EntryExitSignalSource;
+import com.siberalt.singularity.strategy.signal.SignalCondition;
+import com.siberalt.singularity.strategy.signal.Signal;
+import com.siberalt.singularity.strategy.signal.SignalSource;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -64,14 +64,14 @@ class ExDateWindowTest {
     @Test
     void closesEitherSideWhenGivenAsADeadline() {
         for (double side : new double[]{1, -1}) {
-            UpsideCalculator entry = candles -> new Upside(side, 1);
-            UpsideCalculator silent = candles -> Upside.NEUTRAL;
-            EntryExitUpsideCalculator rule = new EntryExitUpsideCalculator(entry, silent)
+            SignalSource entry = candles -> new Signal(side, 1);
+            SignalSource silent = candles -> Signal.NEUTRAL;
+            EntryExitSignalSource rule = new EntryExitSignalSource(entry, silent)
                 .setDeadline(new ExDateWindow(calendar()));
 
             // Вход далеко от отсечки, затем бар внутри окна.
-            assertEquals(side, rule.calculate(barAt(MINE, "2024-06-01T10:00:00Z")).signal());
-            assertEquals(-side, rule.calculate(barAt(MINE, "2024-06-09T10:00:00Z")).signal(),
+            assertEquals(side, rule.calculate(barAt(MINE, "2024-06-01T10:00:00Z")).confidence());
+            assertEquals(-side, rule.calculate(barAt(MINE, "2024-06-09T10:00:00Z")).confidence(),
                 "закрывающий сигнал противоположен стороне позиции");
         }
     }
@@ -79,11 +79,11 @@ class ExDateWindowTest {
     /** Без срока та же обёртка позицию держит: срок ничего не меняет, пока его не поставили. */
     @Test
     void holdsOnWithoutADeadline() {
-        EntryExitUpsideCalculator rule = new EntryExitUpsideCalculator(
-            candles -> new Upside(1, 1), candles -> Upside.NEUTRAL);
+        EntryExitSignalSource rule = new EntryExitSignalSource(
+            candles -> new Signal(1, 1), candles -> Signal.NEUTRAL);
 
-        assertEquals(1, rule.calculate(barAt(MINE, "2024-06-01T10:00:00Z")).signal());
-        assertEquals(Upside.NEUTRAL, rule.calculate(barAt(MINE, "2024-06-09T10:00:00Z")));
+        assertEquals(1, rule.calculate(barAt(MINE, "2024-06-01T10:00:00Z")).confidence());
+        assertEquals(Signal.NEUTRAL, rule.calculate(barAt(MINE, "2024-06-09T10:00:00Z")));
     }
 
     /**
@@ -95,9 +95,9 @@ class ExDateWindowTest {
         SignalCondition away = SignalCondition.of(new ExDateWindow(calendar()).negated()).onlyForBuys();
         List<Candle> inside = barAt(MINE, "2024-06-09T10:00:00Z");
 
-        assertFalse(away.holds(inside, () -> new Upside(1, 1)), "покупка запрещена");
-        assertTrue(away.holds(inside, () -> new Upside(-1, 1)), "продажа проходит");
-        assertTrue(away.holds(barAt(MINE, "2024-06-08T10:00:00Z"), () -> new Upside(1, 1)));
+        assertFalse(away.holds(inside, () -> new Signal(1, 1)), "покупка запрещена");
+        assertTrue(away.holds(inside, () -> new Signal(-1, 1)), "продажа проходит");
+        assertTrue(away.holds(barAt(MINE, "2024-06-08T10:00:00Z"), () -> new Signal(1, 1)));
     }
 
     /** Дивиденд без даты объявления или без дня покупки выбрасывается, и потеря видна. */
@@ -182,8 +182,8 @@ class ExDateWindowTest {
         assertThrows(IllegalArgumentException.class,
             () -> new ExDateWindow(DividendCalendar.EMPTY, 0));
         assertThrows(IllegalArgumentException.class, () -> new AnnouncedDividendCalendar(null));
-        assertThrows(IllegalArgumentException.class, () -> new EntryExitUpsideCalculator(
-            candles -> Upside.NEUTRAL, candles -> Upside.NEUTRAL).setDeadline(null));
+        assertThrows(IllegalArgumentException.class, () -> new EntryExitSignalSource(
+            candles -> Signal.NEUTRAL, candles -> Signal.NEUTRAL).setDeadline(null));
     }
 
     private static DividendCalendar calendar() {

@@ -7,8 +7,8 @@ import com.siberalt.singularity.broker.shared.EventSubscriptionBrokerFacade;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.event.subscription.Subscription;
-import com.siberalt.singularity.strategy.upside.Upside;
-import com.siberalt.singularity.strategy.upside.UpsideCalculator;
+import com.siberalt.singularity.strategy.signal.Signal;
+import com.siberalt.singularity.strategy.signal.SignalSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,7 +27,7 @@ class BasicTradeStrategyTest {
     @Mock
     private EventSubscriptionBrokerFacade broker;
     @Mock
-    private UpsideCalculator upsideCalculator;
+    private SignalSource signalSource;
     @Mock
     private ReadCandleRepository candleRepository;
     @Mock
@@ -43,7 +43,7 @@ class BasicTradeStrategyTest {
             broker,
             "instrumentId",
             "accountId",
-            upsideCalculator,
+            signalSource,
             candleRepository
         );
     }
@@ -57,18 +57,18 @@ class BasicTradeStrategyTest {
 
         strategy.handleNewCandle(event, subscription);
 
-        verifyNoInteractions(candleRepository, upsideCalculator, broker);
+        verifyNoInteractions(candleRepository, signalSource, broker);
     }
 
     @Test
-    void processesCandleAndExecutesBuyWhenUpsideSignalExceedsThreshold() throws AbstractException {
+    void processesCandleAndExecutesBuyWhenSignalExceedsThreshold() throws AbstractException {
         Candle candle1 = Candle.of(
             Instant.parse("2023-01-01T00:00:00Z"), 2L, 100L, 25
         );
         when(event.getInstrumentUid()).thenReturn("instrumentId");
         when(event.getCandle()).thenReturn(candle1);
         when(candleRepository.findBeforeOrEqual(anyLong(), any(), anyLong())).thenReturn(List.of(candle1));
-        when(upsideCalculator.calculate(anyList())).thenReturn(new Upside(0.7, 1.0));
+        when(signalSource.calculate(anyList())).thenReturn(new Signal(0.7, 1.0));
         when(broker.getMaxBuyQuantity("accountId", "instrumentId", OrderType.BEST_PRICE))
             .thenReturn(100L);
 
@@ -80,14 +80,14 @@ class BasicTradeStrategyTest {
     }
 
     @Test
-    void processesCandleAndExecutesSellWhenUpsideSignalFallsBelowThreshold() throws AbstractException {
+    void processesCandleAndExecutesSellWhenSignalFallsBelowThreshold() throws AbstractException {
         Candle candle1 = Candle.of(
             Instant.parse("2023-01-01T00:00:00Z"), 2L, 100L, 25
         );
         when(event.getInstrumentUid()).thenReturn("instrumentId");
         when(event.getCandle()).thenReturn(candle1);
         when(candleRepository.findBeforeOrEqual(anyLong(), any(), anyLong())).thenReturn(List.of(candle1));
-        when(upsideCalculator.calculate(anyList())).thenReturn(new Upside(-0.6, 1.0));
+        when(signalSource.calculate(anyList())).thenReturn(new Signal(-0.6, 1.0));
         when(broker.getPositionSize("accountId", "instrumentId")).thenReturn(100L);
 
         strategy.setSellThreshold(-0.5);
@@ -98,7 +98,7 @@ class BasicTradeStrategyTest {
     }
 
     @Test
-    void doesNotExecuteTradeWhenUpsideSignalIsWithinThresholds() {
+    void doesNotExecuteTradeWhenSignalIsWithinThresholds() {
         NewCandleEvent event1 = new NewCandleEvent(
             "instrumentId",
             Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 2L, 100L, 25)
@@ -107,7 +107,7 @@ class BasicTradeStrategyTest {
             "instrumentId",
             Candle.of(Instant.parse("2023-01-01T00:01:00Z"), 2L, 100L, 26)
         );
-        when(upsideCalculator.calculate(anyList())).thenReturn(new Upside(0.0, 1.0));
+        when(signalSource.calculate(anyList())).thenReturn(new Signal(0.0, 1.0));
 
         strategy.setBuyThreshold(0.6);
         strategy.setSellThreshold(-0.5);

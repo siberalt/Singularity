@@ -16,7 +16,7 @@ import com.siberalt.singularity.strategy.impl.quantity.TradeCapacity;
 import com.siberalt.singularity.strategy.impl.quantity.TradeMoment;
 import com.siberalt.singularity.strategy.impl.quantity.TradeQuantity;
 import com.siberalt.singularity.strategy.observer.Observer;
-import com.siberalt.singularity.strategy.upside.UpsideCalculator;
+import com.siberalt.singularity.strategy.signal.SignalSource;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +26,7 @@ public class BasicTradeStrategy implements Strategy {
     private final EventSubscriptionBrokerFacade broker;
     private final String instrumentId;
     private final String accountId;
-    private final UpsideCalculator upsideCalculator;
+    private final SignalSource signalSource;
     private final ReadCandleRepository candleRepository;
     private long lookbackCandles = 24 * 60;
     private double buyThreshold = 0.7; // Example threshold for trading decision
@@ -41,13 +41,13 @@ public class BasicTradeStrategy implements Strategy {
         EventSubscriptionBrokerFacade broker,
         String instrumentId,
         String accountId,
-        UpsideCalculator upsideCalculator,
+        SignalSource signalSource,
         ReadCandleRepository candleRepository
     ) {
         this.broker = broker;
         this.instrumentId = instrumentId;
         this.accountId = accountId;
-        this.upsideCalculator = upsideCalculator;
+        this.signalSource = signalSource;
         this.candleRepository = candleRepository;
     }
 
@@ -55,13 +55,13 @@ public class BasicTradeStrategy implements Strategy {
         EventSubscriptionBroker broker,
         String instrumentId,
         String accountId,
-        UpsideCalculator upsideCalculator,
+        SignalSource signalSource,
         ReadCandleRepository candleRepository
     ) {
         this.broker = EventSubscriptionBrokerFacade.of(broker);
         this.instrumentId = instrumentId;
         this.accountId = accountId;
-        this.upsideCalculator = upsideCalculator;
+        this.signalSource = signalSource;
         this.candleRepository = candleRepository;
     }
 
@@ -150,23 +150,23 @@ public class BasicTradeStrategy implements Strategy {
         }
 
         if (!lastCandles.isEmpty() && lastCandles.size() % step == 0) {
-            var upside = upsideCalculator.calculate(lastCandles);
+            var signal = signalSource.calculate(lastCandles);
             lastCandles.clear();
 
             TradeMoment moment = new TradeMoment(
                 event.getCandle().instrumentId(),
                 event.getCandle().getTime(),
-                upside
+                signal
             );
 
             try {
-                if (upside.signal() >= buyThreshold) {
+                if (signal.confidence() >= buyThreshold) {
                     long quantityToBuy = tradeQuantity.toBuy(moment, capacity());
 
                     if (quantityToBuy > 0) {
                         broker.buyBestPrice(accountId, instrumentId, quantityToBuy);
                     }
-                } else if (upside.signal() <= sellThreshold) {
+                } else if (signal.confidence() <= sellThreshold) {
                     long quantityToSell = tradeQuantity.toSell(moment, capacity());
 
                     if (quantityToSell > 0) {

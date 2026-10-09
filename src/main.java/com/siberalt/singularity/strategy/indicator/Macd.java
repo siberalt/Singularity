@@ -14,7 +14,7 @@ import java.util.function.Function;
  * именно её пересечение нуля обычно и называют сигналом MACD.
  * <p>
  * Чем он отличается от пересечения двух средних, которое уже есть в {@link Sma} и
- * {@link com.siberalt.singularity.strategy.upside.trend.MovingAverageCrossUpsideCalculator}: там сигналом
+ * {@link com.siberalt.singularity.strategy.signal.trend.MovingAverageCrossSignalSource}: там сигналом
  * является сторона разрыва, здесь - сторона <b>изменения</b> разрыва. Линия выше своей сигнальной означает,
  * что отрыв быстрой средней растёт, то есть тренд ускоряется; это срабатывает раньше пересечения средних и
  * чаще ошибается. Ровно тот же обмен, что между наклоном EMA и крестом, измеренный в {@code docs/signals.md}.

@@ -47,7 +47,7 @@ public class TargetPositionQuantity implements TradeQuantity {
      * once - the market hands over a share of each bar and no more - so a target worth eighty bars
      * of that share is still being bought long after the bars the signal was read from have gone,
      * at prices it never saw. Sized to a few bars instead, the position is in place while the
-     * reason for it is still true. It costs the upside of the part of the account left behind,
+     * reason for it is still true. It costs the signal of the part of the account left behind,
      * which is the trade being made.
      */
     public TargetPositionQuantity setFullPositionShare(double fullPositionShare) {
@@ -80,7 +80,7 @@ public class TargetPositionQuantity implements TradeQuantity {
      * is more than the strategy means to commit to one instrument.
      */
     protected long targetLots(TradeMoment moment, TradeCapacity capacity) {
-        double share = Math.clamp(moment.upside().signal(), 0d, 1d) * fullPositionShare;
+        double share = Math.clamp(moment.signal().confidence(), 0d, 1d) * fullPositionShare;
 
         return (long) (capacity.totalLots() * share);
     }

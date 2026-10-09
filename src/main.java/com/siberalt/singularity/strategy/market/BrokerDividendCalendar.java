@@ -51,7 +51,7 @@ import java.util.function.LongFunction;
  * не было». Поэтому каждый неудачный запрос падает громко, и это сознательно дороже в эксплуатации.
  * <p>
  * Экземпляр принадлежит одной стратегии и одному потоку - как и
- * {@link com.siberalt.singularity.strategy.upside.EntryExitUpsideCalculator}, который его спрашивает.
+ * {@link com.siberalt.singularity.strategy.signal.EntryExitSignalSource}, который его спрашивает.
  */
 public class BrokerDividendCalendar implements DividendCalendar {
     public static final int DEFAULT_HORIZON_DAYS = 400;
