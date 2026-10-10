@@ -5,10 +5,13 @@ import com.siberalt.singularity.broker.contract.value.money.Money;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.TimePoint;
+import com.siberalt.singularity.strategy.signal.AnyOfSignalSource;
+import com.siberalt.singularity.strategy.signal.ConditionalExitSignalSource;
 import com.siberalt.singularity.strategy.signal.EntryExitSignalSource;
 import com.siberalt.singularity.strategy.signal.SignalCondition;
 import com.siberalt.singularity.strategy.signal.Signal;
 import com.siberalt.singularity.strategy.signal.SignalSource;
+import com.siberalt.singularity.strategy.signal.SignalType;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -60,20 +63,46 @@ class ExDateWindowTest {
         assertTrue(window.holds(barAt(MINE, "2024-06-09T10:00:00Z")));
     }
 
-    /** Сроком обёртке оно закрывает и лонг, и шорт - одним объектом, без зеркала. */
+    /**
+     * Выходным делегатом оно закрывает и лонг, и шорт - одним объектом, без зеркала и без знания стороны.
+     * <p>
+     * Раньше это приходилось отдавать обёртке настройкой {@code setDeadline}, потому что источник умел
+     * только знак и закрыл бы одну сторону из двух. Теперь источник говорит «закрыть» типом, а сторону
+     * подставляет обёртка, которая её и знает.
+     */
     @Test
-    void closesEitherSideWhenGivenAsADeadline() {
+    void closesEitherSideAsAnExitDelegate() {
         for (double side : new double[]{1, -1}) {
             SignalSource entry = candles -> new Signal(side, 1);
-            SignalSource silent = candles -> Signal.NEUTRAL;
-            EntryExitSignalSource rule = new EntryExitSignalSource(entry, silent)
-                .setDeadline(new ExDateWindow(calendar()));
+            EntryExitSignalSource rule = new EntryExitSignalSource(entry,
+                new ConditionalExitSignalSource(new ExDateWindow(calendar())));
 
             // Вход далеко от отсечки, затем бар внутри окна.
             assertEquals(side, rule.calculate(barAt(MINE, "2024-06-01T10:00:00Z")).confidence());
-            assertEquals(-side, rule.calculate(barAt(MINE, "2024-06-09T10:00:00Z")).confidence(),
+
+            Signal closing = rule.calculate(barAt(MINE, "2024-06-09T10:00:00Z"));
+
+            assertEquals(1, closing.strength(), "закрытие выдаётся с полной уверенностью");
+            assertEquals(SignalType.POSITION_EXIT, closing.type());
+            assertEquals(-side, closing.confidence(),
                 "закрывающий сигнал противоположен стороне позиции");
         }
+    }
+
+    /** И складывается с другими выходами порядком, а не усреднением: обязательный ставится раньше. */
+    @Test
+    void winsOverTheRulesOwnExitWhenBothCouldSpeak() {
+        SignalSource rulesExit = candles -> new Signal(-1, 1);
+        SignalSource exits = new AnyOfSignalSource(
+            new ConditionalExitSignalSource(new ExDateWindow(calendar())),
+            rulesExit
+        );
+
+        assertEquals(SignalType.POSITION_EXIT,
+            exits.calculate(barAt(MINE, "2024-06-09T10:00:00Z")).type());
+        // Вне окна отвечает своё правило, и его ответ проходит как был.
+        assertEquals(SignalType.UNSPECIFIED,
+            exits.calculate(barAt(MINE, "2024-06-01T10:00:00Z")).type());
     }
 
     /** Без срока та же обёртка позицию держит: срок ничего не меняет, пока его не поставили. */
@@ -182,8 +211,8 @@ class ExDateWindowTest {
         assertThrows(IllegalArgumentException.class,
             () -> new ExDateWindow(DividendCalendar.EMPTY, 0));
         assertThrows(IllegalArgumentException.class, () -> new AnnouncedDividendCalendar(null));
-        assertThrows(IllegalArgumentException.class, () -> new EntryExitSignalSource(
-            candles -> Signal.NEUTRAL, candles -> Signal.NEUTRAL).setDeadline(null));
+        assertThrows(IllegalArgumentException.class, () -> new ConditionalExitSignalSource(null));
+        assertThrows(IllegalArgumentException.class, () -> new AnyOfSignalSource(List.of()));
     }
 
     private static DividendCalendar calendar() {

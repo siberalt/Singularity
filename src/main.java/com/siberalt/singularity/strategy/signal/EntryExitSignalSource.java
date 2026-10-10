@@ -1,7 +1,6 @@
 package com.siberalt.singularity.strategy.signal;
 
 import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.strategy.market.MarketCondition;
 
 import java.util.List;
 
@@ -40,10 +39,12 @@ import java.util.List;
  * instrument does not visit in a quiet year - therefore wants {@link #setMaxWaitBars a limit}, after
  * which this calculator closes the position itself rather than waiting for an opinion that is not coming.
  * <p>
- * A limit that is a date rather than a count of bars goes in {@link #setDeadline} instead. Both close the
- * position without asking the exit delegate, and for the same reason it is this class that does it: the
- * direction the position points is known here and nowhere else, so one condition closes a long and a short
- * alike - which a delegate handing out a signed signal cannot do.
+ * Срок, который измеряется не барами, а состоянием рынка, ставится теперь выходным делегатом, а не
+ * настройкой этого класса: {@link ConditionalExitSignalSource} над условием, и
+ * {@link AnyOfSignalSource}, если выходов несколько. Раньше для этого был {@code setDeadline}, и нужен он
+ * был по одной причине - делегат выдавал знак, не зная стороны открытой позиции, поэтому закрыть мог
+ * только одну из них. С появлением {@link SignalType#closes()} делегату сторона не нужна: он говорит
+ * «закрыть», а сторону берёт отсюда, где она и известна.
  */
 public class EntryExitSignalSource implements SignalSource {
     private final SignalSource entry;
@@ -54,8 +55,6 @@ public class EntryExitSignalSource implements SignalSource {
 
     private int maxWaitBars = Integer.MAX_VALUE;
 
-    /** Срок, не зависящий от мнения выходного делегата; по умолчанию его нет. */
-    private MarketCondition deadline = lastCandles -> false;
 
     /** Which way the open position points, zero while there is none. */
     private double direction;
@@ -107,41 +106,20 @@ public class EntryExitSignalSource implements SignalSource {
         return this;
     }
 
-    /**
-     * Условие, по которому позицию закрывают независимо от мнения выходного делегата.
-     * <p>
-     * Тот же срок, что {@link #setMaxWaitBars}, только измеряемый не барами, а состоянием рынка - и этим
-     * он решает задачу, которую калькулятором выхода не решить. Закрывающий сигнал синтезирует эта обёртка,
-     * а она одна здесь знает, куда смотрит открытая позиция, поэтому одно и то же условие закрывает и лонг,
-     * и шорт. Делегат выхода на такое не способен: он выдаёт знак, не зная стороны, и закрывал бы только
-     * одну из них.
-     * <p>
-     * Пример, ради которого это и сделано, - {@link com.siberalt.singularity.strategy.market.ExDateWindow}:
-     * «не держать под дивидендную отсечку» не мнение о рынке, а срок, и держать его надо для любой стороны.
-     * <p>
-     * Проверяется он со следующего после входа бара - как и мнение делегата, и по той же причине: бар входа
-     * отвечает вход, иначе позиция закрылась бы в момент открытия, заплатив круг ни за что. Поэтому вход,
-     * сделанный внутри окна, сроком не перекрывается, и запрет на вход - отдельное правило.
-     */
-    public EntryExitSignalSource setDeadline(MarketCondition deadline) {
-        if (deadline == null) {
-            throw new IllegalArgumentException("Нет условия, по которому закрывать позицию");
-        }
-
-        this.deadline = deadline;
-
-        return this;
-    }
-
     @Override
     public Signal calculate(List<Candle> lastCandles) {
         if (direction != 0) {
             Signal signal = exit.calculate(lastCandles);
-            boolean closes = Math.abs(signal.confidence()) >= minSignal && direction * signal.confidence() < 0;
+            // Выход, назвавший себя выходом, освобождён от знака, но не от силы. Знак ему не нужен -
+            // сторону знает эта обёртка; а порог нужен ровно как всем остальным: слабая уверенность это
+            // шум, и типом она не перестаёт им быть. Нетипизированному выходу по-прежнему требуется и
+            // сила, и противоположный знак, потому что больше ему сказать нечем.
+            boolean strong = Math.abs(signal.confidence()) >= minSignal;
+            boolean closes = strong && (signal.type().closes() || direction * signal.confidence() < 0);
 
             waited++;
 
-            if (!closes && waited < maxWaitBars && !deadline.holds(lastCandles)) {
+            if (!closes && waited < maxWaitBars) {
                 return Signal.NEUTRAL;
             }
 
