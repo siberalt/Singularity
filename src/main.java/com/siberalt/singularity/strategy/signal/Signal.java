@@ -40,12 +40,20 @@ public record Signal(SignalType type, double confidence, double strength, double
             throw new IllegalArgumentException("Сигнал без типа: о чём он, знать обязательно");
         }
 
-        // Диапазон confidence здесь не проверяется, и это измеренное решение, а не упущение. Проверка,
-        // поставленная на пробу, поймала EwmaVolumeSignalSource с уверенностью до +-2.03 и
-        // AdaptiveSignalSource, пропускающий NaN, - то есть настоящие ошибки, из которых первая просит у
-        // SignalScaledQuantity двести процентов счёта. Но ужесточение контракта меняет поведение и ломает
-        // три тест-класса, которые нарочно подают значения вне диапазона, так что ему место в отдельной
-        // правке вместе с починкой источников, а не в переименовании словаря.
+        // Диапазон уверенности - инвариант, а не пожелание, и держится он здесь по одной причине:
+        // размер позиции считается умножением на это число. EwmaVolumeSignalSource отдавал до +-2.03, то
+        // есть заявку на двести процентов счёта, и обнаружилось это только когда проверку поставили.
+        // Наружу такое уходило молча.
+        if (Double.isNaN(confidence)) {
+            throw new IllegalArgumentException(
+                "Уверенность NaN: отсутствие мнения выражается Signal.NEUTRAL, а не NaN");
+        }
+
+        if (confidence < -1 || confidence > 1) {
+            throw new IllegalArgumentException(
+                "Уверенность лежит в [-1, 1], получено " + confidence);
+        }
+
         if (!Double.isNaN(positionBalance) && (positionBalance < 0 || positionBalance > 1)) {
             throw new IllegalArgumentException(
                 "Доля счёта лежит в [0, 1], получено " + positionBalance);

@@ -89,13 +89,8 @@ public class AdvCappedQuantity implements TradeQuantity {
     }
 
     @Override
-    public long toBuy(TradeMoment moment, TradeCapacity capacity) {
-        return capped(moment, OrderDirection.BUY, delegate.toBuy(moment, capacity));
-    }
-
-    @Override
-    public long toSell(TradeMoment moment, TradeCapacity capacity) {
-        return capped(moment, OrderDirection.SELL, delegate.toSell(moment, capacity));
+    public long toTrade(TradeMoment moment, TradeCapacity capacity, OrderDirection direction) {
+        return capped(moment, direction, delegate.toTrade(moment, capacity, direction));
     }
 
     private long capped(TradeMoment moment, OrderDirection direction, long wanted) {

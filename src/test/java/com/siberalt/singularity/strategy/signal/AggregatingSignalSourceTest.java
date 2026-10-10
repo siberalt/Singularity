@@ -27,7 +27,7 @@ class AggregatingSignalSourceTest {
             candles -> {
                 seenByDelegate.add(List.copyOf(candles));
 
-                return new Signal(seenByDelegate.size(), 1);
+                return new Signal(1, seenByDelegate.size());
             }
         );
     }
@@ -52,7 +52,7 @@ class AggregatingSignalSourceTest {
         Signal signal = calculator.calculate(List.of(minute(60, 14, 15)));
 
         assertEquals(1, seenByDelegate.size());
-        assertEquals(1, signal.confidence());
+        assertEquals(1, signal.strength());
 
         Candle hour = seenByDelegate.getFirst().getFirst();
         assertEquals(Quotation.of(10), hour.open());
@@ -75,7 +75,7 @@ class AggregatingSignalSourceTest {
 
         // Two hours closed; the third is still open.
         assertEquals(2, seenByDelegate.size());
-        assertEquals(2, signal.confidence());
+        assertEquals(2, signal.strength());
         assertEquals(HOUR_START, seenByDelegate.getFirst().getFirst().getTime());
         assertEquals(HOUR_START.plusSeconds(3600), seenByDelegate.getLast().getFirst().getTime());
     }

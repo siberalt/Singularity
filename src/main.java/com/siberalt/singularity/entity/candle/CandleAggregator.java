@@ -30,7 +30,8 @@ import java.util.List;
  * Two things the new number is not. It is <b>not dense</b>: a stretch with no trading in it is a step
  * of more than one, so a position in a list is still something to search for rather than subtract.
  * Rarely, as it turns out - of the 1878 steps between this base's daily bars for one share, 1791 are
- * exactly one and the average is 1.108, because the exchange has traded weekends since 2025 - but
+ * exactly one and the average is 1.108, because this base holds weekend sessions too - Sber's go back
+ * to 2021-02-20, not to 2025 as this said before it was counted - but
  * rarely is not never, and the 87 that are not would land on the wrong bar. And it is
  * <b>not the database's numbering</b>, which is a row number per instrument; this one counts buckets
  * of wall-clock time, so the same day carries the same number for every instrument, which per-

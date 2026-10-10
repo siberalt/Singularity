@@ -1,5 +1,7 @@
 package com.siberalt.singularity.strategy.impl.quantity;
 
+import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
+
 /**
  * Sizes to the position the signal calls for, not to a step towards it: the strategy decides how
  * much of the account should be in the instrument, and trades the difference.
@@ -61,14 +63,18 @@ public class TargetPositionQuantity implements TradeQuantity {
         return this;
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Обе стороны - одна и та же разность до цели, взятая в ту сторону, о которой спрашивают, и не ниже
+     * нуля: цель уже достигнута значит просить нечего.
+     */
     @Override
-    public long toBuy(TradeMoment moment, TradeCapacity capacity) {
-        return Math.max(0, targetLots(moment, capacity) - capacity.positionLots());
-    }
+    public long toTrade(TradeMoment moment, TradeCapacity capacity, OrderDirection direction) {
+        long target = targetLots(moment, capacity);
+        long position = capacity.positionLots();
 
-    @Override
-    public long toSell(TradeMoment moment, TradeCapacity capacity) {
-        return Math.max(0, capacity.positionLots() - targetLots(moment, capacity));
+        return Math.max(0, direction.isBuy() ? target - position : position - target);
     }
 
     /**

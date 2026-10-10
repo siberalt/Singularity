@@ -80,7 +80,10 @@ public record EwmaVolumeSignalSource(
                 bodyRatio = 1.0;
             } else {
                 double body = Math.abs(close - open);
-                bodyRatio = body / range;
+                // Обрезается, потому что тело больше диапазона у свечи, которая этого не может: у
+                // корректной high не ниже открытия с закрытием, а low не выше. Такая свеча раздувала вес
+                // выше объявленного максимума 1 + bodyWeightFactor, а дальше вылезал и сам сигнал.
+                bodyRatio = Math.min(1.0, body / range);
             }
 
             double weight;
@@ -94,7 +97,11 @@ public record EwmaVolumeSignalSource(
                 if (weight <= 0) continue;
             }
 
-            double direction = (range == 0) ? 0 : (close - open) / range;
+            // Та же обрезка и по той же причине: у свечи с телом больше диапазона направление выходит за
+            // единицу, а больше чем «целиком в одну сторону» оно означать не может. Обрезается здесь, а
+            // не на итоговом сигнале: иначе одна битая свеча продолжала бы перетягивать среднее, просто
+            // уже внутри допустимых границ.
+            double direction = range == 0 ? 0 : Math.clamp((close - open) / range, -1.0, 1.0);
             double contribution = direction * volume * weight;
 
             // Экспоненциальный вес для этой свечи: (1 - alpha)^(n-1-idx) * alpha?
@@ -114,7 +121,10 @@ public record EwmaVolumeSignalSource(
             return Signal.NEUTRAL;
         }
 
-        double signal = weightedSignedSum / totalWeightedVolume; // уже в [-1,1]
+        // Взвешенное среднее направлений с положительными весами, поэтому в [-1, 1] - но только потому,
+        // что каждое направление обрезано выше. До этой обрезки здесь выходило до +-2.03, и поскольку
+        // SignalScaledQuantity умножает на уверенность лоты, это была заявка на двести процентов счёта.
+        double signal = weightedSignedSum / totalWeightedVolume;
         double strength = Math.min(1.0, (double) usedCandles / lastCandles.size());
 
         // Плавное затухание при высоком шуме

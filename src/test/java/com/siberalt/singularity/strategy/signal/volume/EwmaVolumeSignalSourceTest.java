@@ -27,14 +27,21 @@ class EwmaVolumeSignalSourceTest {
         candles = new ArrayList<>();
     }
 
+    /**
+     * Свеча с тенями по обе стороны от тела.
+     * <p>
+     * Хвосты считаются от краёв тела, а не от открытия: при {@code open + range} закрытие оказывалось
+     * <b>выше</b> максимума, то есть свеча была невозможной, и калькулятор на ней честно выдавал
+     * направление больше единицы. Проверять его на таких свечах значит проверять не его.
+     */
     private Candle createCandle(double open, double close, long volume) {
-        double range = 1.0;
+        double shadow = 1.0;
         return Candle.of(
             Instant.now().plusSeconds(candles.size() * 60L),
             volume,
             open,
-            open + range,
-            open - range,
+            Math.max(open, close) + shadow,
+            Math.min(open, close) - shadow,
             close
         );
     }

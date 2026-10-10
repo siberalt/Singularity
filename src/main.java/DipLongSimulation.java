@@ -246,22 +246,19 @@ public class DipLongSimulation {
      * time.
      */
     static TradeQuantity shareOf(String size, double cap) {
-        return new TradeQuantity() {
-            @Override
-            public long toBuy(TradeMoment moment, TradeCapacity capacity) {
-                double share = switch (size) {
-                    case "depth" -> moment.signal().strength();
-                    case "flat" -> 1 / cap;
-                    default -> 1;
-                };
-
-                return (long) (capacity.totalLots() * Math.min(1, Math.max(0, share)));
-            }
-
-            @Override
-            public long toSell(TradeMoment moment, TradeCapacity capacity) {
+        return (moment, capacity, direction) -> {
+            // Выход здесь всегда полный: частичное закрытие этим правилом не измерялось.
+            if (direction.isSell()) {
                 return capacity.positionLots();
             }
+
+            double share = switch (size) {
+                case "depth" -> moment.signal().strength();
+                case "flat" -> 1 / cap;
+                default -> 1;
+            };
+
+            return (long) (capacity.totalLots() * Math.min(1, Math.max(0, share)));
         };
     }
 

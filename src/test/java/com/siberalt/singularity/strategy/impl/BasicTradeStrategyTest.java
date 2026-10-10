@@ -9,6 +9,7 @@ import com.siberalt.singularity.entity.candle.ReadCandleRepository;
 import com.siberalt.singularity.event.subscription.Subscription;
 import com.siberalt.singularity.strategy.signal.Signal;
 import com.siberalt.singularity.strategy.signal.SignalSource;
+import com.siberalt.singularity.strategy.signal.SignalType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -116,5 +117,93 @@ class BasicTradeStrategyTest {
         strategy.handleNewCandle(event2, subscription);
 
         verifyNoInteractions(broker);
+    }
+
+    /**
+     * Закрывающий сигнал порогов не спрашивает. Уверенность −0.1 слабее порога продажи −0.5, и раньше
+     * такой стоп просто не срабатывал - то есть стоп, который не стоп. Пороги существуют, чтобы не
+     * согласиться с чужим мнением, а выход не мнение, а распоряжение.
+     */
+    @Test
+    void closesThePositionEvenWhenTheExitIsWeakerThanTheThreshold() throws AbstractException {
+        Candle candle = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 2L, 100L, 25);
+
+        when(event.getInstrumentUid()).thenReturn("instrumentId");
+        when(event.getCandle()).thenReturn(candle);
+        when(candleRepository.findBeforeOrEqual(anyLong(), any(), anyLong())).thenReturn(List.of(candle));
+        when(signalSource.calculate(anyList()))
+            .thenReturn(new Signal(-0.1, 1.0).withType(SignalType.STOP_LOSS));
+        when(broker.getPositionSize("accountId", "instrumentId")).thenReturn(100L);
+
+        strategy.setSellThreshold(-0.5);
+        strategy.setStep(1);
+        strategy.handleNewCandle(event, subscription);
+
+        verify(broker).sellBestPrice("accountId", "instrumentId", 10L);
+    }
+
+    /**
+     * Сторона закрытия берётся из позиции, а не из знака сигнала: закрыть шорт - купить. Это и есть то,
+     * чего источник сигнала знать не может, и из-за чего раньше выход приходилось выражать сроком обёртки.
+     */
+    @Test
+    void buysBackToCloseAShortWhateverTheExitSignSays() throws AbstractException {
+        Candle candle = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 2L, 100L, 25);
+
+        when(event.getInstrumentUid()).thenReturn("instrumentId");
+        when(event.getCandle()).thenReturn(candle);
+        when(candleRepository.findBeforeOrEqual(anyLong(), any(), anyLong())).thenReturn(List.of(candle));
+        when(signalSource.calculate(anyList()))
+            .thenReturn(new Signal(-1.0, 1.0).withType(SignalType.POSITION_EXIT));
+        when(broker.getPositionSize("accountId", "instrumentId")).thenReturn(-100L);
+        when(broker.getMaxBuyQuantity("accountId", "instrumentId", OrderType.BEST_PRICE))
+            .thenReturn(100L);
+
+        strategy.setStep(1);
+        strategy.handleNewCandle(event, subscription);
+
+        verify(broker, never()).sellBestPrice(any(), any(), anyLong());
+        verify(broker).buyBestPrice(eq("accountId"), eq("instrumentId"), anyLong());
+    }
+
+    /** Закрывать нечего - ничего и не делается, сколько бы раз распоряжение ни пришло. */
+    @Test
+    void doesNothingWhenToldToCloseWithNoPositionHeld() throws AbstractException {
+        Candle candle = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 2L, 100L, 25);
+
+        when(event.getInstrumentUid()).thenReturn("instrumentId");
+        when(event.getCandle()).thenReturn(candle);
+        when(candleRepository.findBeforeOrEqual(anyLong(), any(), anyLong())).thenReturn(List.of(candle));
+        when(signalSource.calculate(anyList()))
+            .thenReturn(new Signal(-1.0, 1.0).withType(SignalType.POSITION_EXIT));
+        when(broker.getPositionSize("accountId", "instrumentId")).thenReturn(0L);
+
+        strategy.setStep(1);
+        strategy.handleNewCandle(event, subscription);
+
+        verify(broker, never()).sellBestPrice(any(), any(), anyLong());
+        verify(broker, never()).buyBestPrice(any(), any(), anyLong());
+    }
+
+    /**
+     * А вход порог спрашивает по-прежнему, и асимметрия тут сознательная: фильтровать то, что открывает
+     * сделку, и не трогать то, что закрывает. В этой базе измерено, что симметричный фильтр, запирающий
+     * выход, стоит 51 пункт.
+     */
+    @Test
+    void stillAsksTheThresholdBeforeOpeningAPosition() throws AbstractException {
+        Candle candle = Candle.of(Instant.parse("2023-01-01T00:00:00Z"), 2L, 100L, 25);
+
+        when(event.getInstrumentUid()).thenReturn("instrumentId");
+        when(event.getCandle()).thenReturn(candle);
+        when(candleRepository.findBeforeOrEqual(anyLong(), any(), anyLong())).thenReturn(List.of(candle));
+        when(signalSource.calculate(anyList()))
+            .thenReturn(new Signal(0.3, 1.0).withType(SignalType.POSITION_ENTRY));
+
+        strategy.setBuyThreshold(0.6);
+        strategy.setStep(1);
+        strategy.handleNewCandle(event, subscription);
+
+        verify(broker, never()).buyBestPrice(any(), any(), anyLong());
     }
 }

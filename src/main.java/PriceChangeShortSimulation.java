@@ -393,16 +393,14 @@ public class PriceChangeShortSimulation {
      * share of it: a short left half open has no exit of its own.
      */
     static TradeQuantity shorts() {
-        return new TradeQuantity() {
-            @Override
-            public long toBuy(TradeMoment moment, TradeCapacity capacity) {
+        return (moment, capacity, direction) -> {
+            // Покупка здесь только закрывает шорт, продажа только открывает его, и ни то, ни другое не
+            // делается наполовину: у недозакрытого шорта нет своего выхода.
+            if (direction.isBuy()) {
                 return capacity.positionLots() < 0 ? -capacity.positionLots() : 0;
             }
 
-            @Override
-            public long toSell(TradeMoment moment, TradeCapacity capacity) {
-                return capacity.positionLots() == 0 ? capacity.affordableLots() : 0;
-            }
+            return capacity.positionLots() == 0 ? capacity.affordableLots() : 0;
         };
     }
 }

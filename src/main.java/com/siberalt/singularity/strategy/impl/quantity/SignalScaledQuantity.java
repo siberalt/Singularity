@@ -1,5 +1,7 @@
 package com.siberalt.singularity.strategy.impl.quantity;
 
+import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
+
 /**
  * As much as the account allows, scaled by how strong the signal is: a full-conviction buy commits
  * the whole balance, a full-conviction sell closes the whole position.
@@ -14,14 +16,18 @@ package com.siberalt.singularity.strategy.impl.quantity;
  * as a position to hold instead, which stops a lasting signal from buying the whole of a move.
  */
 public class SignalScaledQuantity implements TradeQuantity {
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Покупка меряется тем, что счёт может купить, продажа - тем, что он держит; это и есть вся разница
+     * между сторонами здесь. Доля берётся по модулю: отвечают сколько, а куда - дело вызывающего. Со
+     * знаком выходило, что закрытие шорта просит отрицательное число лотов, то есть не просит ничего.
+     */
     @Override
-    public long toBuy(TradeMoment moment, TradeCapacity capacity) {
-        return (long) (capacity.affordableLots() * shareOf(moment));
-    }
+    public long toTrade(TradeMoment moment, TradeCapacity capacity, OrderDirection direction) {
+        long available = direction.isBuy() ? capacity.affordableLots() : capacity.positionLots();
 
-    @Override
-    public long toSell(TradeMoment moment, TradeCapacity capacity) {
-        return (long) (capacity.positionLots() * Math.abs(shareOf(moment)));
+        return (long) (available * Math.abs(shareOf(moment)));
     }
 
     /**

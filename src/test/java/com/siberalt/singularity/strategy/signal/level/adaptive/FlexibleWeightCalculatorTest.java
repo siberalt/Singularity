@@ -220,20 +220,25 @@ class FlexibleWeightCalculatorTest {
             assertEquals(0.5, weights.volumeWeight(), 0.001);
         }
 
+        /**
+         * Раньше здесь подавались 1.5 и 2.0, которых {@link Signal} больше не допускает. Проверяемое
+         * поведение от этого не исчезло: потолок срабатывает уже на предельной законной уверенности,
+         * {@code 0.4 + 0.5 * 1.0 = 0.9}, и обрезается до 0.8 - те же числа в ответе, но на входе,
+         * который бывает.
+         */
         @Test
-        @DisplayName("При abs(signal) > 1 — всё равно работает")
-        void shouldHandleSignalGreaterThanOne() {
+        @DisplayName("При предельной уверенности вес обрезается потолком")
+        void clampsTheWeightAtTheCapOnFullConfidence() {
             PriceProximityFunction mockProximity = (candle, level, candles) -> 0.0;
             FlexibleWeightCalculator calc = new FlexibleWeightCalculator(0.4, 0.5, 0.15, 0.2, 0.2, 0.8, mockProximity);
 
-            Signal levels = signal(1.5);
-            Signal volume = signal(2.0);
+            Signal levels = signal(1.0);
+            Signal volume = signal(1.0);
             List<Candle> candles = List.of(candle(100.0));
             LevelPair pair = levelPair(105.0, 95.0);
 
             WeightFactors weights = calc.compute(levels, volume, candles, pair);
 
-            // absSignal = 2.0 → 0.4 + 0.5*2.0 = 1.4 → clamp → 0.8
             assertEquals(0.2, weights.levelsWeight(), 0.001);
             assertEquals(0.8, weights.volumeWeight(), 0.001);
         }

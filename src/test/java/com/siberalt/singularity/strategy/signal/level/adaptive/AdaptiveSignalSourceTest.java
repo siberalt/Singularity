@@ -188,26 +188,15 @@ class AdaptiveSignalSourceTest {
             assertEquals(0.0, result.strength(), 0.001);
         }
 
+        /**
+         * NaN до сюда больше не доходит: его отвергает сам {@link Signal}, то есть делегат с NaN падает
+         * у себя, а не передаёт его дальше. Раньше этот тест проверял, что NaN проходит насквозь - и это
+         * было ровно то поведение, из-за которого сложение весов давало NaN-размер позиции молча.
+         */
         @Test
-        @DisplayName("При NaN в сигнале — возвращает NaN")
-        void shouldPropagateNaN() {
-            LevelBasedSignalSource mockLevels = mock(LevelBasedSignalSource.class);
-            when(mockLevels.calculate(any(), any())).thenReturn(signal(Double.NaN, 0.6));
-
-            SignalSource mockVolume = mock(SignalSource.class);
-            when(mockVolume.calculate(any())).thenReturn(signal(0.5, 0.6));
-
-            WeightCalculator mockWeight = mock(WeightCalculator.class);
-            when(mockWeight.compute(any(), any(), any(), any()))
-                .thenReturn(new WeightFactors(0.5, 0.5));
-
-            AdaptiveSignalSource calc = new AdaptiveSignalSource(
-                mockLevels, mockVolume, mockWeight
-            );
-
-            Signal result = calc.calculate(levelPair(), List.of(candle(100.0)));
-
-            assertTrue(Double.isNaN(result.confidence()));
+        @DisplayName("NaN в уверенности невозможен - его не построить")
+        void cannotBeGivenANaNToPropagate() {
+            assertThrows(IllegalArgumentException.class, () -> signal(Double.NaN, 0.6));
         }
     }
 
