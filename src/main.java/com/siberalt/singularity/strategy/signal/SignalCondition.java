@@ -60,6 +60,22 @@ public interface SignalCondition {
     }
 
     /**
+     * Любое из двух условий, причём второе не спрашивают, если первое уже прошло.
+     * <p>
+     * Нужно для правил вида «либо тип подходит, либо рынок в другом состоянии»: «выше средней пропускаем
+     * только фиксацию прибыли, ниже - что угодно» это
+     * {@code new OfType(TAKE_PROFIT).or(SignalCondition.of(above.negated()))}. Через {@link #and} такое
+     * не выразить - там каждое условие обязательно, а здесь они подменяют друг друга.
+     */
+    default SignalCondition or(SignalCondition other) {
+        if (other == null) {
+            throw new IllegalArgumentException("Нет второго условия");
+        }
+
+        return (lastCandles, signal) -> holds(lastCandles, signal) || other.holds(lastCandles, signal);
+    }
+
+    /**
      * То же условие, но спрашиваемое только про покупку: продажа проходит, ни о чём не спрашивая.
      * <p>
      * Нужно это потому, что в правиле, где один калькулятор и открывает, и закрывает позицию, фильтр на
