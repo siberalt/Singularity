@@ -67,9 +67,9 @@ public record SignalAmplifier(SignalSource delegate,
         double signal = delegateSignal.confidence();
 
         if (signal > positiveThreshold) {
-            return new Signal(1.0, signal);
+            return new Signal(delegateSignal.type(), 1.0, signal, delegateSignal.positionBalance());
         } else if (signal < -negativeThreshold) {
-            return new Signal(-1.0, signal);
+            return new Signal(delegateSignal.type(), -1.0, signal, delegateSignal.positionBalance());
         } else {
             return delegateSignal;
         }

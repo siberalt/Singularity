@@ -35,7 +35,7 @@ public class BasicLevelBasedSignalSource implements LevelBasedSignalSource {
         if (resistancePrice <= supportPrice) {
             // Log a warning and return a neutral Signal
             System.err.println("Warning: Resistance price must be greater than support price. Returning neutral Signal.");
-            return new Signal(0, 0);
+            return Signal.NEUTRAL;
         }
 
         double channelWidth = resistancePrice - supportPrice;

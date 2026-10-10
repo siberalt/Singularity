@@ -104,6 +104,29 @@ class TargetPositionQuantityTest {
         assertThrows(IllegalArgumentException.class, () -> quantity.setFullPositionShare(1.5));
     }
 
+    /**
+     * Названную долю счёта берут как есть, без умножения на долю, отведённую одному инструменту: сигнал
+     * сказал ровно сколько хочет держать, и урезать это второй раз значило бы получить долю, которой не
+     * просил никто.
+     */
+    @Test
+    void takesTheBalanceTheSignalNamedWithoutDiscountingItAgain() {
+        TargetPositionQuantity capped = new TargetPositionQuantity(0.5);
+        TradeMoment named = new TradeMoment(1L, NOW, new Signal(1.0, 1.0).withPositionBalance(0.4));
+
+        assertEquals(400, capped.toBuy(named, TradeCapacity.of(1000, 0)));
+        // А молчащий о размере сигнал считается как раньше - через потолок на инструмент.
+        assertEquals(500, capped.toBuy(moment(1.0), TradeCapacity.of(1000, 0)));
+    }
+
+    /** Ноль - это встать в деньги, а не отсутствие мнения о размере. */
+    @Test
+    void closesThePositionWhenTheBalanceNamedIsZero() {
+        TradeMoment flat = new TradeMoment(1L, NOW, new Signal(1.0, 1.0).withPositionBalance(0));
+
+        assertEquals(800, quantity.toSell(flat, TradeCapacity.of(200, 800)));
+    }
+
     private TradeMoment moment(double signal) {
         return new TradeMoment(1L, NOW, new Signal(signal, 1.0));
     }

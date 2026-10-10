@@ -74,7 +74,7 @@ class VWAPSignalSourceTest {
 
         Signal result = calculator.calculate(candles);
 
-        assertEquals(Signal.NEUTRAL, result); // цена = vwap
+        assertEquals(new Signal(0, 0), result); // цена = vwap
     }
 
     @Test
@@ -106,6 +106,6 @@ class VWAPSignalSourceTest {
 
         Signal result = calculator.calculate(candles);
 
-        assertEquals(Signal.NEUTRAL, result); // 100 == vwap → neutral
+        assertEquals(new Signal(0, 0), result); // 100 == vwap → neutral
     }
 }

@@ -23,7 +23,7 @@ public class MFISignalSource implements SignalSource {
     @Override
     public Signal calculate(List<Candle> lastCandles) {
         if (lastCandles.size() < 2) {
-            return new Signal(0, 0); // Недостаточно данных для расчета
+            return Signal.NEUTRAL; // Недостаточно данных для расчета
         }
 
         List<Double> positiveFlow = new ArrayList<>();
@@ -47,7 +47,7 @@ public class MFISignalSource implements SignalSource {
 
         // Если нет ни положительных, ни отрицательных изменений
         if (positiveFlow.isEmpty() && negativeFlow.isEmpty()) {
-            return new Signal(0, 0);
+            return Signal.NEUTRAL;
         }
 
         // Суммы за период
@@ -60,7 +60,7 @@ public class MFISignalSource implements SignalSource {
 
         // Если оба потока пренебрежимо малы
         if (isPositiveNegligible && isNegativeNegligible) {
-            return new Signal(0, 0);
+            return Signal.NEUTRAL;
         }
 
         // Если положительный поток пренебрежимо мал

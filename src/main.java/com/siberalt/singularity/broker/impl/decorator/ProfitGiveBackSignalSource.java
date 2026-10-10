@@ -7,6 +7,7 @@ import com.siberalt.singularity.entity.operation.OperationState;
 import com.siberalt.singularity.entity.operation.ReadOperationRepository;
 import com.siberalt.singularity.shared.TimeRange;
 import com.siberalt.singularity.strategy.signal.Signal;
+import com.siberalt.singularity.strategy.signal.SignalType;
 import com.siberalt.singularity.strategy.signal.SignalSource;
 
 import java.time.Duration;
@@ -173,14 +174,20 @@ public class ProfitGiveBackSignalSource implements SignalSource {
         return Math.max(giveBack * Math.max(peak, 0), lossBudget * allocated);
     }
 
-    /** Out of the position if there is one, and out of the market while there is not. */
+    /**
+     * Out of the position if there is one, and out of the market while there is not.
+     * <p>
+     * {@link SignalType#POSITION_EXIT}, а не {@code TAKE_PROFIT} и не {@code STOP_LOSS}: порогом здесь
+     * служит максимум из отданной прибыли и бюджета убытка, и какой из двух сработал, источник не
+     * различает. Назвать одно из них значило бы выдумать то, чего он не знает.
+     */
     private Signal closing(long position) {
         if (position > 0) {
-            return new Signal(-1, 1);
+            return new Signal(SignalType.POSITION_EXIT, -1, 1, Signal.UNDEFINED_BALANCE);
         }
 
         if (position < 0) {
-            return new Signal(1, 1);
+            return new Signal(SignalType.POSITION_EXIT, 1, 1, Signal.UNDEFINED_BALANCE);
         }
 
         return Signal.NEUTRAL;

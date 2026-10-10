@@ -16,11 +16,28 @@ package com.siberalt.singularity.strategy.impl.quantity;
 public class SignalScaledQuantity implements TradeQuantity {
     @Override
     public long toBuy(TradeMoment moment, TradeCapacity capacity) {
-        return (long) (capacity.affordableLots() * moment.signal().confidence());
+        return (long) (capacity.affordableLots() * shareOf(moment));
     }
 
     @Override
     public long toSell(TradeMoment moment, TradeCapacity capacity) {
-        return (long) (capacity.positionLots() * Math.abs(moment.signal().confidence()));
+        return (long) (capacity.positionLots() * Math.abs(shareOf(moment)));
+    }
+
+    /**
+     * Какую долю брать: названную сигналом, а если он её не назвал - его уверенность.
+     * <p>
+     * Откат на уверенность и есть то, чем она была здесь всегда: {@link
+     * com.siberalt.singularity.strategy.signal.Signal#confidence()} до появления
+     * {@link com.siberalt.singularity.strategy.signal.Signal#positionBalance()} работала и знаком, и
+     * порогом, и размером сразу. Теперь размер можно назвать отдельно, а старое поведение остаётся
+     * поведением по умолчанию, так что ни один существующий источник от этого не меняется.
+     * <p>
+     * Доля здесь - <b>сколько добавить сейчас</b>, а не сколько держать: это приростный сайзинг, и в
+     * этом он отличается от {@link TargetPositionQuantity}, который читает то же число как цель.
+     */
+    private static double shareOf(TradeMoment moment) {
+        return moment.signal().hasPositionBalance()
+            ? moment.signal().positionBalance() : moment.signal().confidence();
     }
 }

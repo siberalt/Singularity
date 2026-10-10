@@ -80,8 +80,25 @@ public class TargetPositionQuantity implements TradeQuantity {
      * is more than the strategy means to commit to one instrument.
      */
     protected long targetLots(TradeMoment moment, TradeCapacity capacity) {
-        double share = Math.clamp(moment.signal().confidence(), 0d, 1d) * fullPositionShare;
+        return (long) (capacity.totalLots() * targetShareOf(moment));
+    }
 
-        return (long) (capacity.totalLots() * share);
+    /**
+     * Доля счёта, которую надо держать: названная сигналом, иначе выведенная из его уверенности.
+     * <p>
+     * Названная берётся <b>как есть, без умножения на {@link #getFullPositionShare()}</b>, и это
+     * сознательно. Сигнал, назвавший долю, сказал ровно сколько хочет держать; домножить её на
+     * «сколько отдаём под один инструмент» значило бы урезать дважды и получить долю, которой не
+     * просил никто. Потолок на одну бумагу - это ограничение для сигналов, которые о размере молчат.
+     * <p>
+     * Молчащий сигнал считается как раньше: уверенность, обрезанная в [0, 1], берётся долей от
+     * {@code fullPositionShare}. Поэтому поведение всех существующих источников не меняется.
+     */
+    protected double targetShareOf(TradeMoment moment) {
+        if (moment.signal().hasPositionBalance()) {
+            return moment.signal().positionBalance();
+        }
+
+        return Math.clamp(moment.signal().confidence(), 0d, 1d) * fullPositionShare;
     }
 }

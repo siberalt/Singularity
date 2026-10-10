@@ -84,7 +84,11 @@ public class NormalizedSignalSource implements SignalSource {
             return Signal.NEUTRAL;
         }
 
-        return new Signal(Math.tanh(signal.confidence() / scale), signal.strength());
+        return new Signal(
+            signal.type(), Math.tanh(signal.confidence() / scale),
+            signal.strength(),
+            signal.positionBalance()
+        );
     }
 
     /**

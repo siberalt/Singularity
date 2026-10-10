@@ -46,6 +46,13 @@ public class InvertedSignalSource implements SignalSource {
             return signal;
         }
 
-        return new Signal(-signal.confidence(), signal.strength());
+        // Тип и доля счёта переносятся как есть: инверсия - про сторону, а не про то, вход это или
+        // выход и сколько просят. Пересборка через двухаргументный конструктор их обнулила бы.
+        return new Signal(
+            signal.type(),
+            -signal.confidence(),
+            signal.strength(),
+            signal.positionBalance()
+        );
     }
 }

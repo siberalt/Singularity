@@ -40,6 +40,11 @@ class EntryExitSignalSourceTest {
         return new Signal(signal, 1);
     }
 
+    /** Закрывающий сигнал: его обёртка называет типом, и этим он отличается от входа в другую сторону. */
+    private Signal closing(double signal) {
+        return new Signal(SignalType.POSITION_EXIT, signal, 1, Signal.UNDEFINED_BALANCE);
+    }
+
     private List<Signal> run(EntryExitSignalSource calculator, int bars) {
         List<Signal> answers = new ArrayList<>();
 
@@ -63,7 +68,7 @@ class EntryExitSignalSourceTest {
         var calculator = new EntryExitSignalSource(new Scripted(of(1)),
             new Scripted(Signal.NEUTRAL, new Signal(-0.3, 0.1)));
 
-        assertEquals(List.of(of(1), Signal.NEUTRAL, of(-1)), run(calculator, 3));
+        assertEquals(List.of(of(1), Signal.NEUTRAL, closing(-1)), run(calculator, 3));
     }
 
     /** The mirror: a short opened by a fall is closed by a rise, and the closing signal is a buy. */
@@ -72,7 +77,7 @@ class EntryExitSignalSourceTest {
         var calculator = new EntryExitSignalSource(new Scripted(of(-1)),
             new Scripted(of(1)));
 
-        assertEquals(List.of(of(-1), of(1)), run(calculator, 2));
+        assertEquals(List.of(of(-1), closing(1)), run(calculator, 2));
     }
 
     @Test
@@ -80,7 +85,7 @@ class EntryExitSignalSourceTest {
         var calculator = new EntryExitSignalSource(new Scripted(of(1)),
             new Scripted(of(1), of(1), of(-1)));
 
-        assertEquals(List.of(of(1), Signal.NEUTRAL, Signal.NEUTRAL, of(-1)), run(calculator, 4));
+        assertEquals(List.of(of(1), Signal.NEUTRAL, Signal.NEUTRAL, closing(-1)), run(calculator, 4));
     }
 
     @Test
@@ -107,7 +112,7 @@ class EntryExitSignalSourceTest {
     void should_ListenToTheEntryAgain_AfterThePositionIsClosed() {
         var calculator = new EntryExitSignalSource(new Scripted(of(1)), new Scripted(of(-1)));
 
-        assertEquals(List.of(of(1), of(-1), of(1), of(-1)), run(calculator, 4));
+        assertEquals(List.of(of(1), closing(-1), of(1), closing(-1)), run(calculator, 4));
     }
 
     @Test
@@ -134,7 +139,7 @@ class EntryExitSignalSourceTest {
         var calculator = new EntryExitSignalSource(new Scripted(new Signal(0.4, 1), new Signal(0.9, 1)),
             new Scripted(new Signal(-0.4, 1), new Signal(-0.9, 1)), 0.5);
 
-        assertEquals(List.of(Signal.NEUTRAL, new Signal(0.9, 1), Signal.NEUTRAL, of(-1)),
+        assertEquals(List.of(Signal.NEUTRAL, new Signal(0.9, 1), Signal.NEUTRAL, closing(-1)),
             run(calculator, 4));
     }
 
@@ -143,7 +148,7 @@ class EntryExitSignalSourceTest {
         var calculator = new EntryExitSignalSource(new Scripted(of(1)),
             new Scripted(Signal.NEUTRAL)).setMaxWaitBars(3);
 
-        assertEquals(List.of(of(1), Signal.NEUTRAL, Signal.NEUTRAL, of(-1)), run(calculator, 4));
+        assertEquals(List.of(of(1), Signal.NEUTRAL, Signal.NEUTRAL, closing(-1)), run(calculator, 4));
     }
 
     @Test
@@ -151,7 +156,7 @@ class EntryExitSignalSourceTest {
         var calculator = new EntryExitSignalSource(new Scripted(of(1)),
             new Scripted(Signal.NEUTRAL, of(-1))).setMaxWaitBars(10);
 
-        assertEquals(List.of(of(1), Signal.NEUTRAL, of(-1)), run(calculator, 3));
+        assertEquals(List.of(of(1), Signal.NEUTRAL, closing(-1)), run(calculator, 3));
     }
 
     /** The limit is a limit on one position, not on the calculator's life. */
@@ -160,7 +165,7 @@ class EntryExitSignalSourceTest {
         var calculator = new EntryExitSignalSource(new Scripted(of(1)),
             new Scripted(Signal.NEUTRAL)).setMaxWaitBars(2);
 
-        assertEquals(List.of(of(1), Signal.NEUTRAL, of(-1), of(1), Signal.NEUTRAL, of(-1)),
+        assertEquals(List.of(of(1), Signal.NEUTRAL, closing(-1), of(1), Signal.NEUTRAL, closing(-1)),
             run(calculator, 6));
     }
 
@@ -169,7 +174,7 @@ class EntryExitSignalSourceTest {
         var calculator = new EntryExitSignalSource(new Scripted(of(-1)),
             new Scripted(Signal.NEUTRAL)).setMaxWaitBars(1);
 
-        assertEquals(List.of(of(-1), of(1)), run(calculator, 2));
+        assertEquals(List.of(of(-1), closing(1)), run(calculator, 2));
     }
 
     @Test

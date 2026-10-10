@@ -78,7 +78,7 @@ class RSISignalSourceTest {
             List<Candle> candles = generateCandles(15, 100.0);
             Signal result = calculator.calculate(candles);
             // RSI=50 для flat-рынка, сигнал должен быть 0
-            assertEquals(Signal.NEUTRAL, result);
+            assertEquals(new Signal(0, 0), result);
         }
 
         @Test
@@ -89,7 +89,7 @@ class RSISignalSourceTest {
             // Порог должен быть приведен к 100, но сигнал зависит от RSI
             List<Candle> candles = generateCandles(15, 100.0);
             Signal result = calculator.calculate(candles);
-            assertEquals(Signal.NEUTRAL, result);
+            assertEquals(new Signal(0, 0), result);
         }
     }
 
@@ -242,7 +242,7 @@ class RSISignalSourceTest {
             Signal result = calculator.calculate(candles);
 
             // RSI будет 50 (нет ни приростов ни убытков)
-            assertEquals(Signal.NEUTRAL, result);
+            assertEquals(new Signal(0, 0), result);
         }
     }
 

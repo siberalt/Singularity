@@ -7,6 +7,7 @@ import com.siberalt.singularity.strategy.market.position.EntryPrice;
 import com.siberalt.singularity.strategy.market.position.EntryPriceCalculator;
 import com.siberalt.singularity.strategy.market.position.PositionRiskCoefficient;
 import com.siberalt.singularity.strategy.signal.Signal;
+import com.siberalt.singularity.strategy.signal.SignalType;
 import com.siberalt.singularity.strategy.signal.SignalSource;
 import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 
@@ -110,6 +111,8 @@ public class PositionRiskManagerSignalSource implements SignalSource {
 
         // A position sitting exactly on its reference reads as nothing to say, and negating a zero
         // leaves a negative one that no longer equals NEUTRAL.
-        return clamped == 0 ? Signal.NEUTRAL : new Signal(clamped, Math.abs(clamped));
+        // Это стоп по построению: срабатывает он от того, насколько позиция под водой.
+        return clamped == 0 ? Signal.NEUTRAL
+            : new Signal(SignalType.STOP_LOSS, clamped, Math.abs(clamped), Signal.UNDEFINED_BALANCE);
     }
 }

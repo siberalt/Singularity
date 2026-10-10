@@ -35,6 +35,18 @@ class SignalScaledQuantityTest {
         assertEquals(2, quantity.toBuy(moment(0.7), TradeCapacity.of(3, 0)));
     }
 
+    /**
+     * Доля, названная сигналом, вытесняет уверенность. Откат на уверенность и есть прежнее поведение: до
+     * появления positionBalance она работала и знаком, и порогом, и размером сразу.
+     */
+    @Test
+    void prefersTheBalanceTheSignalNamedOverItsConfidence() {
+        TradeMoment named = new TradeMoment(1L, NOW, new Signal(1.0, 1.0).withPositionBalance(0.3));
+
+        assertEquals(300, quantity.toBuy(named, TradeCapacity.of(1000, 0)));
+        assertEquals(1000, quantity.toBuy(moment(1.0), TradeCapacity.of(1000, 0)));
+    }
+
     private TradeMoment moment(double signal) {
         return new TradeMoment(1L, NOW, new Signal(signal, 1.0));
     }

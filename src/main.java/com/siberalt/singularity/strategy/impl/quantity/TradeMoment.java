@@ -11,10 +11,11 @@ import java.time.Instant;
  *                     read by, which is what every measure of recent activity here reads
  * @param at           the moment of the decision - the candle the strategy just reacted to, which
  *                     is what any measure of recent market activity has to be taken as of
- * @param signal       the calculation the decision rests on, whole. Not just its signal: how much
- *                     to trade is exactly the question that wants {@link Signal#strength()} as well,
- *                     and a sizing that wanted to weigh conviction against confidence should not
- *                     have to be given a wider contract first
+ * @param signal       сигнал целиком, а не одно его число: размер читается из
+ *                     {@link Signal#positionBalance()}, если источник его назвал, и из
+ *                     {@link Signal#confidence()}, если нет, а {@link Signal#type()} отвечает, о чём
+ *                     сигнал вообще. Отдавать сюда одно поле значило бы менять контракт при каждом
+ *                     следующем способе считать размер
  */
 public record TradeMoment(long instrumentId, Instant at, Signal signal) {
 }

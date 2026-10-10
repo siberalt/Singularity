@@ -149,7 +149,9 @@ public class EntryExitSignalSource implements SignalSource {
 
             direction = 0;
 
-            return new Signal(closing, 1);
+            // Закрытие названо явно: обёртка - единственный, кто знает сторону открытой позиции, и
+            // именно здесь "закрыть" перестаёт быть неотличимым от "перевернуться".
+            return new Signal(SignalType.POSITION_EXIT, closing, 1, Signal.UNDEFINED_BALANCE);
         }
 
         Signal signal = entry.calculate(lastCandles);

@@ -32,12 +32,17 @@ class InvertedSignalSourceTest {
 
     @Test
     void leavesSilenceSilent() {
-        assertEquals(Signal.NEUTRAL, inverting(0, 0).calculate(ANY_CANDLES));
+        assertEquals(Signal.NEUTRAL, invertingSilence().calculate(ANY_CANDLES));
     }
 
     @Test
     void refusesNothingToInvert() {
         assertThrows(IllegalArgumentException.class, () -> new InvertedSignalSource(null));
+    }
+
+    /** Настоящее молчание, а не посчитанный ноль: тип их теперь различает. */
+    private InvertedSignalSource invertingSilence() {
+        return new InvertedSignalSource(candles -> Signal.NEUTRAL);
     }
 
     private InvertedSignalSource inverting(double signal, double strength) {

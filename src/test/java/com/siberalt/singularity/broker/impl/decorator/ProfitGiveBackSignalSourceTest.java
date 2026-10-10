@@ -10,6 +10,7 @@ import com.siberalt.singularity.entity.operation.OperationType;
 import com.siberalt.singularity.entity.operation.ReadOperationRepository;
 import com.siberalt.singularity.shared.TimeRange;
 import com.siberalt.singularity.strategy.signal.Signal;
+import com.siberalt.singularity.strategy.signal.SignalType;
 import com.siberalt.singularity.strategy.signal.SignalSource;
 import org.junit.jupiter.api.Test;
 
@@ -36,6 +37,11 @@ class ProfitGiveBackSignalSourceTest {
     private final List<Operation> operations = new ArrayList<>();
     private final ReadOperationRepository repository = mock(ReadOperationRepository.class);
     private final SignalSource signal = candles -> new Signal(1, 1);
+
+    /** Сторож закрывает позицию, и теперь говорит это типом, а не только знаком. */
+    private static Signal closing() {
+        return new Signal(SignalType.POSITION_EXIT, -1, 1, Signal.UNDEFINED_BALANCE);
+    }
 
     /**
      * The guard asks for one instrument's operations within a window and folds each one once, so the
@@ -72,7 +78,7 @@ class ProfitGiveBackSignalSourceTest {
         assertEquals(new Signal(1, 1), guard.calculate(bars(0, 200)));
         assertEquals(new Signal(1, 1), guard.calculate(bars(1, 171)));
 
-        assertEquals(new Signal(-1, 1), guard.calculate(bars(2, 165)));
+        assertEquals(closing(), guard.calculate(bars(2, 165)));
         assertEquals(1, guard.getTrips());
     }
 
@@ -85,7 +91,7 @@ class ProfitGiveBackSignalSourceTest {
         assertEquals(new Signal(1, 1), guard.calculate(bars(0, 100)));
         assertEquals(new Signal(1, 1), guard.calculate(bars(1, 91)));
 
-        assertEquals(new Signal(-1, 1), guard.calculate(bars(2, 88)));
+        assertEquals(closing(), guard.calculate(bars(2, 88)));
     }
 
     /**
