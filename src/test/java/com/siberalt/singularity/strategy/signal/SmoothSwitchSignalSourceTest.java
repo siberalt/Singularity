@@ -10,6 +10,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SmoothSwitchSignalSourceTest {
@@ -108,6 +109,36 @@ class SmoothSwitchSignalSourceTest {
     }
 
     /** A trend read and its inversion, weighed either side of a coefficient of one. */
+    /**
+     * Политики типа и размера те же, что у состава: вес, проголосовавший в сторону ответа, становится
+     * долей счёта. Здесь голоса весят 3 к 1, поэтому уверенность 0.5, а доля 0.75.
+     */
+    @Test
+    void sizesByTheWeightThatAgreedWhenToldTo() {
+        SmoothSwitchSignalSource calculator = new SmoothSwitchSignalSource(
+            candles -> 0,
+            List.of(
+                SmoothSwitchSignalSource.weighted(answering(1, 1), atAnyReading(3)),
+                SmoothSwitchSignalSource.weighted(answering(-1, 1), atAnyReading(1))
+            )
+        ).setType(SignalType.POSITION_ENTRY).setBalance(BalancePolicy.AGREEING_WEIGHT);
+
+        Signal merged = calculator.calculate(ANY_CANDLES);
+
+        assertEquals(SignalType.POSITION_ENTRY, merged.type());
+        assertEquals(0.5, merged.confidence(), 1e-9);
+        assertEquals(0.75, merged.positionBalance(), 1e-9);
+    }
+
+    /** По умолчанию - как раньше: ни типа, ни доли. */
+    @Test
+    void staysSilentAboutTypeAndSizeByDefault() {
+        Signal merged = blending(0.5).calculate(ANY_CANDLES);
+
+        assertEquals(SignalType.UNSPECIFIED, merged.type());
+        assertFalse(merged.hasPositionBalance());
+    }
+
     private SmoothSwitchSignalSource blending(double width) {
         return new SmoothSwitchSignalSource(
             candles -> reading,

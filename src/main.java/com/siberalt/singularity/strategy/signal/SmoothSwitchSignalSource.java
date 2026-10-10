@@ -48,6 +48,43 @@ public class SmoothSwitchSignalSource implements SignalSource {
     private final MarketCoefficient coefficient;
     private final List<WeightedCalculator> calculators;
 
+    private TypePolicy type = TypePolicy.UNDECIDED;
+
+    private BalancePolicy balance = BalancePolicy.UNDEFINED;
+
+    /**
+     * О чём получается сигнал этого состава. По умолчанию ни о чём - {@link SignalType#UNSPECIFIED}:
+     * делегаты тип не подскажут, а сливать несогласные типы нечем.
+     */
+    public SmoothSwitchSignalSource setType(SignalType type) {
+        return setType(TypePolicy.fixed(type));
+    }
+
+    /** Тип как функция расклада - например {@link TypePolicy#BY_SIDE} для книги без шортов. */
+    public SmoothSwitchSignalSource setType(TypePolicy type) {
+        if (type == null) {
+            throw new IllegalArgumentException("Нет политики, которой определять тип");
+        }
+
+        this.type = type;
+
+        return this;
+    }
+
+    /**
+     * Какую долю счёта просить. По умолчанию состав её не называет, и размер считается от уверенности,
+     * как раньше; {@link BalancePolicy#AGREEING_WEIGHT} берёт вместо этого долю согласного веса.
+     */
+    public SmoothSwitchSignalSource setBalance(BalancePolicy balance) {
+        if (balance == null) {
+            throw new IllegalArgumentException("Нет политики, которой определять долю счёта");
+        }
+
+        this.balance = balance;
+
+        return this;
+    }
+
     public SmoothSwitchSignalSource(
         MarketCoefficient coefficient,
         List<WeightedCalculator> calculators
@@ -70,6 +107,8 @@ public class SmoothSwitchSignalSource implements SignalSource {
         double signal = 0;
         double strength = 0;
         double total = 0;
+        double positiveWeight = 0;
+        double negativeWeight = 0;
 
         for (WeightedCalculator weighted : calculators) {
             double weight = Math.max(0, weighted.weight().at(reading));
@@ -82,6 +121,12 @@ public class SmoothSwitchSignalSource implements SignalSource {
             signal += weight * answer.confidence();
             strength += weight * answer.strength();
             total += weight;
+
+            if (answer.confidence() > 0) {
+                positiveWeight += weight;
+            } else if (answer.confidence() < 0) {
+                negativeWeight += weight;
+            }
         }
 
         // Nothing weighs anything here, which is a market none of these calculators was written for.
@@ -89,7 +134,9 @@ public class SmoothSwitchSignalSource implements SignalSource {
             return Signal.NEUTRAL;
         }
 
-        return new Signal(signal / total, strength / total);
+        Votes votes = new Votes(signal / total, strength / total, total, positiveWeight, negativeWeight);
+
+        return new Signal(type.of(votes), votes.confidence(), votes.strength(), balance.of(votes));
     }
 
     public static WeightedCalculator weighted(SignalSource calculator, Weight weight) {
