@@ -32,4 +32,19 @@ public interface MarketCondition {
     default MarketCondition negated() {
         return lastCandles -> !holds(lastCandles);
     }
+
+    /**
+     * Both conditions, the second only asked when the first has held.
+     * <p>
+     * Needed as soon as a rule means something more specific than either half: "below the average
+     * <i>and</i> falling steeply" is a decisive break, while below the average alone is also every quiet
+     * drift across it, and a steep fall alone is also one inside an uptrend.
+     */
+    default MarketCondition and(MarketCondition other) {
+        if (other == null) {
+            throw new IllegalArgumentException("Нет второго условия");
+        }
+
+        return lastCandles -> holds(lastCandles) && other.holds(lastCandles);
+    }
 }
