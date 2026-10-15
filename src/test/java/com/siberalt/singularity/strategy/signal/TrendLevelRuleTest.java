@@ -4,6 +4,7 @@ import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.TimePoint;
 import com.siberalt.singularity.strategy.market.MarketCoefficient;
+import com.siberalt.singularity.strategy.market.SteadySide;
 import com.siberalt.singularity.strategy.market.TolerantLevel;
 import org.junit.jupiter.api.Test;
 
@@ -14,9 +15,15 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-/** Трендовая ветка: вход на событии пересечения, выход по уровню, терпимому к нерешительному пробою. */
+/** Правило «уровень плюс режим»: вход на пересечении, выход по терпимому уровню, ветки по режиму. */
 class TrendLevelRuleTest {
     private static final int BARS = 10;
+
+    private static final Signal TRENDING = new Signal(1, 1);
+
+    private static final Signal FLAT = new Signal(-0.5, 1);
+
+    private static final Signal FALLING = new Signal(-1, 0.5);
 
     /**
      * Вход срабатывает на смене стороны, а не внутри фазы. Первая сторона запоминается молча: на первом
@@ -146,5 +153,74 @@ class TrendLevelRuleTest {
 
         return new Candle(1, new TimePoint(at, Instant.EPOCH.plusSeconds(60L * at)),
             value, value, value, value, volume);
+    }
+
+    /** В восходящем режиме отвечает трендовая ветка. */
+    @Test
+    void runsTheTrendingBranchInAnUptrend() {
+        assertEquals(TRENDING, regime(SteadySide.UP).calculate(List.of()));
+    }
+
+    /** Во флэте - своя, и это то место, куда просится возврат к средней. */
+    @Test
+    void runsTheFlatBranchWhileThereIsNoTrend() {
+        assertEquals(FLAT, regime(SteadySide.FLAT).calculate(List.of()));
+    }
+
+    /**
+     * В нисходящем режиме приходит закрывающая сторона, а не молчание. Молчание позицию не закрыло бы,
+     * а заморозило: стратегия, уже сидящая в бумаге, получила бы ноль и осталась в ней на всё падение.
+     */
+    @Test
+    void closesThePositionInADowntrend() {
+        assertEquals(FALLING, regime(SteadySide.DOWN).calculate(List.of()));
+    }
+
+    /**
+     * Для длинной книги закрывающая ветка - это {@code OUT_OF_MARKET}, и сторона у неё минус первая:
+     * стратегия читает уверенность, а не тип, так что выход с плюс единицей был бы прочитан покупкой.
+     */
+    @Test
+    void leavesTheMarketWithTheSideThatCloses() {
+        assertEquals(-1, TrendLevelRule.OUT_OF_MARKET.calculate(List.of()).confidence());
+    }
+
+    /** Пока режим не размечен - прогрев кривой, - правило тоже молчит. */
+    @Test
+    void saysNothingWhileTheRegimeIsUnknown() {
+        assertEquals(Signal.NEUTRAL, regime(Double.NaN).calculate(List.of()));
+    }
+
+    /**
+     * Границы стоят на половине предела, а не на самих {@code -1}, {@code 0} и {@code 1}. Для
+     * {@link SteadySide} это безразлично - он отдаёт ровно эти три числа, - но непрерывную меру тренда
+     * такая сборка делит осмысленно, а не объявляет флэтом всё, что не дошло до предела.
+     */
+    @Test
+    void splitsAContinuousReadingAtHalfTheLimit() {
+        assertEquals(TRENDING, regime(0.6).calculate(List.of()), "выше половины предела - тренд");
+        assertEquals(FLAT, regime(0.4).calculate(List.of()), "ниже - флэт");
+        assertEquals(FLAT, regime(-0.4).calculate(List.of()), "и симметрично вниз");
+        assertEquals(FALLING, regime(-0.6).calculate(List.of()), "решительно вниз - закрываем");
+    }
+
+    @Test
+    void refusesARegimeThatCannotBeAssembled() {
+        SignalSource branch = candles -> TRENDING;
+
+        assertThrows(IllegalArgumentException.class,
+            () -> TrendLevelRule.byRegime(null, branch, branch, branch));
+        assertThrows(IllegalArgumentException.class,
+            () -> TrendLevelRule.byRegime(candles -> 0, null, branch, branch));
+        assertThrows(IllegalArgumentException.class,
+            () -> TrendLevelRule.byRegime(candles -> 0, branch, null, branch));
+        assertThrows(IllegalArgumentException.class,
+            () -> TrendLevelRule.byRegime(candles -> 0, branch, branch, null));
+    }
+
+    /** Переключатель с ветками, которые только называют себя: проверяется выбор, а не сами правила. */
+    private static SignalSource regime(double reading) {
+        return TrendLevelRule.byRegime(candles -> reading, candles -> TRENDING, candles -> FLAT,
+            candles -> FALLING);
     }
 }
