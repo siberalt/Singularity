@@ -1,0 +1,58 @@
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <title>Зоны режима</title>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript" src="trendZones.js"></script>
+    <style>
+        body {
+            font: 13px/1.4 -apple-system, "Segoe UI", Arial, sans-serif;
+            margin: 0 12px;
+        }
+
+        #controls {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        #caption {
+            font-variant-numeric: tabular-nums;
+        }
+
+        #legend span {
+            margin-right: 10px;
+            white-space: nowrap;
+        }
+
+        .swatch {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            margin-right: 3px;
+            vertical-align: middle;
+        }
+
+        .hint {
+            color: #5f6368;
+        }
+    </style>
+</head>
+<body>
+<!-- Зоны TrendZoneSimulation: цена, покрашенная режимом, и под ней сам угол средней с порогами.
+     Шагать здесь не по чему, в отличие от LevelFrames.html: ответ детектора уровней зависит от окна,
+     которое ему дали, а режим на баре - функция баров до него, и ответ на каждом баре один. -->
+<div id="controls">
+    <label><input type="checkbox" id="average" checked> средняя</label>
+    <label><input type="checkbox" id="angleChart" checked> угол средней</label>
+    <span id="caption"></span>
+</div>
+<div id="legend" class="hint"></div>
+<div id="price_chart" style="width: 100%; height: 900px"></div>
+<!-- Угол тех же баров: по зонам не видно, прошло чтение порог с запасом или еле-еле. -->
+<div id="angle_chart" style="width: 100%; height: 220px"></div>
+</body>
+</html>
