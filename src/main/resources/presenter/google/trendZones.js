@@ -69,9 +69,13 @@ function writeLegend() {
         + item(DOWN_COLOUR, 'вниз ' + shares.down + '%')
         + item(UNMARKED_COLOUR, 'прогрев ' + shares.unmarked + '%')
         + item(AVERAGE_COLOUR, 'SMA(' + settings['sma'] + ')')
-        + item(ANGLE_COLOUR, 'угол средней по ' + settings['bars'] + ' приращениям')
-        + '<span>· объявление ' + settings['decisive'] + ', удержание ' + settings['remains']
-        + ' — долей предельных 45°</span>';
+        + item(ANGLE_COLOUR, byCrossings()
+            ? 'пересечений цены со средней в окрестности ' + settings['window'] + ' баров'
+            : 'угол средней по ' + settings['bars'] + ' приращениям')
+        + '<span>· ' + (byCrossings()
+            ? 'флэт от ' + settings['crowd'] + ' пересечений в окрестности'
+            : 'объявление ' + settings['decisive'] + ', удержание ' + settings['remains']
+              + ' — долей предельных 45°') + '</span>';
 
     document.getElementById('caption').textContent =
         'бумага ' + model['instrument'] + ' · ' + model['price'].length + ' баров ' + model['interval']
@@ -170,7 +174,16 @@ function priceWindow() {
     return {viewWindow: {min: min - margin, max: max + margin}};
 }
 
-/** Угол тех же баров с четырьмя порогами: объявление и удержание, каждый в обе стороны. */
+// Режим размечен частотой пересечений, а не углом: от этого зависит и подпись, и нижний график.
+function byCrossings() {
+    return model['settings']['byCrossings'] === true && Array.isArray(model['crossings']);
+}
+
+/**
+ * Под ценой - то, из чего получились зоны, а не что-нибудь похожее: угол с его порогами или счёт
+ * пересечений со своим. Рисовать угол под разметкой по пересечениям значило бы показывать одну меру,
+ * а размечать другой.
+ */
 function drawAngle() {
     const holder = document.getElementById('angle_chart');
     holder.hidden = !document.getElementById('angleChart').checked;
@@ -179,13 +192,34 @@ function drawAngle() {
         return;
     }
 
-    const decisive = model['settings']['decisive'];
-    const remains = model['settings']['remains'];
     const table = new google.visualization.DataTable();
     const columns = [];
     const series = {};
 
     table.addColumn('string', 'Время');
+
+    if (byCrossings()) {
+        const crowd = model['settings']['crowd'];
+        const highest = model['crossings'].reduce((top, one) => Math.max(top, one === null ? 0 : one), 0);
+
+        // Ступеньками, а не линией: счёт - целое число, и наклонные между соседними барами рисовали бы
+        // переход, которого нет.
+        addColumn(table, columns, series, 'Пересечений в окрестности', row => model['crossings'][row],
+            {color: ANGLE_COLOUR, lineWidth: 1});
+        threshold(table, columns, series, 'гроздь', crowd, FLAT_COLOUR);
+
+        table.addRows(rowsOf(columns));
+        angleChart.draw(table, options(series, {
+            viewWindow: {min: 0, max: Math.max(crowd + 1, highest)},
+            ticks: ticksTo(Math.max(crowd + 1, highest))
+        }));
+
+        return;
+    }
+
+    const decisive = model['settings']['decisive'];
+    const remains = model['settings']['remains'];
+
     addColumn(table, columns, series, 'Угол средней', row => model['angle'][row],
         {color: ANGLE_COLOUR, lineWidth: 1});
     threshold(table, columns, series, 'объявление вверх', decisive, UP_COLOUR);
@@ -198,6 +232,16 @@ function drawAngle() {
         viewWindow: {min: -1, max: 1},
         ticks: [-1, -decisive, -remains, 0, remains, decisive, 1]
     }));
+}
+
+function ticksTo(highest) {
+    const ticks = [];
+
+    for (let at = 0; at <= highest; at++) {
+        ticks.push(at);
+    }
+
+    return ticks;
 }
 
 function threshold(table, columns, series, title, level, colour) {

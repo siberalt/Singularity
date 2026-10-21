@@ -273,7 +273,7 @@ public class BasicTradeStrategySimulation {
 //            lastCandles ->  true // IncrementalRsi.of(lastCandles, 12) <= 70
 //        );
 
-        SignalSource priceChange = new PriceChangeSignalSource(2, 3, 2);
+        SignalSource priceChange = new PriceChangeSignalSource(2, 3, 3);
         // Срок закрывает позицию под отсечку независимо от мнения выхода, и закрывает любую сторону:
         // направление позиции знает только сама обёртка. Окно по умолчанию - день покупки и день перед
         // ним, потому что гэп приходит на следующий день, а заявка доходит через бар.

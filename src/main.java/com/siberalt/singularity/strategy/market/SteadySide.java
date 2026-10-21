@@ -37,11 +37,11 @@ import java.util.List;
  * меняется: отсутствие данных это не повод объявить флэт.
  */
 public class SteadySide implements MarketCoefficient {
-    public static final double UP = 1;
+    public static final double UP = TrendZone.UP;
 
-    public static final double DOWN = -1;
+    public static final double DOWN = TrendZone.DOWN;
 
-    public static final double FLAT = 0;
+    public static final double FLAT = TrendZone.FLAT;
 
     private final MarketCoefficient reading;
 

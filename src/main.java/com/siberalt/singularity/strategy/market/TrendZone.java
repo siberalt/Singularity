@@ -23,6 +23,17 @@ package com.siberalt.singularity.strategy.market;
  * делит его границами, а не равенством, и для него «половина предела» - осмысленный порог.
  */
 public record TrendZone(int from, int to, double side) {
+    /**
+     * Словарь сторон живёт здесь, а не в классификаторе: классификаторов режима несколько
+     * ({@link SteadySide}, {@link CrossingRegime}), и объявить одни и те же три числа в каждом значило
+     * бы завести второе место, которое однажды разойдётся с первым.
+     */
+    public static final double UP = 1;
+
+    public static final double FLAT = 0;
+
+    public static final double DOWN = -1;
+
     public TrendZone {
         if (from < 0 || to < from) {
             throw new IllegalArgumentException("Зона идёт от бара к бару, получено " + from + ".." + to);

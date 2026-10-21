@@ -7,6 +7,9 @@ import com.siberalt.singularity.entity.candle.SqliteCandleRepository;
 import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.strategy.indicator.Sma;
+import com.siberalt.singularity.strategy.market.CrossingRegime;
+import com.siberalt.singularity.strategy.market.MarketCoefficient;
+import com.siberalt.singularity.strategy.market.MarketSeries;
 import com.siberalt.singularity.strategy.market.SteadySide;
 import com.siberalt.singularity.strategy.market.TrendAngle;
 import com.siberalt.singularity.strategy.market.TrendZone;
@@ -67,6 +70,16 @@ public class TrendZoneSimulation {
     private static final double DECISIVE = 0.9;
     /** При каком согласном чтении объявленная сторона остаётся. Производный от решительного: половина. */
     private static final double REMAINS = DECISIVE / 2;
+    /** Окрестность, в которой считаются пересечения цены со средней. */
+    private static final int CROSS_WINDOW = 20;
+    /** Сколько пересечений в окрестности делают её флэтом. */
+    private static final int CROWD = 3;
+    /**
+     * Чем размечать режим. {@code true} - частотой пересечений цены со средней, {@code false} - углом
+     * средней. Переключатель, а не два стенда: обе разметки должны ложиться на один и тот же ряд, иначе
+     * сравнивать картинки нечем.
+     */
+    private static final boolean BY_CROSSINGS = true;
     private static final Path OUTPUT = Paths.get("src/main/resources/presenter/google/TrendZones.json");
 
     public static void main(String[] args) throws IOException {
@@ -86,15 +99,62 @@ public class TrendZoneSimulation {
         }
 
         // Окно ровно такое, сколько мере нужно: лишние бары ответа не меняют, см. контракт TrendZones.
-        List<TrendZone> zones = TrendZones.of(bars, new SteadySide(angle(), DECISIVE, REMAINS), window);
+        List<TrendZone> zones = TrendZones.of(bars, regime(), window);
         double[] angles = anglesOf(bars, window);
+        double[] crossings = crossingsOf(bars);
 
-        write(bars, zones, angles);
+        write(bars, zones, angles, crossings);
         report(bars, zones);
+    }
+
+    private static MarketCoefficient regime() {
+        return BY_CROSSINGS
+            ? new CrossingRegime(curve(), CROSS_WINDOW, CROWD)
+            : new SteadySide(angle(), DECISIVE, REMAINS);
     }
 
     private static TrendAngle angle() {
         return TrendAngle.overSma(SMA_PERIOD, ANGLE_BARS);
+    }
+
+    private static MarketSeries curve() {
+        return candles -> Sma.seriesOf(candles, SMA_PERIOD, Candle::getCloseAsDouble);
+    }
+
+    /**
+     * Сколько пересечений цены со средней попало в окрестность каждого бара - то, из чего получились
+     * зоны при {@link #BY_CROSSINGS}. На картинке нужно рядом с ними по той же причине, что и угол: по
+     * зонам не видно, набралась гроздь еле-еле или с запасом.
+     */
+    private static double[] crossingsOf(List<Candle> bars) {
+        double[] sma = Sma.seriesOf(bars, SMA_PERIOD, Candle::getCloseAsDouble);
+        double[] counts = new double[bars.size()];
+
+        for (int at = 0; at < bars.size(); at++) {
+            if (Double.isNaN(sma[at])) {
+                counts[at] = Double.NaN;
+
+                continue;
+            }
+
+            int crossings = 0;
+            double previous = 0;
+
+            for (int back = Math.max(0, at - CROSS_WINDOW + 1); back <= at; back++) {
+                double side = Math.signum(bars.get(back).getCloseAsDouble() - sma[back]);
+
+                if (side == 0 || Double.isNaN(sma[back])) {
+                    continue;
+                }
+
+                crossings += previous != 0 && side != previous ? 1 : 0;
+                previous = side;
+            }
+
+            counts[at] = crossings;
+        }
+
+        return counts;
     }
 
     /**
@@ -116,8 +176,11 @@ public class TrendZoneSimulation {
     private static void report(List<Candle> bars, List<TrendZone> zones) {
         System.out.printf(Locale.ROOT, "бумага %d, %d баров %s, зон %d%n",
             INSTRUMENT_ID, bars.size(), INTERVAL, zones.size());
-        System.out.printf(Locale.ROOT, "режим: SteadySide(TrendAngle.overSma(%d, %d), %.2f, %.2f)%n",
-            SMA_PERIOD, ANGLE_BARS, DECISIVE, REMAINS);
+        System.out.printf(Locale.ROOT, "режим: %s%n", BY_CROSSINGS
+            ? "CrossingRegime(SMA(%d), окрестность %d, гроздь от %d)"
+                .formatted(SMA_PERIOD, CROSS_WINDOW, CROWD)
+            : "SteadySide(TrendAngle.overSma(%d, %d), %.2f, %.2f)"
+                .formatted(SMA_PERIOD, ANGLE_BARS, DECISIVE, REMAINS));
         System.out.printf("%10s %6s %8s %8s %8s%n", "сторона", "зон", "баров", "доля", "медиана");
 
         for (double side : new double[]{SteadySide.UP, SteadySide.FLAT, SteadySide.DOWN}) {
@@ -151,16 +214,16 @@ public class TrendZoneSimulation {
      * дырку в ней надо назвать дыркой, а не нулём - ноль у угла означает «ход сошёлся в ничью», то есть
      * прямо противоположное отсутствию чтения.
      */
-    private static void write(List<Candle> bars, List<TrendZone> zones, double[] angles)
-        throws IOException {
+    private static void write(List<Candle> bars, List<TrendZone> zones, double[] angles,
+                              double[] crossings) throws IOException {
         double[] sma = Sma.seriesOf(bars, SMA_PERIOD, Candle::getCloseAsDouble);
 
         try (PrintWriter out = new PrintWriter(Files.newBufferedWriter(OUTPUT))) {
             out.printf(Locale.ROOT, "{%n  \"instrument\": %d,%n  \"interval\": \"%s\",%n",
                 INSTRUMENT_ID, INTERVAL);
-            out.printf(Locale.ROOT,
-                "  \"settings\": {\"sma\": %d, \"bars\": %d, \"decisive\": %s, \"remains\": %s},%n",
-                SMA_PERIOD, ANGLE_BARS, DECISIVE, REMAINS);
+            out.printf(Locale.ROOT, "  \"settings\": {\"sma\": %d, \"bars\": %d, \"decisive\": %s,"
+                    + " \"remains\": %s, \"window\": %d, \"crowd\": %d, \"byCrossings\": %s},%n",
+                SMA_PERIOD, ANGLE_BARS, DECISIVE, REMAINS, CROSS_WINDOW, CROWD, BY_CROSSINGS);
 
             out.print("  \"times\": [");
 
@@ -188,6 +251,13 @@ public class TrendZoneSimulation {
             for (int row = 0; row < bars.size(); row++) {
                 out.print(row == 0 ? "" : ",");
                 out.print(numberOf(angles[row], 4));
+            }
+
+            out.printf("],%n  \"crossings\": [");
+
+            for (int row = 0; row < bars.size(); row++) {
+                out.print(row == 0 ? "" : ",");
+                out.print(numberOf(crossings[row], 0));
             }
 
             out.printf("],%n  \"zones\": [%n");
