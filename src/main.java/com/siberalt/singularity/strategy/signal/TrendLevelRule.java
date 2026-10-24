@@ -136,7 +136,7 @@ public final class TrendLevelRule {
      * @param level   уровень выхода - любая формула. Терпимость к нерешительному пробою задаётся здесь же,
      *                через {@link com.siberalt.singularity.strategy.market.TolerantLevel} над средней;
      *                голая средняя означает «выходить при любом переходе через неё»
-     * @param ownExit своё правило выхода, или {@link NullSignalSource}, если его нет
+     * @param ownExit своё правило выхода, или {@link SignalSource#NULL}, если его нет
      */
     public static SignalSource trendBranch(SignalSource trend, MarketCoefficient level,
                                            SignalSource ownExit) {

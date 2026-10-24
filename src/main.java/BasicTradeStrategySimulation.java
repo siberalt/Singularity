@@ -89,7 +89,7 @@ public class BasicTradeStrategySimulation {
     private final static boolean VWAP_RESET_DAILY = false;
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
-        Instant startTime = Instant.parse("2021-12-01T00:00:00Z");
+        Instant startTime = Instant.parse("2021-03-01T00:00:00Z");
         Instant endTime = Instant.parse("2026-12-11T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
@@ -273,7 +273,7 @@ public class BasicTradeStrategySimulation {
 //            lastCandles ->  true // IncrementalRsi.of(lastCandles, 12) <= 70
 //        );
 
-        SignalSource priceChange = new PriceChangeSignalSource(2, 3, 3);
+        SignalSource priceChange = new SlopeChangeSignalSource(120);
         // Срок закрывает позицию под отсечку независимо от мнения выхода, и закрывает любую сторону:
         // направление позиции знает только сама обёртка. Окно по умолчанию - день покупки и день перед
         // ним, потому что гэп приходит на следующий день, а заявка доходит через бар.
@@ -297,7 +297,7 @@ public class BasicTradeStrategySimulation {
 //                        (lastCandles, signal) -> Math.abs(signal.get().confidence()) >= 0.99
 //                    ),
                     entryExit,
-                    20
+                    300
                 )
             ),
 

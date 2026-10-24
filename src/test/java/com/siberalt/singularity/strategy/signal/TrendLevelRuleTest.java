@@ -34,7 +34,7 @@ class TrendLevelRuleTest {
     void entersOnTheCrossRatherThanInsideThePhase() {
         double[] side = {1};
         SignalSource rule = TrendLevelRule.trendBranch(candles -> new Signal(side[0], 1),
-            candles -> 0, new NullSignalSource());
+            candles -> 0, SignalSource.NULL);
         List<Candle> flat = series(100, 0, 1);
 
         assertEquals(Signal.NEUTRAL, rule.calculate(flat), "первая сторона - не смена");
@@ -79,13 +79,13 @@ class TrendLevelRuleTest {
     @Test
     void holdsThroughADriftButNotThroughADecisiveBreak() {
         assertEquals(Signal.NEUTRAL,
-            opened(new NullSignalSource(), tolerant()).calculate(drifting()),
+            opened(SignalSource.NULL, tolerant()).calculate(drifting()),
             "дрейф сквозь уровень - держим, порог опущен в зону");
         assertEquals(SignalType.POSITION_EXIT,
-            opened(new NullSignalSource(), tolerant()).calculate(series(118, -2, 1)).type(),
+            opened(SignalSource.NULL, tolerant()).calculate(series(118, -2, 1)).type(),
             "решительное падение - выходим у самого уровня");
         assertEquals(SignalType.POSITION_EXIT,
-            opened(new NullSignalSource(), tolerant()).calculate(drifting(90)).type(),
+            opened(SignalSource.NULL, tolerant()).calculate(drifting(90)).type(),
             "дрейф, дошедший до зоны поддержки, закрывает - прежняя пара условий этого не умела");
     }
 
@@ -94,9 +94,9 @@ class TrendLevelRuleTest {
         SignalSource trend = candles -> new Signal(1, 1);
 
         assertThrows(IllegalArgumentException.class,
-            () -> TrendLevelRule.trendBranch(null, candles -> 0, new NullSignalSource()));
+            () -> TrendLevelRule.trendBranch(null, candles -> 0, SignalSource.NULL));
         assertThrows(IllegalArgumentException.class,
-            () -> TrendLevelRule.trendBranch(trend, null, new NullSignalSource()));
+            () -> TrendLevelRule.trendBranch(trend, null, SignalSource.NULL));
         assertThrows(IllegalArgumentException.class,
             () -> TrendLevelRule.trendBranch(trend, candles -> 0, null));
     }
