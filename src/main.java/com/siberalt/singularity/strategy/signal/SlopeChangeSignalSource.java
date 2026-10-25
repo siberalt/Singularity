@@ -12,18 +12,26 @@ import java.util.List;
  * <pre>
  *     сигнал = (sl − sw) / (|sl| + |sw|)
  * </pre>
- * где {@code sw} - наклон регрессии по раннему отрезку, {@code sl} - по позднему. Отрезки
- * <b>не пересекаются</b>: ранний кончается там, где начинается поздний.
+ * где {@code sw} - наклон регрессии по раннему отрезку, {@code sl} - по позднему. Откуда берутся сами
+ * отрезки, решает {@link StretchPolicy}: {@link StretchPolicy#fixed} нарезает их по счёту баров,
+ * {@link StretchPolicy#betweenPivots} якорит на разворотах цены. Мера от этого не меняется - меняется
+ * только то, что она сравнивает.
  *
  * <h2>Ноль здесь значит «тренд ровный», а не «тренда нет»</h2>
  * Это главное, что надо знать, прежде чем куда-нибудь это ставить. Прямой устойчивый рост даёт
  * <b>ноль</b>: наклоны отрезков равны, меняться нечему. Единица означает, что отрезки смотрят в разные
- * стороны, то есть ход развернулся внутри окна. Про то, вверх рынок идёт или вниз, эта мера не говорит
+ * стороны, то есть ход развернулся между ними. Про то, вверх рынок идёт или вниз, эта мера не говорит
  * ничего - для этого есть {@link ChangeAngleSignalSource}, {@link SlopeSignalSource} и крест.
  * <p>
  * Поэтому её место - <b>выход</b>, а не вход: выдыхающийся тренд это повод закрыть позицию, а не
  * открыть. Направление в этой базе измерено до дна - парные различия между крестом, наклоном EMA и
  * MACD в двух видах ни одно не проходит двух ошибок, - а кривизну не мерили ни разу.
+ *
+ * <h2>Предел достигается чаще, чем кажется</h2>
+ * Стоит знать до выставления порогов: ровно ±1 выходит на 48% баров при отрезках 20 и 20 и на 53% при
+ * 120 и 120, а медиана модуля там 0.95 и 1.00. Предел означает лишь, что знаки наклонов разошлись, то
+ * есть между отрезками случился разворот. Порог в районе 0.7 поэтому не отсекает хвост, а проходится
+ * чаще, чем нет - проверено на ликвидной трети.
  *
  * <h2>Почему знаменатель именно такой</h2>
  * Напрашивающееся {@code (sl − sw) / sw} - деление на знаковую величину, и оно ломается дважды.
@@ -35,18 +43,6 @@ import java.util.List;
  * Сумма модулей лечит оба: знаменатель положителен, в ноль обращается только вместе с числителем, а по
  * неравенству треугольника {@code |sl − sw| ≤ |sl| + |sw|}, так что результат лежит в {@code [−1, 1]}
  * без всякого {@code tanh} и инвариант {@link Signal} выполняется по построению.
- *
- * <h2>Отрезки разной длины - это другая мера, а не настройка</h2>
- * Длины задаются по отдельности, и короткий поздний отрезок против длинного раннего - вещь осмысленная:
- * устойчивая база против чувствительного щупа. Но читать такую пару как симметричное сравнение нельзя.
- * <p>
- * Разброс наклона регрессии падает примерно как {@code n³}, поэтому при отрезках 30 и 10 ошибка
- * короткого наклона выше примерно <b>в пять раз</b>, и почти вся изменчивость ответа приходит от него.
- * Мера тогда отвечает не «ход ускорился», а «последние десять баров отличаются от обычного хода»; это
- * не хуже, но это другой вопрос. Равные отрезки задаются конструктором с одним числом.
- * <p>
- * Та же асимметрия портит и силу: {@code R²} на коротком отрезке завышен - через три-четыре точки
- * прямая проходит почти всегда, - а сила берёт наименьшее из двух, то есть обычно как раз короткое.
  *
  * <h2>Нормировать наклоны на цену не нужно, и это не экономия</h2>
  * Мера однородна нулевой степени: домножьте оба наклона на любое положительное число, и ответ не
@@ -69,24 +65,45 @@ import java.util.List;
  * то же самое, рано или поздно разойдётся с первым - в этой базе это уже измерено на мёртвой зоне.
  */
 public class SlopeChangeSignalSource implements SignalSource {
-    private final int earlierBars;
+    /** Меньше трёх точек прямую проводить не по чему. */
+    public static final int MIN_SLOPE_BARS = 3;
 
-    private final int laterBars;
+    private final StretchPolicy stretches;
+
+    private final int minSlopeBars;
 
     private PriceExtractor priceExtractor = Candle::close;
 
     /**
-     * @param earlierBars сколько баров в раннем отрезке - в базе, с которой сравнивают
-     * @param laterBars   сколько в позднем - в том, что сравнивают с базой
+     * @param stretches    чем выбирать отрезки
+     * @param minSlopeBars сколько баров нужно каждому отрезку; короче - источник молчит
      */
-    public SlopeChangeSignalSource(int earlierBars, int laterBars) {
-        this.earlierBars = checked(earlierBars, "ранний");
-        this.laterBars = checked(laterBars, "поздний");
+    public SlopeChangeSignalSource(StretchPolicy stretches, int minSlopeBars) {
+        if (stretches == null) {
+            throw new IllegalArgumentException("Нужно, чем выбирать отрезки под наклоны");
+        }
+
+        if (minSlopeBars < MIN_SLOPE_BARS) {
+            throw new IllegalArgumentException(
+                "Отрезку нужно хотя бы " + MIN_SLOPE_BARS + " бара, получено " + minSlopeBars);
+        }
+
+        this.stretches = stretches;
+        this.minSlopeBars = minSlopeBars;
     }
 
-    /** Отрезки равной длины: симметричное сравнение, где изменчивость приходит от обоих поровну. */
+    public SlopeChangeSignalSource(StretchPolicy stretches) {
+        this(stretches, MIN_SLOPE_BARS);
+    }
+
+    /** Отрезки заданной длины, отсчитанные от конца окна. */
+    public SlopeChangeSignalSource(int earlierBars, int laterBars) {
+        this(StretchPolicy.fixed(earlierBars, laterBars));
+    }
+
+    /** Отрезки равной длины: симметричное сравнение. */
     public SlopeChangeSignalSource(int barsPerSlope) {
-        this(barsPerSlope, barsPerSlope);
+        this(StretchPolicy.fixed(barsPerSlope));
     }
 
     /** Читает ход не по закрытию, а по чему-нибудь ещё - по типичной цене, скажем. */
@@ -100,38 +117,40 @@ public class SlopeChangeSignalSource implements SignalSource {
         return this;
     }
 
-    /** Сколько свечей нужно, чтобы мера посчиталась. */
-    public int requiredCandles() {
-        return earlierBars + laterBars;
-    }
-
     @Override
     public Signal calculate(List<Candle> lastCandles) {
-        if (lastCandles == null || lastCandles.size() < requiredCandles()) {
+        if (lastCandles == null || lastCandles.isEmpty()) {
             return Signal.NEUTRAL;
         }
 
-        int last = lastCandles.size();
-        LinearRegression earlier = fit(lastCandles, last - requiredCandles(), earlierBars);
-        LinearRegression later = fit(lastCandles, last - laterBars, laterBars);
-        double scale = Math.abs(later.getSlope()) + Math.abs(earlier.getSlope());
-        // Оба наклона нулевые - ход стоит, и ускоряться нечему. Ноль здесь не «не знаю», а ответ.
-        double change = scale == 0 ? 0 : (later.getSlope() - earlier.getSlope()) / scale;
+        SlopeStretches chosen = stretches.of(lastCandles);
 
-        return new Signal(change, Math.min(earlier.getR2(), later.getR2()));
-    }
-
-    private static int checked(int bars, String which) {
-        if (bars < 3) {
-            throw new IllegalArgumentException(
-                "Наклон нужно проводить хотя бы по трём барам, " + which + " отрезок: " + bars);
+        if (chosen == null || !chosen.longEnough(minSlopeBars)
+            || chosen.laterTo() >= lastCandles.size()) {
+            return Signal.NEUTRAL;
         }
 
-        return bars;
+        LinearRegression earlier = fit(lastCandles, chosen.earlierFrom(), chosen.earlierTo());
+        LinearRegression later = fit(lastCandles, chosen.laterFrom(), chosen.laterTo());
+
+        return new Signal(changeOf(earlier.getSlope(), later.getSlope()),
+            Math.min(earlier.getR2(), later.getR2()));
     }
 
-    /** Регрессия по отрезку. Сдвиг по оси x на наклон не влияет, поэтому она всегда с нуля. */
-    private LinearRegression fit(List<Candle> lastCandles, int from, int length) {
+    /**
+     * Ядро меры, вынесенное отдельно, чтобы у формулы и её обоснования был один экземпляр.
+     * <p>
+     * Ноль возвращается, когда оба наклона нулевые: ход стоит, и ускоряться нечему.
+     */
+    public static double changeOf(double earlierSlope, double laterSlope) {
+        double scale = Math.abs(laterSlope) + Math.abs(earlierSlope);
+
+        return scale == 0 ? 0 : (laterSlope - earlierSlope) / scale;
+    }
+
+    /** Регрессия по отрезку; обе границы входят. Сдвиг по оси x на наклон не влияет. */
+    private LinearRegression fit(List<Candle> lastCandles, int from, int to) {
+        int length = to - from + 1;
         double[] x = new double[length];
         double[] y = new double[length];
 

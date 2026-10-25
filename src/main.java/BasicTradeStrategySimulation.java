@@ -37,9 +37,7 @@ import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.shared.TimeRange;
 import com.siberalt.singularity.simulation.SimulationClock;
 import com.siberalt.singularity.strategy.Strategy;
-import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
-import com.siberalt.singularity.strategy.extreme.LastExtremeLocator;
-import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.*;
 import com.siberalt.singularity.strategy.impl.BasicTradeStrategy;
 import com.siberalt.singularity.strategy.indicator.IncrementalRsi;
 import com.siberalt.singularity.strategy.indicator.Sma;
@@ -89,8 +87,8 @@ public class BasicTradeStrategySimulation {
     private final static boolean VWAP_RESET_DAILY = false;
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
-        Instant startTime = Instant.parse("2021-03-01T00:00:00Z");
-        Instant endTime = Instant.parse("2026-12-11T00:00:00Z");
+        Instant startTime = Instant.parse("2022-06-01T00:00:00Z");
+        Instant endTime = Instant.parse("2022-12-31T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
@@ -232,7 +230,7 @@ public class BasicTradeStrategySimulation {
      */
     private static DividendCalendar tinkoffDividends(SqliteInstrumentRepository instruments,
                                                      Instant from, Instant to)
-        throws IOException, AbstractException, java.sql.SQLException {
+        throws IOException, AbstractException {
         ConfigInterface tinkoffConfiguration = new YamlConfig(
             Files.newInputStream(Paths.get("src/test/resources/broker/tinkoff/test-settings.yaml")));
         Properties properties = new Properties();
@@ -268,11 +266,6 @@ public class BasicTradeStrategySimulation {
         ExtremeLocator minimaBaseLocator,
         DividendCalendar dividends
     ) {
-//        FilterSignalSource filterSignalSource = new FilterSignalSource(
-//            new PriceChangeSignalSource(30, 7, 100),
-//            lastCandles ->  true // IncrementalRsi.of(lastCandles, 12) <= 70
-//        );
-
         SignalSource priceChange = new SlopeChangeSignalSource(120);
         // Срок закрывает позицию под отсечку независимо от мнения выхода, и закрывает любую сторону:
         // направление позиции знает только сама обёртка. Окно по умолчанию - день покупки и день перед

@@ -103,8 +103,10 @@ class SlopeChangeSignalSourceTest {
         SlopeChangeSignalSource source = new SlopeChangeSignalSource(HALF);
         List<Candle> window = slopes(1, 3);
 
-        assertEquals(2 * HALF, source.requiredCandles());
-        assertEquals(Signal.NEUTRAL, source.calculate(window.subList(0, 2 * HALF - 1)));
+        assertEquals(Signal.NEUTRAL, source.calculate(window.subList(0, 2 * HALF - 1)),
+            "на одну свечу меньше - ответа нет");
+        assertTrue(!Signal.NEUTRAL.equals(source.calculate(window.subList(0, 2 * HALF))),
+            "ровно столько - ответ есть");
         assertEquals(Signal.NEUTRAL, source.calculate(null));
     }
 
@@ -126,7 +128,7 @@ class SlopeChangeSignalSourceTest {
     void comparesStretchesOfDifferentLength() {
         SlopeChangeSignalSource uneven = new SlopeChangeSignalSource(20, 5);
 
-        assertEquals(25, uneven.requiredCandles());
+        assertEquals(Signal.NEUTRAL, uneven.calculate(slopes(20, 1, 4, 3)), "24 свечи - мало");
         assertEquals(0.5, uneven.calculate(slopes(20, 1, 5, 3)).confidence(), 1e-12);
         assertEquals(-0.5, uneven.calculate(slopes(20, 3, 5, 1)).confidence(), 1e-12);
     }
@@ -144,8 +146,10 @@ class SlopeChangeSignalSourceTest {
     /** Конструктор с одним числом - это равные отрезки, и ничего больше. */
     @Test
     void takesOneNumberAsTwoEqualStretches() {
-        assertEquals(new SlopeChangeSignalSource(HALF, HALF).requiredCandles(),
-            new SlopeChangeSignalSource(HALF).requiredCandles());
+        List<Candle> window = slopes(1, 3);
+
+        assertEquals(new SlopeChangeSignalSource(HALF, HALF).calculate(window).confidence(),
+            new SlopeChangeSignalSource(HALF).calculate(window).confidence(), 1e-12);
     }
 
     @Test

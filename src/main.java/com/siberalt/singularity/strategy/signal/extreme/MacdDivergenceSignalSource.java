@@ -1,16 +1,14 @@
 package com.siberalt.singularity.strategy.signal.extreme;
 
-import com.siberalt.singularity.entity.candle.BarSpacing;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
+import com.siberalt.singularity.strategy.extreme.ExtremePositions;
 import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
 import com.siberalt.singularity.strategy.indicator.Macd;
 import com.siberalt.singularity.strategy.signal.Signal;
 import com.siberalt.singularity.strategy.signal.SignalSource;
 import com.siberalt.singularity.strategy.signal.trend.MacdSignalSource;
 
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -214,7 +212,7 @@ public class MacdDivergenceSignalSource implements SignalSource {
             return Signal.NEUTRAL;
         }
 
-        checkIndexed(lastCandles);
+        ExtremePositions.requireIndexed(lastCandles);
 
         double[] readings = source == MacdSignalSource.Source.HISTOGRAM
             ? Macd.seriesOf(lastCandles, fastPeriod, slowPeriod, signalPeriod)
@@ -259,8 +257,8 @@ public class MacdDivergenceSignalSource implements SignalSource {
             return null;
         }
 
-        int at = positionOf(lastCandles, pivots.get(pivots.size() - 1));
-        int before = positionOf(lastCandles, pivots.get(pivots.size() - 2));
+        int at = ExtremePositions.of(lastCandles, pivots.get(pivots.size() - 1));
+        int before = ExtremePositions.of(lastCandles, pivots.get(pivots.size() - 2));
 
         if (at < 0 || before < 0 || before >= at) {
             return null;
@@ -293,44 +291,5 @@ public class MacdDivergenceSignalSource implements SignalSource {
         }
 
         return new Divergence(at, Math.abs(momentum - momentumBefore) / last);
-    }
-
-    /**
-     * Позиция свечи в списке - двоичным поиском по её индексу.
-     * <p>
-     * Вычитанием индексов её не получить, и это не придирка: {@link
-     * com.siberalt.singularity.entity.candle.CandleAggregator} отдаёт собранной свече {@code timePoint}
-     * первой свечи своего ведра, поэтому у дневных баров, собранных из минутных, индексы расходятся на
-     * сотни и неравномерно - короткие сессии и праздники. Делением на средний шаг
-     * ({@link BarSpacing}) вышло бы близко, но «близко» здесь означает
-     * прочитать индикатор не в том баре и выдумать расхождение, которого нет.
-     * <p>
-     * Двоичный поиск точен при любом шаге: список свечей упорядочен по времени, а индекс растёт вместе с
-     * ним. Ответ всё равно сверяется по ссылке - локаторы возвращают элементы того же списка, так что
-     * совпасть должен он же.
-     */
-    private static int positionOf(List<Candle> lastCandles, Candle pivot) {
-        int at = Collections.binarySearch(lastCandles, pivot,
-            Comparator.comparingLong(Candle::getIndex));
-
-        return at >= 0 && lastCandles.get(at) == pivot ? at : -1;
-    }
-
-    /**
-     * Свечи без растущего индекса отвергаются вслух и до того, как их увидит локатор.
-     * <p>
-     * Проверка стоит здесь, а не в {@link #positionOf}, потому что туда дело не доходит: при одинаковых
-     * индексах {@link com.siberalt.singularity.strategy.extreme.ProximityGroupingExtremeLocator} считает
-     * все экстремумы одним - расстояние между ними выходит нулевым, - и сигнала не оказывается ещё до
-     * всякого поиска позиции. Такой отказ выглядит как «расхождения нет», а означает «считать нечем», и
-     * различить их снаружи невозможно. Отсюда и громкость: {@link Candle#DEFAULT_INDEX} в этом
-     * калькуляторе - ошибка вызывающего, а не данные.
-     */
-    private static void checkIndexed(List<Candle> lastCandles) {
-        if (lastCandles.getFirst().getIndex() == Candle.DEFAULT_INDEX
-            || lastCandles.getLast().getIndex() <= lastCandles.getFirst().getIndex()) {
-            throw new IllegalArgumentException(
-                "Свечи без растущего индекса: по ним не найти, где стоит экстремум");
-        }
     }
 }

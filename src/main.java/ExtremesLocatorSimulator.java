@@ -1,29 +1,40 @@
-import com.siberalt.singularity.entity.candle.Candle;
-import com.siberalt.singularity.entity.candle.cvs.CvsCandleRepository;
+import com.siberalt.singularity.broker.contract.service.market.request.CandleInterval;
+import com.siberalt.singularity.configuration.ConfigInterface;
+import com.siberalt.singularity.configuration.YamlConfig;
+import com.siberalt.singularity.entity.candle.*;
 import com.siberalt.singularity.entity.candle.cvs.CvsFileCandleRepositoryFactory;
 import com.siberalt.singularity.presenter.google.PriceChart;
 import com.siberalt.singularity.presenter.google.series.PointSeriesProvider;
+import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.strategy.extreme.ExtremeLocator;
 import com.siberalt.singularity.strategy.extreme.PivotPointExtremeLocator;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.List;
 
 public class ExtremesLocatorSimulator {
-    // Our id for TMOS - what its candles are kept under.
-    private static final long TMOS = 2;
-    public static void main(String[] args) {
-        Instant startTime = Instant.parse("2021-01-01T00:00:00Z");
-        Instant endTime = Instant.parse("2021-02-02T00:00:00Z");
-        CvsFileCandleRepositoryFactory factory = new CvsFileCandleRepositoryFactory();
+    private static final long INSTRUMENT_ID = 7;
 
-        CvsCandleRepository candleRepository = factory.create(
-            TMOS,
-            "src/test/resources/entity.candle.cvs/TMOS"
+    public static void main(String[] args) throws IOException {
+        Instant startTime = Instant.parse("2021-03-01T00:00:00Z");
+        Instant endTime = Instant.parse("2026-12-11T00:00:00Z");
+
+        ConfigInterface configuration = new YamlConfig(
+            Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
-        List<Candle> candles = candleRepository.getPeriod(TMOS, startTime, endTime);
-        ExtremeLocator minExtremeLocator = PivotPointExtremeLocator.ofMinimums(60);
-        ExtremeLocator maxExtremeLocator = PivotPointExtremeLocator.ofMaximums(60);
+        String dbPath = ConfigFacade.of(configuration).getAsString("dbPath");
+        SqliteCandleRepositoryFactory sqliteCandleRepositoryFactory = new SqliteCandleRepositoryFactory();
+
+        ReadCandleRepository candleRepository = new AggregatingCandleRepository(
+            sqliteCandleRepositoryFactory.create(dbPath),
+            CandleInterval.HOUR
+        );
+        List<Candle> candles = candleRepository.getPeriod(INSTRUMENT_ID, startTime, endTime);
+        ExtremeLocator minExtremeLocator = PivotPointExtremeLocator.ofMinimums(50);
+        ExtremeLocator maxExtremeLocator = PivotPointExtremeLocator.ofMaximums(50);
         PointSeriesProvider minPoints = new PointSeriesProvider("Minima");
         minPoints.setColor("#00FF00");
         minPoints.setSize(5);
@@ -47,7 +58,7 @@ public class ExtremesLocatorSimulator {
 
         PriceChart priceChart = new PriceChart(
             candleRepository,
-            TMOS,
+            INSTRUMENT_ID,
             Candle::getCloseAsDouble
         );
         priceChart.addSeriesProvider(minPoints);
