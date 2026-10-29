@@ -61,6 +61,15 @@ public class ChangeAngleSignalSource implements SignalSource {
     /** Предел угла: больше 45° не бывает, см. неравенство треугольника в описании класса. */
     public static final double MAX_DEGREES = 45;
 
+    /**
+     * Мерить по всем барам, которые дали, сколько бы их ни было.
+     * <p>
+     * Нужно тому, кто окно выбирает снаружи и заранее его длины не знает - прежде всего
+     * {@link PivotWindowSignalSource}, отдающему ногу от последнего разворота. Без этого угол резал бы
+     * ногу второй раз, своим собственным числом приращений, и мерил бы не ногу, а её хвост.
+     */
+    public static final int ALL_BARS = -1;
+
     private final int bars;
 
     private PriceExtractor priceExtractor = Candle::close;
@@ -68,10 +77,13 @@ public class ChangeAngleSignalSource implements SignalSource {
     private ToDoubleFunction<Candle> volumeExtractor = Candle::volume;
 
     /**
-     * @param bars сколько приращений входит в прямоугольник; свечей нужно на одну больше
+     * @param bars сколько приращений входит в прямоугольник; свечей нужно на одну больше.
+     *             {@link #ALL_BARS} - по всем, что дали
      */
     public ChangeAngleSignalSource(int bars) {
-        if (bars < 1) {
+        // Ноль отвергается как прежде: «все бары» - это отдельное значение, а не любое непозитивное.
+        // Иначе опечатка молча превращалась бы в другое окно.
+        if (bars < 1 && bars != ALL_BARS) {
             throw new IllegalArgumentException(
                 "Угол нужно мерить хотя бы по одному приращению, получено " + bars);
         }
@@ -98,11 +110,18 @@ public class ChangeAngleSignalSource implements SignalSource {
 
     /** Оба угла в градусах, каждый в [−45, 45]. Отдельно от {@link #calculate}, чтобы их было чем читать. */
     public Angles anglesOf(List<Candle> lastCandles) {
-        if (lastCandles == null || lastCandles.size() < bars + 1) {
+        if (lastCandles == null) {
             return null;
         }
 
-        List<Candle> window = lastCandles.subList(lastCandles.size() - bars - 1, lastCandles.size());
+        int increments = bars == ALL_BARS ? lastCandles.size() - 1 : bars;
+
+        if (increments < 1 || lastCandles.size() < increments + 1) {
+            return null;
+        }
+
+        List<Candle> window =
+            lastCandles.subList(lastCandles.size() - increments - 1, lastCandles.size());
 
         return new Angles(
             angleOf(window, candle -> priceExtractor.extract(candle).toDouble()),

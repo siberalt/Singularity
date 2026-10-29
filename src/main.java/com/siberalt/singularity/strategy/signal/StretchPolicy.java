@@ -63,6 +63,7 @@ public interface StretchPolicy {
         return fixed(barsPerSlope, barsPerSlope);
     }
 
+
     /**
      * Отрезки между разворотами: ранний от предпоследнего разворота к последнему, поздний от последнего
      * до конца окна.

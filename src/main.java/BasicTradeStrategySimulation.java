@@ -87,8 +87,8 @@ public class BasicTradeStrategySimulation {
     private final static boolean VWAP_RESET_DAILY = false;
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
-        Instant startTime = Instant.parse("2022-06-01T00:00:00Z");
-        Instant endTime = Instant.parse("2022-12-31T00:00:00Z");
+        Instant startTime = Instant.parse("2021-06-01T00:00:00Z");
+        Instant endTime = Instant.parse("2026-12-31T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
         );
@@ -266,7 +266,9 @@ public class BasicTradeStrategySimulation {
         ExtremeLocator minimaBaseLocator,
         DividendCalendar dividends
     ) {
-        SignalSource priceChange = new SlopeChangeSignalSource(120);
+        SignalSource priceChange = new PivotSlopeSignalSource(4).setVolatilityCalculator(new ATRVolatilityCalculator(20));
+        // SignalSource priceChange = new SlopeChangeSignalSource(120);
+
         // Срок закрывает позицию под отсечку независимо от мнения выхода, и закрывает любую сторону:
         // направление позиции знает только сама обёртка. Окно по умолчанию - день покупки и день перед
         // ним, потому что гэп приходит на следующий день, а заявка доходит через бар.
@@ -284,40 +286,8 @@ public class BasicTradeStrategySimulation {
             accountId,
             new AggregatingSignalSource(
                 CandleInterval.HOUR,
-                new WindowSignalSource(
-//                    new FilterSignalSource(
-//                        new SlopeSignalSource(6),
-//                        (lastCandles, signal) -> Math.abs(signal.get().confidence()) >= 0.99
-//                    ),
-                    entryExit,
-                    300
-                )
+                new WindowSignalSource(entryExit, 300)
             ),
-
-//            new WindowSignalSource(
-//                //new PriceChangeSignalSource(10, 3.5, 0.5),
-//                new EntryExitSignalSource(
-//                    filterSignalSource,
-//                    new PriceChangeSignalSource(10, 100, 4)
-//                ).setMaxWaitBars(30),
-//                100
-//            ),
-//            new WindowSignalSource(
-//                new SignalAmplifier(slopeSignalSource, 0.95, 0.95),
-//                100
-//            ),
-//            new WindowSignalSource(
-//                FixedReverserSignalSource.ofRises(
-//                    new SignalAmplifier(slopeSignalSource, 0.95, 0.95), 800, 1
-//                ),
-//                100
-//            ),
-//            new WindowSignalSource(
-//                FixedReverserSignalSource.ofFalls(
-//                    new SignalAmplifier(slopeSignalSource, 0.95, 0.9), 5, 1
-//                ),
-//                100
-//            ),
             candleRepository
         );
         strategy.setLookbackCandles(60 * 24 * 300);

@@ -3,6 +3,7 @@ package com.siberalt.singularity.strategy.signal;
 import com.siberalt.singularity.broker.contract.value.quotation.Quotation;
 import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.entity.candle.TimePoint;
+import com.siberalt.singularity.strategy.extreme.ZigZagExtremeLocator;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -120,7 +121,7 @@ class ChangeAngleSignalSourceTest {
     @Test
     void refusesAWindowWithNothingToMeasure() {
         assertThrows(IllegalArgumentException.class, () -> new ChangeAngleSignalSource(0));
-        assertThrows(IllegalArgumentException.class, () -> new ChangeAngleSignalSource(-1));
+        assertThrows(IllegalArgumentException.class, () -> new ChangeAngleSignalSource(-2));
     }
 
     private static ChangeAngleSignalSource angle() {
@@ -152,5 +153,71 @@ class ChangeAngleSignalSourceTest {
 
         return new Candle(1, new TimePoint(at, Instant.EPOCH.plusSeconds(60L * at)),
             value, value, value, value, volume);
+    }
+
+    /**
+     * {@code ALL_BARS} меряет всё окно, сколько бы его ни дали: ответ совпадает с тем, что даёт
+     * явное число приращений, равное длине окна.
+     */
+    @Test
+    void measuresEverythingGivenWhenAskedForAllBars() {
+        List<Candle> candles = rising(12);
+
+        assertEquals(
+            new ChangeAngleSignalSource(candles.size() - 1).calculate(candles).confidence(),
+            new ChangeAngleSignalSource(ChangeAngleSignalSource.ALL_BARS)
+                .calculate(candles).confidence(), 1e-12);
+    }
+
+    /**
+     * И ровно за этим оно заведено: {@link PivotWindowSignalSource} отдаёт ногу неизвестной длины, а
+     * угол с фиксированным числом приращений резал бы её второй раз и мерил бы хвост, а не ногу.
+     */
+    @Test
+    void measuresTheWholeLegBehindThePivotWindow() {
+        List<Candle> candles = new ArrayList<>(rising(12));
+        double last = candles.getLast().getCloseAsDouble();
+
+        for (int at = 1; at <= 12; at++) {
+            candles.add(candle(candles.size(), last - at * 3));
+        }
+
+        SignalSource whole = new PivotWindowSignalSource(
+            new ChangeAngleSignalSource(ChangeAngleSignalSource.ALL_BARS),
+            new ZigZagExtremeLocator(1));
+
+        assertEquals(-1, whole.calculate(candles).confidence(), 1e-9,
+            "вся нога после разворота идёт вниз без единого отката");
+    }
+
+    /** На одной свече приращений нет, и {@code ALL_BARS} отвечает молчанием, а не нулём. */
+    @Test
+    void saysNothingWhenThereIsNothingToMeasure() {
+        assertEquals(Signal.NEUTRAL,
+            new ChangeAngleSignalSource(ChangeAngleSignalSource.ALL_BARS).calculate(rising(1)));
+    }
+
+    /** Всё, кроме ALL_BARS, проверяется как прежде: ноль и прочие непозитивные - ошибка сборки. */
+    @Test
+    void stillRefusesEverythingButTheSentinel() {
+        assertThrows(IllegalArgumentException.class, () -> new ChangeAngleSignalSource(0));
+        assertThrows(IllegalArgumentException.class, () -> new ChangeAngleSignalSource(-2));
+    }
+
+    private static List<Candle> rising(int bars) {
+        List<Candle> candles = new ArrayList<>(bars);
+
+        for (int at = 0; at < bars; at++) {
+            candles.add(candle(at, 1000 + at * 2));
+        }
+
+        return candles;
+    }
+
+    private static Candle candle(int at, double price) {
+        Quotation value = Quotation.of(price);
+
+        return new Candle(1, new TimePoint(at, Instant.EPOCH.plusSeconds(60L * at)),
+            value, value, value, value, 1);
     }
 }
