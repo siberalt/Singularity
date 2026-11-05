@@ -69,13 +69,22 @@ function writeLegend() {
         + item(DOWN_COLOUR, 'вниз ' + shares.down + '%')
         + item(UNMARKED_COLOUR, 'прогрев ' + shares.unmarked + '%')
         + item(AVERAGE_COLOUR, 'SMA(' + settings['sma'] + ')')
-        + item(ANGLE_COLOUR, byCrossings()
-            ? 'пересечений цены со средней в окрестности ' + settings['window'] + ' баров'
-            : 'угол средней по ' + settings['bars'] + ' приращениям')
-        + '<span>· ' + (byCrossings()
-            ? 'флэт от ' + settings['crowd'] + ' пересечений в окрестности'
-            : 'объявление ' + settings['decisive'] + ', удержание ' + settings['remains']
-              + ' — долей предельных 45°') + '</span>';
+        + item(ANGLE_COLOUR, {
+            CROSSINGS: 'пересечений цены со средней в окрестности ' + settings['window'] + ' баров',
+            DECISIVE: (settings['slopeAnchor'] > 0
+                ? 'наклон цены от разворота зигзага ' + settings['slopeAnchor'] + ' ATR, не длиннее '
+                    + settings['slopeBars'] + ' приращений'
+                : 'наклон цены по ' + settings['slopeBars'] + ' приращениям') + ', в ATR за бар',
+            BAND: 'расстояние цены от средней, в ATR',
+            ANGLE: 'угол средней по ' + settings['bars'] + ' приращениям'
+        }[regime()])
+        + '<span>· ' + {
+            CROSSINGS: 'флэт от ' + settings['crowd'] + ' пересечений в окрестности',
+            DECISIVE: 'пересечение со средней - смена тренда при наклоне от ±' + settings['slopeDecisive'],
+            BAND: 'сторона меняется за краем полосы ±' + settings['bandWidth'] + ' ATR, внутри - прежняя',
+            ANGLE: 'объявление ' + settings['decisive'] + ', удержание ' + settings['remains']
+                + ' — долей предельных 45°'
+        }[regime()] + '</span>';
 
     document.getElementById('caption').textContent =
         'бумага ' + model['instrument'] + ' · ' + model['price'].length + ' баров ' + model['interval']
@@ -174,15 +183,22 @@ function priceWindow() {
     return {viewWindow: {min: min - margin, max: max + margin}};
 }
 
-// Режим размечен частотой пересечений, а не углом: от этого зависит и подпись, и нижний график.
-function byCrossings() {
-    return model['settings']['byCrossings'] === true && Array.isArray(model['crossings']);
+// Чем размечен режим: от этого зависит и подпись, и нижний график. Старые файлы знали только
+// byCrossings, и они читаются по-прежнему.
+function regime() {
+    const settings = model['settings'];
+
+    if (settings['regime']) {
+        return settings['regime'];
+    }
+
+    return settings['byCrossings'] === true ? 'CROSSINGS' : 'ANGLE';
 }
 
 /**
- * Под ценой - то, из чего получились зоны, а не что-нибудь похожее: угол с его порогами или счёт
- * пересечений со своим. Рисовать угол под разметкой по пересечениям значило бы показывать одну меру,
- * а размечать другой.
+ * Под ценой - то, из чего получились зоны, а не что-нибудь похожее: угол с его порогами, счёт
+ * пересечений со своим или наклон с порогом подтверждения. Рисовать угол под разметкой по пересечениям
+ * значило бы показывать одну меру, а размечать другой.
  */
 function drawAngle() {
     const holder = document.getElementById('angle_chart');
@@ -198,7 +214,39 @@ function drawAngle() {
 
     table.addColumn('string', 'Время');
 
-    if (byCrossings()) {
+    if (regime() === 'BAND') {
+        const width = model['settings']['bandWidth'];
+
+        addColumn(table, columns, series, 'Расстояние от средней, ATR', row => model['distance'][row],
+            {color: ANGLE_COLOUR, lineWidth: 1});
+        threshold(table, columns, series, 'край полосы вверх', width, UP_COLOUR);
+        threshold(table, columns, series, 'средняя', 0, UNMARKED_COLOUR);
+        threshold(table, columns, series, 'край полосы вниз', -width, DOWN_COLOUR);
+
+        table.addRows(rowsOf(columns));
+        angleChart.draw(table, options(series, {}));
+
+        return;
+    }
+
+    if (regime() === 'DECISIVE') {
+        const decisive = model['settings']['slopeDecisive'];
+
+        // Наклон считается на каждом баре, но значим только там, где цена стоит не с той стороны
+        // средней, что объявленная: в остальных барах порог ничего не решает.
+        addColumn(table, columns, series, 'Наклон цены, ATR за бар', row => model['slope'][row],
+            {color: ANGLE_COLOUR, lineWidth: 1});
+        threshold(table, columns, series, 'подтверждение вверх', decisive, UP_COLOUR);
+        threshold(table, columns, series, 'ноль', 0, UNMARKED_COLOUR);
+        threshold(table, columns, series, 'подтверждение вниз', -decisive, DOWN_COLOUR);
+
+        table.addRows(rowsOf(columns));
+        angleChart.draw(table, options(series, {}));
+
+        return;
+    }
+
+    if (regime() === 'CROSSINGS') {
         const crowd = model['settings']['crowd'];
         const highest = model['crossings'].reduce((top, one) => Math.max(top, one === null ? 0 : one), 0);
 

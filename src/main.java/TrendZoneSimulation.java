@@ -7,13 +7,19 @@ import com.siberalt.singularity.entity.candle.SqliteCandleRepository;
 import com.siberalt.singularity.entity.candle.SqliteCandleRepositoryFactory;
 import com.siberalt.singularity.service.ConfigFacade;
 import com.siberalt.singularity.strategy.indicator.Sma;
+import com.siberalt.singularity.math.LinearRegression;
+import com.siberalt.singularity.strategy.extreme.ExtremePositions;
+import com.siberalt.singularity.strategy.extreme.ZigZagExtremeLocator;
 import com.siberalt.singularity.strategy.market.CrossingRegime;
+import com.siberalt.singularity.strategy.market.DecisiveCrossing;
+import com.siberalt.singularity.strategy.market.DistanceBand;
 import com.siberalt.singularity.strategy.market.MarketCoefficient;
 import com.siberalt.singularity.strategy.market.MarketSeries;
 import com.siberalt.singularity.strategy.market.SteadySide;
 import com.siberalt.singularity.strategy.market.TrendAngle;
 import com.siberalt.singularity.strategy.market.TrendZone;
 import com.siberalt.singularity.strategy.market.TrendZones;
+import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -34,6 +40,11 @@ import java.util.Locale;
  * не изгибалась ни разу, ноль - что изгибалась туда и обратно в ничью. Значимость изгиба мерится
  * пройденным средней путём, а не ошибкой разности средних: цены автокоррелированы, и классический
  * критерий объявлял бы тренд почти всегда.
+ * <p>
+ * Или {@link DecisiveCrossing} на той же средней: сторона меняется на пересечении цены со средней,
+ * но только если наклон цены в сторону пересечения решителен - иначе средняя просто всплыла над
+ * стоящей ценой, и это не смена тренда. Флэта у него нет, сторон две. Рядом с зонами печатается
+ * контроль - та же средняя без подтверждения, - чтобы было видно, сколько смен стороны отсечено.
  *
  * <h2>Почему здесь нет кадров, в отличие от {@code LevelDetectorSimulation}</h2>
  * Там кадры нужны по существу: ответ детектора зависит от окна, которое ему дали, и одно и то же место
@@ -75,11 +86,46 @@ public class TrendZoneSimulation {
     /** Сколько пересечений в окрестности делают её флэтом. */
     private static final int CROWD = 3;
     /**
-     * Чем размечать режим. {@code true} - частотой пересечений цены со средней, {@code false} - углом
-     * средней. Переключатель, а не два стенда: обе разметки должны ложиться на один и тот же ряд, иначе
-     * сравнивать картинки нечем.
+     * По скольким приращениям цены проводится наклон, подтверждающий пересечение, - неделя торговых
+     * дней. С якорем {@link #SLOPE_ANCHOR} это потолок ноги от разворота.
      */
-    private static final boolean BY_CROSSINGS = true;
+    private static final int SLOPE_BARS = 5;
+    /** Какой наклон подтверждает пересечение, в ATR за бар: за неделю это ход на 3 ATR. */
+    private static final double SLOPE_DECISIVE = 0.6;
+    /**
+     * Порог отката зигзага, от чьего последнего разворота проводится наклон. Ноль - без якоря, наклон по
+     * последним {@link #SLOPE_BARS} барам.
+     */
+    private static final double SLOPE_ANCHOR = 1;
+    /**
+     * Сколько баров после прогрева средней помнит {@link DecisiveCrossing}. Сторону он не хранит, а
+     * пересчитывает по окну и засевает по первому читаемому бару - так что разногласие старше окна
+     * становится стороной без всякого подтверждения. Окно {@code SMA_PERIOD + ANGLE_BARS} оставило бы ему
+     * сорок баров памяти, и гистерезис терял бы смысл через два месяца; год - с запасом.
+     */
+    private static final int MEMORY = 400;
+
+    /**
+     * Чем размечать режим. Переключатель, а не три стенда: все разметки должны ложиться на одну и ту же
+     * среднюю, иначе сравнивать картинки нечем.
+     */
+    enum Regime {
+        /** Угол средней под {@link SteadySide}. */
+        ANGLE,
+        /** Частота пересечений цены со средней. */
+        CROSSINGS,
+        /** Пересечение со средней, подтверждённое наклоном цены. */
+        DECISIVE,
+        /** Расстояние цены от средней в ATR, с полосой гистерезиса. */
+        BAND
+    }
+
+    private static final Regime REGIME = Regime.BAND;
+    /**
+     * Полуширина полосы {@link DistanceBand} в ATR(14). Объявлена до того, как смотреть картинку: медиана
+     * {@code |цена − SMA(80)| / ATR(14)} по ликвидной трети дневными барами, 2.48, округлённая.
+     */
+    private static final double BAND_WIDTH = 2.5;
     private static final Path OUTPUT = Paths.get("src/main/resources/presenter/google/TrendZones.json");
 
     public static void main(String[] args) throws IOException {
@@ -91,7 +137,7 @@ public class TrendZoneSimulation {
         SqliteCandleRepository candleRepository = new SqliteCandleRepositoryFactory().create(dbPath);
         List<Candle> bars = new CandleAggregator()
             .aggregate(candleRepository.getPeriod(INSTRUMENT_ID, FROM, TO), INTERVAL);
-        int window = SMA_PERIOD + ANGLE_BARS;
+        int window = windowOf(REGIME);
 
         if (bars.size() <= window) {
             throw new IllegalStateException(
@@ -100,17 +146,34 @@ public class TrendZoneSimulation {
 
         // Окно ровно такое, сколько мере нужно: лишние бары ответа не меняют, см. контракт TrendZones.
         List<TrendZone> zones = TrendZones.of(bars, regime(), window);
-        double[] angles = anglesOf(bars, window);
+        double[] angles = anglesOf(bars, SMA_PERIOD + ANGLE_BARS);
         double[] crossings = crossingsOf(bars);
+        double[] slopes = slopesOf(bars);
+        double[] distances = new DistanceBand(curve(), BAND_WIDTH).distancesOf(bars);
 
-        write(bars, zones, angles, crossings);
-        report(bars, zones);
+        write(bars, zones, angles, crossings, slopes, distances);
+        report(bars, zones, window);
     }
 
     private static MarketCoefficient regime() {
-        return BY_CROSSINGS
-            ? new CrossingRegime(curve(), CROSS_WINDOW, CROWD)
-            : new SteadySide(angle(), DECISIVE, REMAINS);
+        return switch (REGIME) {
+            case ANGLE -> new SteadySide(angle(), DECISIVE, REMAINS);
+            case CROSSINGS -> new CrossingRegime(curve(), CROSS_WINDOW, CROWD);
+            case DECISIVE -> decisiveCrossing(SLOPE_ANCHOR > 0);
+            case BAND -> new DistanceBand(curve(), BAND_WIDTH);
+        };
+    }
+
+    private static DecisiveCrossing decisiveCrossing(boolean anchored) {
+        DecisiveCrossing crossing = new DecisiveCrossing(curve(), SLOPE_BARS, SLOPE_DECISIVE);
+
+        return anchored ? crossing.setSlopeAnchor(new ZigZagExtremeLocator(SLOPE_ANCHOR)) : crossing;
+    }
+
+    private static int windowOf(Regime regime) {
+        // Обоим помнить сторону нечем, кроме окна: она пересчитывается по нему на каждом баре.
+        return regime == Regime.DECISIVE || regime == Regime.BAND
+            ? SMA_PERIOD + MEMORY : SMA_PERIOD + ANGLE_BARS;
     }
 
     private static TrendAngle angle() {
@@ -123,7 +186,7 @@ public class TrendZoneSimulation {
 
     /**
      * Сколько пересечений цены со средней попало в окрестность каждого бара - то, из чего получились
-     * зоны при {@link #BY_CROSSINGS}. На картинке нужно рядом с ними по той же причине, что и угол: по
+     * зоны при {@link Regime#CROSSINGS}. На картинке нужно рядом с ними по той же причине, что и угол: по
      * зонам не видно, набралась гроздь еле-еле или с запасом.
      */
     private static double[] crossingsOf(List<Candle> bars) {
@@ -158,6 +221,52 @@ public class TrendZoneSimulation {
     }
 
     /**
+     * Наклон цены в ATR за бар - то, чем {@link DecisiveCrossing} подтверждает пересечения. Считается
+     * тем же способом, что и внутри него: регрессия закрытий от последнего разворота зигзага, но не
+     * дальше {@link #SLOPE_BARS} приращений назад, ATR(14) у того же бара. Совпадает с его чтением не до
+     * последнего знака - он ведёт ATR и зигзаг от начала своего окна, а здесь от начала истории, - но
+     * сглаживание Уайлдера забывает начало за несколько десятков баров, а последний разворот у бара от
+     * начала отсчёта почти никогда не зависит.
+     */
+    private static double[] slopesOf(List<Candle> bars) {
+        double[] atr = new ATRVolatilityCalculator().profile(bars);
+        double[] readings = new double[bars.size()];
+        ZigZagExtremeLocator anchor = SLOPE_ANCHOR > 0 ? new ZigZagExtremeLocator(SLOPE_ANCHOR) : null;
+
+        for (int at = 0; at < bars.size(); at++) {
+            int from = at - SLOPE_BARS;
+
+            if (anchor != null) {
+                // Только развороты, известные на этом баре: префикс, а не вся история.
+                List<Candle> known = bars.subList(0, at + 1);
+                int[] pivots = ExtremePositions.of(known, anchor.locate(known));
+
+                from = pivots.length == 0 ? from : Math.max(pivots[pivots.length - 1], from);
+            }
+
+            int increments = at - from;
+
+            if (from < 0 || increments < 2 || !(atr[at] > 0)) {
+                readings[at] = Double.NaN;
+
+                continue;
+            }
+
+            double[] x = new double[increments + 1];
+            double[] y = new double[increments + 1];
+
+            for (int step = 0; step <= increments; step++) {
+                x[step] = step;
+                y[step] = bars.get(from + step).getCloseAsDouble();
+            }
+
+            readings[at] = new LinearRegression(x, y).getSlope() / atr[at];
+        }
+
+        return readings;
+    }
+
+    /**
      * Сам угол на каждом баре - то, из чего получились зоны. На картинке он нужен рядом с ними: по
      * зонам не видно, прошло чтение порог с запасом или еле-еле.
      */
@@ -173,14 +282,46 @@ public class TrendZoneSimulation {
     }
 
     /** Сколько зон вышло, какой они длины и сколько времени занимает каждая сторона. */
-    private static void report(List<Candle> bars, List<TrendZone> zones) {
+    private static void report(List<Candle> bars, List<TrendZone> zones, int window) {
         System.out.printf(Locale.ROOT, "бумага %d, %d баров %s, зон %d%n",
             INSTRUMENT_ID, bars.size(), INTERVAL, zones.size());
-        System.out.printf(Locale.ROOT, "режим: %s%n", BY_CROSSINGS
-            ? "CrossingRegime(SMA(%d), окрестность %d, гроздь от %d)"
-                .formatted(SMA_PERIOD, CROSS_WINDOW, CROWD)
-            : "SteadySide(TrendAngle.overSma(%d, %d), %.2f, %.2f)"
-                .formatted(SMA_PERIOD, ANGLE_BARS, DECISIVE, REMAINS));
+        System.out.printf(Locale.ROOT, "режим: %s%n", switch (REGIME) {
+            case ANGLE -> "SteadySide(TrendAngle.overSma(%d, %d), %.2f, %.2f)"
+                .formatted(SMA_PERIOD, ANGLE_BARS, DECISIVE, REMAINS);
+            case CROSSINGS -> "CrossingRegime(SMA(%d), окрестность %d, гроздь от %d)"
+                .formatted(SMA_PERIOD, CROSS_WINDOW, CROWD);
+            case DECISIVE -> String.format(Locale.ROOT,
+                "DecisiveCrossing(SMA(%d), наклон %s, от %.2f ATR за бар), память %d", SMA_PERIOD,
+                SLOPE_ANCHOR > 0
+                    ? String.format(Locale.ROOT, "от разворота зигзага %.1f ATR, не длиннее %d",
+                        SLOPE_ANCHOR, SLOPE_BARS)
+                    : "по " + SLOPE_BARS,
+                SLOPE_DECISIVE, MEMORY);
+            case BAND -> String.format(Locale.ROOT, "DistanceBand(SMA(%d), полоса ±%.2f ATR), память %d",
+                SMA_PERIOD, BAND_WIDTH, MEMORY);
+        });
+
+        // Полоса сравнивается с нулевой шириной - сторона цены - и с пересечением, подтверждённым
+        // наклоном, на той же средней и в том же окне.
+        if (REGIME == Regime.BAND) {
+            System.out.printf(Locale.ROOT, "без полосы зон %d, пересечение с наклоном - зон %d%n",
+                TrendZones.of(bars, new DistanceBand(curve(), 0), window).size(),
+                TrendZones.of(bars, decisiveCrossing(SLOPE_ANCHOR > 0), window).size());
+        }
+
+        // Контроли - та же средняя без подтверждения и, при якоре, то же подтверждение по последним
+        // барам: сколько смен стороны отсекло подтверждение и что из этого добавил якорь.
+        if (REGIME == Regime.DECISIVE) {
+            int naive = TrendZones.of(bars, DecisiveCrossing.naive(curve()), window).size();
+
+            System.out.printf(Locale.ROOT, "без подтверждения зон %d, отсечено %.0f%% смен стороны%n",
+                naive, naive <= 1 ? 0 : 100.0 * (naive - zones.size()) / (naive - 1));
+
+            if (SLOPE_ANCHOR > 0) {
+                System.out.printf(Locale.ROOT, "без якоря, по последним %d барам, зон %d%n", SLOPE_BARS,
+                    TrendZones.of(bars, decisiveCrossing(false), window).size());
+            }
+        }
         System.out.printf("%10s %6s %8s %8s %8s%n", "сторона", "зон", "баров", "доля", "медиана");
 
         for (double side : new double[]{SteadySide.UP, SteadySide.FLAT, SteadySide.DOWN}) {
@@ -215,15 +356,18 @@ public class TrendZoneSimulation {
      * прямо противоположное отсутствию чтения.
      */
     private static void write(List<Candle> bars, List<TrendZone> zones, double[] angles,
-                              double[] crossings) throws IOException {
+                              double[] crossings, double[] slopes, double[] distances) throws IOException {
         double[] sma = Sma.seriesOf(bars, SMA_PERIOD, Candle::getCloseAsDouble);
 
         try (PrintWriter out = new PrintWriter(Files.newBufferedWriter(OUTPUT))) {
             out.printf(Locale.ROOT, "{%n  \"instrument\": %d,%n  \"interval\": \"%s\",%n",
                 INSTRUMENT_ID, INTERVAL);
             out.printf(Locale.ROOT, "  \"settings\": {\"sma\": %d, \"bars\": %d, \"decisive\": %s,"
-                    + " \"remains\": %s, \"window\": %d, \"crowd\": %d, \"byCrossings\": %s},%n",
-                SMA_PERIOD, ANGLE_BARS, DECISIVE, REMAINS, CROSS_WINDOW, CROWD, BY_CROSSINGS);
+                    + " \"remains\": %s, \"window\": %d, \"crowd\": %d, \"slopeBars\": %d,"
+                    + " \"slopeDecisive\": %s, \"slopeAnchor\": %s, \"bandWidth\": %s,"
+                    + " \"regime\": \"%s\"},%n",
+                SMA_PERIOD, ANGLE_BARS, DECISIVE, REMAINS, CROSS_WINDOW, CROWD, SLOPE_BARS,
+                SLOPE_DECISIVE, SLOPE_ANCHOR, BAND_WIDTH, REGIME);
 
             out.print("  \"times\": [");
 
@@ -258,6 +402,20 @@ public class TrendZoneSimulation {
             for (int row = 0; row < bars.size(); row++) {
                 out.print(row == 0 ? "" : ",");
                 out.print(numberOf(crossings[row], 0));
+            }
+
+            out.printf("],%n  \"slope\": [");
+
+            for (int row = 0; row < bars.size(); row++) {
+                out.print(row == 0 ? "" : ",");
+                out.print(numberOf(slopes[row], 4));
+            }
+
+            out.printf("],%n  \"distance\": [");
+
+            for (int row = 0; row < bars.size(); row++) {
+                out.print(row == 0 ? "" : ",");
+                out.print(numberOf(distances[row], 4));
             }
 
             out.printf("],%n  \"zones\": [%n");
