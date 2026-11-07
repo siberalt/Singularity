@@ -65,11 +65,17 @@ import java.util.Locale;
  * Торговый итог той же разметки, чтобы картинка не обманывала: как парковочное правило она обошла
  * удержание бумаги (+47.9 ± 13.4 пп), фонд не обошла (+3.2 ± 9.2), а гистерезис против его отсутствия дал
  * +1.9 ± 2.9 - то есть не дал ничего.
+ * <p>
+ * У {@link DistanceBand} то же самое: против удержания проходит (+47.7 ± 11.9 статическая, +53.3 ± 16.1 с
+ * сужением), фонд не обходит, а сторону цены без полосы не обгоняет ни статическая полоса (−8.1 ± 14.3),
+ * ни с сужением (−2.5 ± 6.6) - полоса покупает меньше сделок, 2-3 в год против 12, а не доходность. Всё
+ * это мерилось как самостоятельное правило «бумага или фонд»; задумана разметка как фильтр для другой
+ * стратегии, и мерить её как фильтр надо отдельно.
  */
 public class TrendZoneSimulation {
     /** Самая ликвидная бумага базы по медианному минутному обороту - с неё начинаются все стенды. */
     private static final long INSTRUMENT_ID = 7;
-    private static final Instant FROM = Instant.parse("2021-12-01T00:00:00Z");
+    private static final Instant FROM = Instant.parse("2020-01-01T00:00:00Z");
     private static final Instant TO = Instant.parse("2026-09-16T00:00:00Z");
     /** Дневные бары: режим - вещь медленная, и мерился он дневными. */
     private static final CandleInterval INTERVAL = CandleInterval.DAY;
@@ -126,6 +132,21 @@ public class TrendZoneSimulation {
      * {@code |цена − SMA(80)| / ATR(14)} по ликвидной трети дневными барами, 2.48, округлённая.
      */
     private static final double BAND_WIDTH = 2.5;
+    /**
+     * Сужение краёв полосы по наклону цены, объявленное до стенда: наклон по неделе торговых дней,
+     * проекция на тот же горизонт, края не уже одного ATR - хода типичного дня. Ноль в
+     * {@link #BAND_HORIZON} - статическая полоса.
+     */
+    private static final int BAND_SLOPE_BARS = 5;
+    private static final double BAND_HORIZON = BAND_SLOPE_BARS;
+    private static final double BAND_MIN_WIDTH = 1;
+    /**
+     * Схлопывать ли край полосы до средней, когда цена отбила её решительным наклоном -
+     * {@link DistanceBand#setReclaim}. Порог не подбирается: тот наклон, при котором полоса сужается до
+     * {@link #BAND_MIN_WIDTH}, - дальше край падает до самой средней. Наклон тот же, что у сужения.
+     */
+    private static final boolean RECLAIM = true;
+    private static final double RECLAIM_DECISIVE = (BAND_WIDTH - BAND_MIN_WIDTH) / BAND_HORIZON;
     private static final Path OUTPUT = Paths.get("src/main/resources/presenter/google/TrendZones.json");
 
     public static void main(String[] args) throws IOException {
@@ -149,9 +170,10 @@ public class TrendZoneSimulation {
         double[] angles = anglesOf(bars, SMA_PERIOD + ANGLE_BARS);
         double[] crossings = crossingsOf(bars);
         double[] slopes = slopesOf(bars);
-        double[] distances = new DistanceBand(curve(), BAND_WIDTH).distancesOf(bars);
+        double[] distances = band().distancesOf(bars);
+        DistanceBand.Edges edges = band().edgesOf(bars);
 
-        write(bars, zones, angles, crossings, slopes, distances);
+        write(bars, zones, angles, crossings, slopes, distances, edges);
         report(bars, zones, window);
     }
 
@@ -160,8 +182,17 @@ public class TrendZoneSimulation {
             case ANGLE -> new SteadySide(angle(), DECISIVE, REMAINS);
             case CROSSINGS -> new CrossingRegime(curve(), CROSS_WINDOW, CROWD);
             case DECISIVE -> decisiveCrossing(SLOPE_ANCHOR > 0);
-            case BAND -> new DistanceBand(curve(), BAND_WIDTH);
+            case BAND -> band();
         };
+    }
+
+    private static DistanceBand band() {
+        return RECLAIM ? narrowed().setReclaim(RECLAIM_DECISIVE) : narrowed();
+    }
+
+    private static DistanceBand narrowed() {
+        return new DistanceBand(curve(), BAND_WIDTH)
+            .setSlopeNarrowing(BAND_SLOPE_BARS, BAND_HORIZON, BAND_MIN_WIDTH);
     }
 
     private static DecisiveCrossing decisiveCrossing(boolean anchored) {
@@ -297,16 +328,31 @@ public class TrendZoneSimulation {
                         SLOPE_ANCHOR, SLOPE_BARS)
                     : "по " + SLOPE_BARS,
                 SLOPE_DECISIVE, MEMORY);
-            case BAND -> String.format(Locale.ROOT, "DistanceBand(SMA(%d), полоса ±%.2f ATR), память %d",
-                SMA_PERIOD, BAND_WIDTH, MEMORY);
+            case BAND -> String.format(Locale.ROOT, "DistanceBand(SMA(%d), полоса ±%.2f ATR, сужение по "
+                    + "наклону за %d баров на горизонт %.0f, не уже %.2f%s), память %d",
+                SMA_PERIOD, BAND_WIDTH, BAND_SLOPE_BARS, BAND_HORIZON, BAND_MIN_WIDTH,
+                RECLAIM ? String.format(Locale.ROOT, ", до средней при наклоне от %.2f", RECLAIM_DECISIVE) : "",
+                MEMORY);
         });
 
-        // Полоса сравнивается с нулевой шириной - сторона цены - и с пересечением, подтверждённым
-        // наклоном, на той же средней и в том же окне.
+        // Полоса сравнивается с собой без отмены, со статической той же ширины, со статической шириной
+        // нижнего края, с нулевой шириной - стороной цены - и с пересечением, подтверждённым наклоном, на
+        // той же средней и в том же окне. «Против цены» - доля размеченных баров, где сторона режима
+        // противоположна стороне цены относительно средней: то, что на картинке видно как ложный сигнал.
         if (REGIME == Regime.BAND) {
-            System.out.printf(Locale.ROOT, "без полосы зон %d, пересечение с наклоном - зон %d%n",
-                TrendZones.of(bars, new DistanceBand(curve(), 0), window).size(),
-                TrendZones.of(bars, decisiveCrossing(SLOPE_ANCHOR > 0), window).size());
+            System.out.printf("%-36s %6s %12s%n", "разметка", "зон", "против цены");
+            compare(bars, window, "эта", zones);
+            compare(bars, window, "без отмены", TrendZones.of(bars, narrowed(), window));
+            compare(bars, window, String.format(Locale.ROOT, "статическая ±%.2f", BAND_WIDTH),
+                TrendZones.of(bars, new DistanceBand(curve(), BAND_WIDTH), window));
+            compare(bars, window, String.format(Locale.ROOT, "статическая ±%.2f с отменой", BAND_WIDTH),
+                TrendZones.of(bars, new DistanceBand(curve(), BAND_WIDTH)
+                    .setSlopeNarrowing(BAND_SLOPE_BARS, 0, BAND_WIDTH).setReclaim(RECLAIM_DECISIVE), window));
+            compare(bars, window, String.format(Locale.ROOT, "статическая ±%.2f", BAND_MIN_WIDTH),
+                TrendZones.of(bars, new DistanceBand(curve(), BAND_MIN_WIDTH), window));
+            compare(bars, window, "без полосы", TrendZones.of(bars, new DistanceBand(curve(), 0), window));
+            compare(bars, window, "пересечение с наклоном",
+                TrendZones.of(bars, decisiveCrossing(SLOPE_ANCHOR > 0), window));
         }
 
         // Контроли - та же средняя без подтверждения и, при якоре, то же подтверждение по последним
@@ -344,6 +390,22 @@ public class TrendZoneSimulation {
         System.out.println("записано в " + OUTPUT);
     }
 
+    private static void compare(List<Candle> bars, int window, String name, List<TrendZone> zones) {
+        double[] sma = Sma.seriesOf(bars, SMA_PERIOD, Candle::getCloseAsDouble);
+        int marked = 0;
+        int against = 0;
+
+        for (TrendZone zone : zones) {
+            for (int at = zone.from(); at <= zone.to(); at++) {
+                marked++;
+                against += zone.side() * (bars.get(at).getCloseAsDouble() - sma[at]) < 0 ? 1 : 0;
+            }
+        }
+
+        System.out.printf(Locale.ROOT, "%-36s %6d %11.0f%%%n", name, zones.size(),
+            marked == 0 ? 0 : 100.0 * against / marked);
+    }
+
     private static String nameOf(double side) {
         return side > 0 ? "вверх" : side < 0 ? "вниз" : "флэт";
     }
@@ -356,7 +418,8 @@ public class TrendZoneSimulation {
      * прямо противоположное отсутствию чтения.
      */
     private static void write(List<Candle> bars, List<TrendZone> zones, double[] angles,
-                              double[] crossings, double[] slopes, double[] distances) throws IOException {
+                              double[] crossings, double[] slopes, double[] distances,
+                              DistanceBand.Edges edges) throws IOException {
         double[] sma = Sma.seriesOf(bars, SMA_PERIOD, Candle::getCloseAsDouble);
 
         try (PrintWriter out = new PrintWriter(Files.newBufferedWriter(OUTPUT))) {
@@ -365,9 +428,11 @@ public class TrendZoneSimulation {
             out.printf(Locale.ROOT, "  \"settings\": {\"sma\": %d, \"bars\": %d, \"decisive\": %s,"
                     + " \"remains\": %s, \"window\": %d, \"crowd\": %d, \"slopeBars\": %d,"
                     + " \"slopeDecisive\": %s, \"slopeAnchor\": %s, \"bandWidth\": %s,"
-                    + " \"regime\": \"%s\"},%n",
+                    + " \"bandSlopeBars\": %d, \"bandHorizon\": %s, \"bandMinWidth\": %s,"
+                    + " \"reclaim\": %s, \"regime\": \"%s\"},%n",
                 SMA_PERIOD, ANGLE_BARS, DECISIVE, REMAINS, CROSS_WINDOW, CROWD, SLOPE_BARS,
-                SLOPE_DECISIVE, SLOPE_ANCHOR, BAND_WIDTH, REGIME);
+                SLOPE_DECISIVE, SLOPE_ANCHOR, BAND_WIDTH, BAND_SLOPE_BARS, BAND_HORIZON, BAND_MIN_WIDTH,
+                RECLAIM ? String.format(Locale.ROOT, "%.4f", RECLAIM_DECISIVE) : "null", REGIME);
 
             out.print("  \"times\": [");
 
@@ -416,6 +481,21 @@ public class TrendZoneSimulation {
             for (int row = 0; row < bars.size(); row++) {
                 out.print(row == 0 ? "" : ",");
                 out.print(numberOf(distances[row], 4));
+            }
+
+            // Края - там, где расстояние измеримо: до прогрева средней рисовать их не к чему.
+            out.printf("],%n  \"bandUp\": [");
+
+            for (int row = 0; row < bars.size(); row++) {
+                out.print(row == 0 ? "" : ",");
+                out.print(numberOf(Double.isNaN(distances[row]) ? Double.NaN : edges.up()[row], 4));
+            }
+
+            out.printf("],%n  \"bandDown\": [");
+
+            for (int row = 0; row < bars.size(); row++) {
+                out.print(row == 0 ? "" : ",");
+                out.print(numberOf(Double.isNaN(distances[row]) ? Double.NaN : edges.down()[row], 4));
             }
 
             out.printf("],%n  \"zones\": [%n");

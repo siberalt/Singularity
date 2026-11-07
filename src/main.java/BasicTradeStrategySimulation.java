@@ -266,8 +266,8 @@ public class BasicTradeStrategySimulation {
         ExtremeLocator minimaBaseLocator,
         DividendCalendar dividends
     ) {
-        SignalSource priceChange = new PivotSlopeSignalSource(4).setVolatilityCalculator(new ATRVolatilityCalculator(20));
-        // SignalSource priceChange = new SlopeChangeSignalSource(120);
+        //SignalSource priceChange = new PivotSlopeSignalSource(4).setVolatilityCalculator(new ATRVolatilityCalculator(20));
+        SignalSource priceChange = new SlopeChangeSignalSource(120);
 
         // Срок закрывает позицию под отсечку независимо от мнения выхода, и закрывает любую сторону:
         // направление позиции знает только сама обёртка. Окно по умолчанию - день покупки и день перед

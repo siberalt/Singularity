@@ -4,6 +4,7 @@ import com.siberalt.singularity.entity.candle.Candle;
 import com.siberalt.singularity.strategy.volatility.ATRVolatilityCalculator;
 import com.siberalt.singularity.strategy.volatility.VolatilityCalculator;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -28,9 +29,41 @@ import java.util.List;
  * ликвидной трети дневными барами медиана {@code |цена − SMA(80)| / ATR(14)} вышла 2.48, а у отдельных
  * бумаг от 1.88 до 2.83.
  *
+ * <h2>Сужение по наклону</h2>
+ * {@link #setSlopeNarrowing} делает края подвижными: край в сторону выхода сужается на {@code τ·v}, где
+ * {@code v} - наклон регрессии цены за последние приращения в волатильностях за бар. Условие
+ * {@code d > width − τ·v} - то же, что {@code d + τ·v > width}: «расстояние, на котором цена окажется через
+ * τ баров, если сохранит скорость». Резкий ход переключает раньше, медленный - как прежде.
+ * <p>
+ * Края зажаты в {@code [minWidth, width]}. Сверху - чтобы граница залипания осталась прежней: ход против
+ * выхода полосу не расширяет. Снизу - чтобы однодневная шпилька не схлопывала полосу в сторону цены.
+ * Наклон берётся у цены, а не у расстояния: производная расстояния смешивает «пошла цена» и
+ * «поползла средняя», а дрейф средней полоса и так отсекает.
+ * <p>
+ * На стенде дневными барами по ликвидной трети (SMA(80), ATR(14), ширина 2.5, края от 1, наклон и
+ * горизонт по 5 баров) сужение обошло статическую полосу ширины 1 на +7.6 ± 4.3 пп при издержках, с плюсом
+ * во всех четырёх периодах, но правило «больше двух ошибок» не прошло. Статические ширины 1 и 2.5 между
+ * собой неразличимы, так что разницу вносит именно наклон, а не узость.
+ *
+ * <h2>Отбитая средняя</h2>
+ * {@link #setReclaim} схлопывает край в сторону выхода до самой кривой, когда наклон туда не меньше
+ * {@code decisive}: цена отбила среднюю рывком - и сторона меняется сразу, едва цена её перешла. Ровно на
+ * кривой - ещё не перешла. Дальше сторона держится как любая другая: до противоположного края, а не до
+ * возврата к средней.
+ * <p>
+ * Одного положения цены для этого мало. Правило «режим вниз, а цена над средней - значит вверх» вместе
+ * со своим зеркалом и есть сторона цены, полоса нулевой ширины: на Сбере 78 зон вместо 9. Наклон отличает
+ * «цена пришла к средней» от «средняя сползла к стоящей цене» - дрейф средней наклона цены не создаёт.
+ * <p>
+ * В плоскости «расстояние × наклон» это та же область выхода, что у сужения, с другим краем: при
+ * {@code decisive = (width − minWidth) / horizon} край линейно сужается до {@code minWidth} и на этом
+ * наклоне падает до нуля. При {@code decisive = 0} почти любой возврат за кривую меняет сторону, и полоса
+ * близка к стороне цены.
+ *
  * <h2>Контроль - та же сборка</h2>
  * При {@code width == 0} полоса схлопывается, и ответ - сторона, с которой цена стоит, ровно как у
- * {@link DecisiveCrossing#naive}. Сравнивать полосу надо с ней самой в нулевой ширине.
+ * {@link DecisiveCrossing#naive}. Сравнивать полосу надо с ней самой в нулевой ширине; сужение - с
+ * нулевым горизонтом, при котором оно совпадает со статической полосой.
  *
  * <h2>Состояния между вызовами нет</h2>
  * Сторона пересчитывается проходом по окну, как в {@link CrossingRegime}. Первый читаемый бар её
@@ -52,6 +85,23 @@ public class DistanceBand implements MarketCoefficient {
     private PriceExtractor priceExtractor = Candle::close;
 
     private VolatilityCalculator volatilityCalculator = new ATRVolatilityCalculator();
+
+    /** Ноль - края неподвижны. */
+    private int slopeBars;
+
+    private double horizon;
+
+    private double minWidth;
+
+    /** Бесконечность - отмены нет. */
+    private double decisive = Double.POSITIVE_INFINITY;
+
+    /**
+     * Края полосы у каждого бара, оба положительные: {@code up} - насколько расстояние должно превысить
+     * ноль, чтобы сторона стала {@link #UP}, {@code down} - насколько уйти под ноль для {@link #DOWN}.
+     */
+    public record Edges(double[] up, double[] down) {
+    }
 
     /**
      * @param level кривая, расстояние до которой меряется; обычно средняя
@@ -91,23 +141,72 @@ public class DistanceBand implements MarketCoefficient {
         return this;
     }
 
+    /**
+     * Сужает край в сторону выхода на {@code horizon · v}, где {@code v} - наклон регрессии цены за
+     * {@code slopeBars} приращений в волатильностях за бар; края не уже {@code minWidth} и не шире
+     * {@code width}. Нулевой горизонт - статическая полоса.
+     */
+    public DistanceBand setSlopeNarrowing(int slopeBars, double horizon, double minWidth) {
+        if (slopeBars < 1) {
+            throw new IllegalArgumentException("Наклон нужен хотя бы по одному приращению, получено " + slopeBars);
+        }
+
+        if (horizon < 0 || Double.isNaN(horizon)) {
+            throw new IllegalArgumentException("Горизонт проекции неотрицателен, получено " + horizon);
+        }
+
+        if (minWidth < 0 || minWidth > width || Double.isNaN(minWidth)) {
+            throw new IllegalArgumentException(
+                "Нижний край между нулём и шириной %s, получено %s".formatted(width, minWidth));
+        }
+
+        this.slopeBars = slopeBars;
+        this.horizon = horizon;
+        this.minWidth = minWidth;
+
+        return this;
+    }
+
+    /**
+     * Схлопывает край в сторону выхода до кривой, когда наклон туда не меньше {@code decisive}
+     * волатильностей за бар. Наклон тот же, что у {@link #setSlopeNarrowing}, поэтому сужение задаётся
+     * раньше; без проекции - нулевым горизонтом.
+     */
+    public DistanceBand setReclaim(double decisive) {
+        if (slopeBars == 0) {
+            throw new IllegalStateException("Отмене нужен наклон: сначала setSlopeNarrowing");
+        }
+
+        if (decisive < 0 || Double.isNaN(decisive)) {
+            throw new IllegalArgumentException("Порог наклона неотрицателен, получено " + decisive);
+        }
+
+        this.decisive = decisive;
+
+        return this;
+    }
+
     @Override
     public double of(List<Candle> lastCandles) {
         if (lastCandles == null || lastCandles.isEmpty()) {
             return Double.NaN;
         }
 
-        double[] distances = distancesOf(lastCandles);
+        double[] volatility = volatilityCalculator.profile(lastCandles);
+        double[] distances = distancesOf(lastCandles, volatility);
+        Edges edges = edgesOf(lastCandles, volatility);
         double side = 0;
 
-        for (double distance : distances) {
+        for (int at = 0; at < distances.length; at++) {
+            double distance = distances[at];
+
             if (Double.isNaN(distance)) {
                 continue;
             }
 
-            if (distance > width) {
+            if (distance > edges.up()[at]) {
                 side = UP;
-            } else if (distance < -width) {
+            } else if (distance < -edges.down()[at]) {
                 side = DOWN;
             } else if (side == 0) {
                 // Засев по знаку: внутри полосы прежней стороны ещё нет, а ровно на кривой нет и знака.
@@ -123,8 +222,19 @@ public class DistanceBand implements MarketCoefficient {
      * нечем - кривая не прогрелась или волатильность не положительна.
      */
     public double[] distancesOf(List<Candle> lastCandles) {
+        return distancesOf(lastCandles, volatilityCalculator.profile(lastCandles));
+    }
+
+    /**
+     * Края полосы у каждого бара. Без сужения оба равны ширине; с сужением там, где наклон ещё не
+     * измерить, - тоже.
+     */
+    public Edges edgesOf(List<Candle> lastCandles) {
+        return edgesOf(lastCandles, volatilityCalculator.profile(lastCandles));
+    }
+
+    private double[] distancesOf(List<Candle> lastCandles, double[] volatility) {
         double[] curve = level.of(lastCandles);
-        double[] volatility = volatilityCalculator.profile(lastCandles);
         double[] distances = new double[lastCandles.size()];
 
         for (int at = 0; at < distances.length; at++) {
@@ -132,10 +242,49 @@ public class DistanceBand implements MarketCoefficient {
                 && !Double.isNaN(curve[at]) && volatility[at] > 0;
 
             distances[at] = measurable
-                ? (priceExtractor.extract(lastCandles.get(at)).toDouble() - curve[at]) / volatility[at]
+                ? (priceOf(lastCandles.get(at)) - curve[at]) / volatility[at]
                 : Double.NaN;
         }
 
         return distances;
+    }
+
+    private Edges edgesOf(List<Candle> lastCandles, double[] volatility) {
+        double[] up = new double[lastCandles.size()];
+        double[] down = new double[lastCandles.size()];
+
+        Arrays.fill(up, width);
+        Arrays.fill(down, width);
+
+        if (slopeBars == 0 || horizon == 0 && Double.isInfinite(decisive)) {
+            return new Edges(up, down);
+        }
+
+        for (int at = slopeBars; at < up.length && at < volatility.length; at++) {
+            double slope = PriceSlope.of(
+                lastCandles.subList(at - slopeBars, at + 1),
+                priceExtractor,
+                volatility[at]
+            );
+
+            if (Double.isNaN(slope)) {
+                continue;
+            }
+
+            double shift = horizon * slope;
+
+            up[at] = slope >= decisive ? 0 : clamp(width - shift);
+            down[at] = -slope >= decisive ? 0 : clamp(width + shift);
+        }
+
+        return new Edges(up, down);
+    }
+
+    private double clamp(double edge) {
+        return Math.max(minWidth, Math.min(width, edge));
+    }
+
+    private double priceOf(Candle candle) {
+        return priceExtractor.extract(candle).toDouble();
     }
 }

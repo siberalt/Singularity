@@ -81,7 +81,12 @@ function writeLegend() {
         + '<span>· ' + {
             CROSSINGS: 'флэт от ' + settings['crowd'] + ' пересечений в окрестности',
             DECISIVE: 'пересечение со средней - смена тренда при наклоне от ±' + settings['slopeDecisive'],
-            BAND: 'сторона меняется за краем полосы ±' + settings['bandWidth'] + ' ATR, внутри - прежняя',
+            BAND: 'сторона меняется за краем полосы ±' + settings['bandWidth'] + ' ATR, внутри - прежняя'
+                + (narrowed() ? '; край в сторону хода сужается по наклону цены за '
+                    + settings['bandSlopeBars'] + ' баров на горизонт ' + settings['bandHorizon']
+                    + ', не уже ' + settings['bandMinWidth'] : '')
+                + (settings['reclaim'] ? '; край падает до средней, когда цена отбивает её с наклоном от '
+                    + settings['reclaim'] + ' ATR за бар' : ''),
             ANGLE: 'объявление ' + settings['decisive'] + ', удержание ' + settings['remains']
                 + ' — долей предельных 45°'
         }[regime()] + '</span>';
@@ -195,6 +200,11 @@ function regime() {
     return settings['byCrossings'] === true ? 'CROSSINGS' : 'ANGLE';
 }
 
+// Сужаются ли края полосы по наклону. Старые файлы краёв не писали - у них полоса статическая.
+function narrowed() {
+    return Array.isArray(model['bandUp']) && model['settings']['bandHorizon'] > 0;
+}
+
 /**
  * Под ценой - то, из чего получились зоны, а не что-нибудь похожее: угол с его порогами, счёт
  * пересечений со своим или наклон с порогом подтверждения. Рисовать угол под разметкой по пересечениям
@@ -219,12 +229,26 @@ function drawAngle() {
 
         addColumn(table, columns, series, 'Расстояние от средней, ATR', row => model['distance'][row],
             {color: ANGLE_COLOUR, lineWidth: 1});
-        threshold(table, columns, series, 'край полосы вверх', width, UP_COLOUR);
-        threshold(table, columns, series, 'средняя', 0, UNMARKED_COLOUR);
-        threshold(table, columns, series, 'край полосы вниз', -width, DOWN_COLOUR);
+
+        if (narrowed()) {
+            // Подвижные края - те, по которым размечены зоны; статическая ширина рядом серым, чтобы
+            // было видно, где и насколько наклон её сузил.
+            addColumn(table, columns, series, 'край вверх', row => model['bandUp'][row],
+                {color: UP_COLOUR, lineWidth: 1});
+            addColumn(table, columns, series, 'край вниз',
+                row => model['bandDown'][row] === null ? null : -model['bandDown'][row],
+                {color: DOWN_COLOUR, lineWidth: 1});
+            threshold(table, columns, series, 'полоса без сужения вверх', width, UNMARKED_COLOUR);
+            threshold(table, columns, series, 'средняя', 0, UNMARKED_COLOUR);
+            threshold(table, columns, series, 'полоса без сужения вниз', -width, UNMARKED_COLOUR);
+        } else {
+            threshold(table, columns, series, 'край полосы вверх', width, UP_COLOUR);
+            threshold(table, columns, series, 'средняя', 0, UNMARKED_COLOUR);
+            threshold(table, columns, series, 'край полосы вниз', -width, DOWN_COLOUR);
+        }
 
         table.addRows(rowsOf(columns));
-        angleChart.draw(table, options(series, {}));
+        angleChart.draw(table, options(series, {viewWindow: {min: -12, max: 12},}));
 
         return;
     }

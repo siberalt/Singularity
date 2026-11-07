@@ -124,6 +124,168 @@ class DistanceBandTest {
         }
     }
 
+    /**
+     * Резкое падение внутри полосы: статическая держит прежнюю сторону, сужение - нет. Наклон по трём
+     * последним закрытиям 102, 100.5, 99 - минус 1.5 за бар, край вниз 2 − 1.5 = 0.5, а расстояние −1.
+     */
+    @Test
+    void turnsEarlierOnASteepMove() {
+        List<Candle> fall = prices(103, 102, 100.5, 99);
+
+        assertEquals(TrendZone.UP, band().of(fall));
+        assertEquals(TrendZone.DOWN, narrowing(1, 0.5).of(fall));
+        assertEquals(0.5, narrowing(1, 0.5).edgesOf(fall).down()[3], 1e-9);
+    }
+
+    /**
+     * Медленный подход по 0.8 за бар сужает край вниз только до 1.2, и расстояние −1 внутри него; потом
+     * цена встаёт под кривой - наклона нет, край снова 2. Сторона прежняя всё время.
+     */
+    @Test
+    void keepsTheSideOfASlowApproachAndAStillPrice() {
+        List<Candle> slow = prices(103, 102.2, 101.4, 100.6, 99.8, 99, 99, 99);
+        DistanceBand.Edges edges = narrowing(1, 0.5).edgesOf(slow);
+
+        assertEquals(TrendZone.UP, narrowing(1, 0.5).of(slow));
+        assertEquals(1.2, edges.down()[5], 1e-9);
+        assertEquals(WIDTH, edges.down()[7], 1e-9);
+    }
+
+    /** Нулевой горизонт - та же статическая полоса, на любом ряду. */
+    @Test
+    void equalsTheStaticBandAtZeroHorizon() {
+        for (List<Candle> candles : List.of(prices(103, 102, 100.5, 99), prices(103, 101, 99, 98.5, 97.5),
+            prices(96, 99, 101, 101.5, 102, 102.5))) {
+            assertEquals(band().of(candles), narrowing(0, 0.5).of(candles));
+        }
+    }
+
+    /**
+     * Края зажаты: обвал в 1.7 за бар при горизонте 10 сузил бы край в минус, а он остаётся на нижнем
+     * пределе 0.5 - и расстояние −0.4 внутри него сторону не меняет.
+     */
+    @Test
+    void doesNotNarrowBelowTheMinimum() {
+        List<Candle> crash = prices(103, 103, 99.6);
+        DistanceBand steep = narrowing(10, 0.5);
+
+        assertEquals(0.5, steep.edgesOf(crash).down()[2], 1e-9);
+        assertEquals(TrendZone.UP, steep.of(crash));
+    }
+
+    /** Ход против выхода полосу не расширяет: граница залипания остаётся прежней. */
+    @Test
+    void neverWidensBeyondTheWidth() {
+        DistanceBand.Edges edges = narrowing(1, 0.5).edgesOf(prices(100, 98, 96, 94));
+
+        assertEquals(WIDTH, edges.up()[3], 1e-9);
+        assertEquals(0.5, edges.down()[3], 1e-9);
+    }
+
+    @Test
+    void reportsStaticEdgesWithoutNarrowing() {
+        DistanceBand.Edges edges = band().edgesOf(prices(100, 98, 96, 94));
+
+        assertArrayEquals(new double[]{WIDTH, WIDTH, WIDTH, WIDTH}, edges.up(), 1e-9);
+        assertArrayEquals(new double[]{WIDTH, WIDTH, WIDTH, WIDTH}, edges.down(), 1e-9);
+    }
+
+    @Test
+    void refusesANarrowingThatCannotBeAssembled() {
+        assertThrows(IllegalArgumentException.class, () -> band().setSlopeNarrowing(0, 1, 0.5));
+        assertThrows(IllegalArgumentException.class, () -> band().setSlopeNarrowing(2, -1, 0.5));
+        assertThrows(IllegalArgumentException.class, () -> band().setSlopeNarrowing(2, Double.NaN, 0.5));
+        assertThrows(IllegalArgumentException.class, () -> band().setSlopeNarrowing(2, 1, -0.1));
+        assertThrows(IllegalArgumentException.class, () -> band().setSlopeNarrowing(2, 1, WIDTH + 0.1));
+    }
+
+    /**
+     * Цена отбила кривую рывком - наклон по 97, 98, 100.5 равен 1.75 за бар, - но до края 2 не дошла:
+     * статическая полоса держит сторону вниз, отмена схлопывает край и переходит вверх.
+     */
+    @Test
+    void turnsAtTheCurveOnADecisiveReclaim() {
+        List<Candle> push = prices(97, 98, 100.5, 102);
+
+        assertEquals(TrendZone.DOWN, band().of(push));
+        assertEquals(TrendZone.UP, reclaiming(1).of(push));
+    }
+
+    @Test
+    void turnsAtTheCurveInTheMirrorCase() {
+        List<Candle> drop = prices(103, 102, 99.5, 98);
+
+        assertEquals(TrendZone.UP, band().of(drop));
+        assertEquals(TrendZone.DOWN, reclaiming(1).of(drop));
+    }
+
+    /** Над кривой, но подход по 0.4 за бар: это не отбитая средняя, сторона прежняя. */
+    @Test
+    void keepsTheSideOnASlowReturn() {
+        assertEquals(TrendZone.DOWN, reclaiming(1).of(prices(99, 99.4, 99.8, 100.2, 100.6)));
+    }
+
+    /** Кривая сама сползла под стоящую цену: цена над ней, но наклона цены нет - сторона прежняя. */
+    @Test
+    void keepsTheSideWhenTheCurveSlidesUnderAStillPrice() {
+        MarketSeries sliding = candles -> {
+            double[] curve = new double[candles.size()];
+
+            for (int at = 0; at < curve.length; at++) {
+                curve[at] = 101 - 0.5 * at;
+            }
+
+            return curve;
+        };
+        DistanceBand overSliding = new DistanceBand(sliding, WIDTH).setVolatilityCalculator(volatility(1))
+            .setSlopeNarrowing(2, 0, WIDTH).setReclaim(1);
+
+        assertEquals(TrendZone.DOWN, overSliding.of(prices(100, 100, 100, 100, 100)));
+    }
+
+    /**
+     * Отбитая сторона держится как любая другая: цена сползает по 0.5 за бар обратно на кривую и под неё,
+     * но до края −2 не доходит - сторона вверх.
+     */
+    @Test
+    void holdsTheReclaimedSideUntilTheOppositeEdge() {
+        assertEquals(TrendZone.UP,
+            reclaiming(1).of(prices(97, 98, 100.5, 102, 101.5, 101, 100.5, 100, 99.5)));
+    }
+
+    /** Обратный рывок сквозь кривую - 102, 100, 98.5, минус 1.75 за бар - отбивает её уже вниз. */
+    @Test
+    void turnsBackOnADecisiveFallThroughTheCurve() {
+        assertEquals(TrendZone.DOWN, reclaiming(1).of(prices(97, 98, 100.5, 102, 100, 98.5)));
+    }
+
+    /** Нулевой порог: почти любой возврат за кривую меняет сторону, ответ близок к стороне цены. */
+    @Test
+    void approachesThePriceSideAtZeroThreshold() {
+        assertEquals(TrendZone.UP, reclaiming(0).of(prices(99, 99.4, 99.8, 100.2, 100.6)));
+    }
+
+    /**
+     * Край схлопывается ниже нижнего предела сужения: на 100.5 наклон 1.75, сужение дало бы
+     * 2 − 0.5·1.75 = 1.125, отмена даёт 0. Противоположный край не трогается; где наклона ещё нет - ширина.
+     */
+    @Test
+    void reportsTheCollapsedEdge() {
+        DistanceBand.Edges edges = narrowing(0.5, 1).setReclaim(1).edgesOf(prices(97, 98, 100.5, 102));
+
+        assertEquals(WIDTH, edges.up()[1], 1e-9);
+        assertEquals(0, edges.up()[2], 1e-9);
+        assertEquals(WIDTH, edges.down()[2], 1e-9);
+        assertEquals(1.125, narrowing(0.5, 1).edgesOf(prices(97, 98, 100.5, 102)).up()[2], 1e-9);
+    }
+
+    @Test
+    void refusesAReclaimThatCannotBeAssembled() {
+        assertThrows(IllegalStateException.class, () -> band().setReclaim(1));
+        assertThrows(IllegalArgumentException.class, () -> narrowing(1, 0.5).setReclaim(-1));
+        assertThrows(IllegalArgumentException.class, () -> narrowing(1, 0.5).setReclaim(Double.NaN));
+    }
+
     @Test
     void refusesWhatCannotBeAssembled() {
         assertThrows(IllegalArgumentException.class, () -> new DistanceBand(null, WIDTH));
@@ -135,6 +297,16 @@ class DistanceBandTest {
 
     private static DistanceBand band() {
         return new DistanceBand(flat(), WIDTH).setVolatilityCalculator(volatility(1));
+    }
+
+    /** Наклон по двум приращениям, края не уже {@code minWidth}. */
+    private static DistanceBand narrowing(double horizon, double minWidth) {
+        return band().setSlopeNarrowing(2, horizon, minWidth);
+    }
+
+    /** Отмена без проекции: наклон по двум приращениям, края неподвижны, пока наклон не решительный. */
+    private static DistanceBand reclaiming(double decisive) {
+        return band().setSlopeNarrowing(2, 0, WIDTH).setReclaim(decisive);
     }
 
     private static VolatilityCalculator volatility(double value) {
