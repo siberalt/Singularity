@@ -14,8 +14,12 @@ package com.siberalt.singularity.strategy.signal;
  *                   {@link ChangeAngleSignalSource}, зазор импульса у расхождения. Поэтому порог на неё
  *                   ставится рядом с тем источником, который её произвёл - см.
  *                   {@link com.siberalt.singularity.strategy.signal.condition.Deadband}
- * @param positionBalance какую долю счёта сигнал просит держать, в [0, 1], или
- *                   {@link #UNDEFINED_BALANCE}, если источник этого не говорит. Ноль - встать в деньги
+ * @param positionBalance какую долю счёта сигнал просит держать, в [-1, 1], или
+ *                   {@link #UNDEFINED_BALANCE}, если источник этого не говорит. Знак - сторона
+ *                   <b>позиции</b>: выше нуля лонг, ниже шорт, ноль - встать в деньги. Со знаком
+ *                   {@code confidence} он не обязан совпадать, потому что тот - сторона <b>сделки</b>:
+ *                   зафиксировать часть лонга значит продать ({@code confidence < 0}), оставаясь в лонге
+ *                   (доля выше нуля)
  *
  * @see SignalType о чём бывает сигнал и чего тип пока не делает
  */
@@ -54,9 +58,9 @@ public record Signal(SignalType type, double confidence, double strength, double
                 "Уверенность лежит в [-1, 1], получено " + confidence);
         }
 
-        if (!Double.isNaN(positionBalance) && (positionBalance < 0 || positionBalance > 1)) {
-            throw new IllegalArgumentException(
-                "Доля счёта лежит в [0, 1], получено " + positionBalance);
+        // Не больше счёта ни в одну сторону: доля - это цель без плеча, а плечо - решение счёта, не сигнала.
+        if (!Double.isNaN(positionBalance) && (positionBalance < -1 || positionBalance > 1)) {
+            throw new IllegalArgumentException("Доля счёта лежит в [-1, 1], получено " + positionBalance);
         }
     }
 

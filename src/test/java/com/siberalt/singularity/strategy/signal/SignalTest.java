@@ -50,9 +50,18 @@ class SignalTest {
         assertEquals(0, flat.positionBalance());
     }
 
+    /** Доля ниже нуля - шорт: сторона позиции, а не ошибка. */
+    @Test
+    void takesANegativeBalanceAsAShort() {
+        Signal shortHalf = new Signal(-1, 1).withPositionBalance(-0.5);
+
+        assertTrue(shortHalf.hasPositionBalance());
+        assertEquals(-0.5, shortHalf.positionBalance());
+    }
+
     @Test
     void refusesABalanceOutsideItsRange() {
-        assertThrows(IllegalArgumentException.class, () -> new Signal(1, 1).withPositionBalance(-0.1));
+        assertThrows(IllegalArgumentException.class, () -> new Signal(1, 1).withPositionBalance(-1.1));
         assertThrows(IllegalArgumentException.class, () -> new Signal(1, 1).withPositionBalance(1.1));
         assertThrows(IllegalArgumentException.class,
             () -> new Signal(SignalType.POSITION_ENTRY, 1, 1, 2));

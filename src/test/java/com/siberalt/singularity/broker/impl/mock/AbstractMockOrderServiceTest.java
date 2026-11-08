@@ -659,6 +659,43 @@ public abstract class AbstractMockOrderServiceTest {
     }
 
     /**
+     * Плата за занятые бумаги: шорт держится год под 100% годовых - и стоит ровно свою рыночную цену.
+     * <p>
+     * Деньги от продажи лежат на счёте и в плюсе, так что процент на деньги здесь ни при чём: берётся
+     * только комиссия за бумаги, и считается она от их стоимости на момент сведения, а не продажи.
+     */
+    @Test
+    public void testMarginAccountChargesForBorrowedSharesOverTime() throws AbstractException {
+        Candle validCandle = createCandle(currentTime, 10, 15, 5, 10, 100000);
+        long lot = config.getInstrument().getLot();
+        String currency = config.getInstrument().getCurrency();
+
+        broker.getOrderService().setMarginPolicy(MarginPolicy.CASH_ONLY);
+        broker.getOrderService()
+            .settleWith(FundingPolicy.FREE, new FixedRateFunding(1.0))
+            .setCallsMargin(false);
+        addMoney(Quotation.of(1000));
+        assertSellFilled(validCandle, OrderType.MARKET, 50 / lot, validCandle.close());
+
+        double before = broker.getOperationsService()
+            .getAvailableMoney(testAccount.getId(), currency).getQuotation().toDouble();
+        double shortValue = 50 / lot * lot * 8.0;
+
+        // Год спустя бумага стоит 8: занято бумаг на 400, и год под 100% стоит 400.
+        Instant later = currentTime.plus(java.time.Duration.ofDays(365));
+
+        when(candleStorage.findBeforeOrEqual(idOf(config.getInstrument().getUid()), later, 1))
+            .thenReturn(List.of(createCandle(later, 8, 8, 8, 8, 100000)));
+        when(clock.currentTime()).thenReturn(later);
+        broker.getOrderService().getMarginSettlement().settle(testAccount.getId(), currency);
+
+        double after = broker.getOperationsService()
+            .getAvailableMoney(testAccount.getId(), currency).getQuotation().toDouble();
+
+        assertEquals(before - shortValue, after, 1e-6);
+    }
+
+    /**
      * Маржин-колл: цена ушла против позиции, обеспечения не хватает - брокер закрывает её сам.
      * <p>
      * Купили с плечом по 10, цена упала до 6. Своих было 1000, позиция 3000; на падении 40% убыток 1200,

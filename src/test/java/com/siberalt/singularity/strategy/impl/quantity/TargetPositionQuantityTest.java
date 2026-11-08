@@ -127,6 +127,55 @@ class TargetPositionQuantityTest {
         assertEquals(800, quantity.toSell(flat, TradeCapacity.of(200, 800)));
     }
 
+    /**
+     * Из лонга в шорт одной продажей: 800 закрывают лонг, ещё 500 - половина тысячи - открывают шорт.
+     * Купить при этом нечего, сколько бы денег ни было.
+     */
+    @Test
+    void turnsALongIntoAShortInOneSale() {
+        TradeMoment shortHalf = named(-1.0, -0.5);
+
+        assertEquals(1300, quantity.toSell(shortHalf, TradeCapacity.of(200, 800)));
+        assertEquals(0, quantity.toBuy(shortHalf, TradeCapacity.of(200, 800)));
+    }
+
+    /**
+     * В шорте счёт тот же: 500 проданных лежат деньгами и покупаются обратно, а позиция ниже нуля их
+     * вычитает - тысяча лотов, как до продажи. Цель достигнута, просить нечего ни в одну сторону.
+     */
+    @Test
+    void holdsAShortOnceItIsMet() {
+        TradeMoment shortHalf = named(-1.0, -0.5);
+
+        assertEquals(0, quantity.toSell(shortHalf, TradeCapacity.of(1500, -500)));
+        assertEquals(0, quantity.toBuy(shortHalf, TradeCapacity.of(1500, -500)));
+    }
+
+    /** Фиксация шорта - покупка: половина от шорта на половину счёта - 250 из 500. */
+    @Test
+    void coversPartOfAShortWhenItsTargetShrinks() {
+        assertEquals(250, quantity.toBuy(named(1.0, -0.25), TradeCapacity.of(1500, -500)));
+    }
+
+    @Test
+    void coversTheWholeShortOnAZeroTarget() {
+        assertEquals(500, quantity.toBuy(named(1.0, 0), TradeCapacity.of(1500, -500)));
+    }
+
+    /**
+     * Шорт - только названная доля. Продажа без неё по-прежнему значит «ничего не держать», а не
+     * «встать в шорт»: иначе каждый существующий источник выхода начал бы открывать шорты.
+     */
+    @Test
+    void neverShortsOnConfidenceAlone() {
+        assertEquals(800, quantity.toSell(moment(-1.0), TradeCapacity.of(200, 800)));
+        assertEquals(0, quantity.toSell(moment(-1.0), TradeCapacity.of(1000, 0)));
+    }
+
+    private TradeMoment named(double confidence, double balance) {
+        return new TradeMoment(1L, NOW, new Signal(confidence, 1.0).withPositionBalance(balance));
+    }
+
     private TradeMoment moment(double signal) {
         return new TradeMoment(1L, NOW, new Signal(signal, 1.0));
     }
