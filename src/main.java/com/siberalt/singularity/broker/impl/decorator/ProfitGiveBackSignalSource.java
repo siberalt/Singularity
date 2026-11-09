@@ -183,11 +183,11 @@ public class ProfitGiveBackSignalSource implements SignalSource {
      */
     private Signal closing(long position) {
         if (position > 0) {
-            return new Signal(SignalType.POSITION_EXIT, -1, 1, Signal.UNDEFINED_BALANCE);
+            return new Signal(SignalType.POSITION_EXIT, -1, 1, Signal.UNDEFINED_SHARE);
         }
 
         if (position < 0) {
-            return new Signal(SignalType.POSITION_EXIT, 1, 1, Signal.UNDEFINED_BALANCE);
+            return new Signal(SignalType.POSITION_EXIT, 1, 1, Signal.UNDEFINED_SHARE);
         }
 
         return Signal.NEUTRAL;

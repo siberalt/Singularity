@@ -40,7 +40,7 @@ class ProfitGiveBackSignalSourceTest {
 
     /** Сторож закрывает позицию, и теперь говорит это типом, а не только знаком. */
     private static Signal closing() {
-        return new Signal(SignalType.POSITION_EXIT, -1, 1, Signal.UNDEFINED_BALANCE);
+        return new Signal(SignalType.POSITION_EXIT, -1, 1, Signal.UNDEFINED_SHARE);
     }
 
     /**

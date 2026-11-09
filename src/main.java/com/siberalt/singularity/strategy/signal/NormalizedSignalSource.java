@@ -87,7 +87,7 @@ public class NormalizedSignalSource implements SignalSource {
         return new Signal(
             signal.type(), Math.tanh(signal.confidence() / scale),
             signal.strength(),
-            signal.positionBalance()
+            signal.share()
         );
     }
 

@@ -121,13 +121,13 @@ class SmoothSwitchSignalSourceTest {
                 SmoothSwitchSignalSource.weighted(answering(1, 1), atAnyReading(3)),
                 SmoothSwitchSignalSource.weighted(answering(-1, 1), atAnyReading(1))
             )
-        ).setType(SignalType.POSITION_ENTRY).setBalance(BalancePolicy.AGREEING_WEIGHT);
+        ).setType(SignalType.POSITION_ENTRY).setShare(SharePolicy.AGREEING_WEIGHT);
 
         Signal merged = calculator.calculate(ANY_CANDLES);
 
         assertEquals(SignalType.POSITION_ENTRY, merged.type());
         assertEquals(0.5, merged.confidence(), 1e-9);
-        assertEquals(0.75, merged.positionBalance(), 1e-9);
+        assertEquals(0.75, merged.share(), 1e-9);
     }
 
     /** По умолчанию - как раньше: ни типа, ни доли. */
@@ -136,7 +136,7 @@ class SmoothSwitchSignalSourceTest {
         Signal merged = blending(0.5).calculate(ANY_CANDLES);
 
         assertEquals(SignalType.UNSPECIFIED, merged.type());
-        assertFalse(merged.hasPositionBalance());
+        assertFalse(merged.hasShare());
     }
 
     private SmoothSwitchSignalSource blending(double width) {

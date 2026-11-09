@@ -69,11 +69,16 @@ public class TargetPositionQuantity implements TradeQuantity {
      * Обе стороны - одна и та же разность до цели, взятая в ту сторону, о которой спрашивают, и не ниже
      * нуля: цель уже достигнута значит просить нечего.
      * <p>
-     * Цель со знаком считается той же разностью. Из лонга 800 в шорт на половину тысячи - продажа 1300
-     * одной заявкой: 800 закрывают лонг, 500 открывают шорт. Обратно в деньги - покупка 500.
+     * Сигнал, который сам назвал долю, целью не читается: доля - размер его сделки, а не позиция, и
+     * считается он как у любого другого способа - {@link TradeQuantity#namedLots}. Цель выводится только
+     * из уверенности тех, кто о размере молчит.
      */
     @Override
     public long toTrade(TradeMoment moment, TradeCapacity capacity, OrderDirection direction) {
+        if (moment.signal().hasShare()) {
+            return TradeQuantity.namedLots(moment.signal(), capacity, direction);
+        }
+
         long target = targetLots(moment, capacity);
         long position = capacity.positionLots();
 
@@ -89,39 +94,6 @@ public class TargetPositionQuantity implements TradeQuantity {
      * is more than the strategy means to commit to one instrument.
      */
     protected long targetLots(TradeMoment moment, TradeCapacity capacity) {
-        return (long) (capacity.totalLots() * targetShareOf(moment));
-    }
-
-    /**
-     * Доля счёта, которую надо держать: названная сигналом, иначе выведенная из его уверенности.
-     * <p>
-     * Названная берётся <b>как есть, без умножения на {@link #getFullPositionShare()}</b>, и это
-     * сознательно. Сигнал, назвавший долю, сказал ровно сколько хочет держать; домножить её на
-     * «сколько отдаём под один инструмент» значило бы урезать дважды и получить долю, которой не
-     * просил никто. Потолок на одну бумагу - это ограничение для сигналов, которые о размере молчат.
-     * <p>
-     * Молчащий сигнал считается как раньше: уверенность, обрезанная в [0, 1], берётся долей от
-     * {@code fullPositionShare}. Поэтому поведение всех существующих источников не меняется.
-     *
-     * <h2>Шорт</h2>
-     * Названная доля ниже нуля - цель в шорте, и считается она от того же счёта. {@link
-     * TradeCapacity#totalLots()} стоимость счёта в лотах и при шорте: деньги от продажи лежат на счёте и
-     * входят в то, что можно купить, а позиция ниже нуля их же и вычитает.
-     * <p>
-     * Шорт открывается только названной долей. Уверенность ниже нуля по-прежнему значит «ничего не
-     * держать»: читать её шортом значило бы перевернуть каждый существующий источник, который продажей
-     * говорил «выйти». Сторону же сделки выбирает стратегия по уверенности, поэтому источник, называющий
-     * шорт, должен вдобавок нести уверенность за порогом продажи - иначе разность до цели никто не спросит.
-     * <p>
-     * Цель в лотах держит долю постоянной и в шорте. На падении счёт растёт, и та же доля просит больше
-     * бумаг: шорт доливается, как лонг меньше всего счёта докупается на падении, - если стратегия
-     * спрашивает в эту сторону.
-     */
-    protected double targetShareOf(TradeMoment moment) {
-        if (moment.signal().hasPositionBalance()) {
-            return moment.signal().positionBalance();
-        }
-
-        return Math.clamp(moment.signal().confidence(), 0d, 1d) * fullPositionShare;
+        return (long) (capacity.totalLots() * Math.clamp(moment.signal().confidence(), 0d, 1d) * fullPositionShare);
     }
 }

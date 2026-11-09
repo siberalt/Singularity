@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.impl.quantity;
 
 import com.siberalt.singularity.strategy.signal.Signal;
+import com.siberalt.singularity.strategy.signal.SignalType;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -105,61 +106,49 @@ class TargetPositionQuantityTest {
     }
 
     /**
-     * Названную долю счёта берут как есть, без умножения на долю, отведённую одному инструменту: сигнал
-     * сказал ровно сколько хочет держать, и урезать это второй раз значило бы получить долю, которой не
-     * просил никто.
+     * Названная доля - размер сделки, а не цель: сигнал просит купить 0.4 счёта, и покупается 0.4, хотя
+     * позиция уже 0.4. Потолок на инструмент её тоже не урезает - сигнал сказал, сколько торговать.
      */
     @Test
-    void takesTheBalanceTheSignalNamedWithoutDiscountingItAgain() {
+    void tradesTheShareTheSignalNamedRatherThanATarget() {
         TargetPositionQuantity capped = new TargetPositionQuantity(0.5);
-        TradeMoment named = new TradeMoment(1L, NOW, new Signal(1.0, 1.0).withPositionBalance(0.4));
 
-        assertEquals(400, capped.toBuy(named, TradeCapacity.of(1000, 0)));
-        // А молчащий о размере сигнал считается как раньше - через потолок на инструмент.
-        assertEquals(500, capped.toBuy(moment(1.0), TradeCapacity.of(1000, 0)));
+        assertEquals(400, capped.toBuy(named(SignalType.POSITION_ENTRY, 1, 0.4), TradeCapacity.of(600, 400)));
+        // А молчащий о размере сигнал - по-прежнему цель через потолок на инструмент.
+        assertEquals(100, capped.toBuy(moment(1.0), TradeCapacity.of(600, 400)));
     }
 
-    /** Ноль - это встать в деньги, а не отсутствие мнения о размере. */
+    /** Доли - от всего счёта, а не от остатка, поэтому складываются: 0.1, 0.2 и 0.2 - половина. */
     @Test
-    void closesThePositionWhenTheBalanceNamedIsZero() {
-        TradeMoment flat = new TradeMoment(1L, NOW, new Signal(1.0, 1.0).withPositionBalance(0));
+    void addsSharesUpAgainstTheWholeAccount() {
+        assertEquals(100, quantity.toSell(named(SignalType.TAKE_PROFIT, -1, 0.1), TradeCapacity.of(0, 1000)));
+        assertEquals(200, quantity.toSell(named(SignalType.TAKE_PROFIT, -1, 0.2), TradeCapacity.of(100, 900)));
+        assertEquals(200, quantity.toSell(named(SignalType.TAKE_PROFIT, -1, 0.2), TradeCapacity.of(300, 700)));
+    }
 
-        assertEquals(800, quantity.toSell(flat, TradeCapacity.of(200, 800)));
+    /** Купить можно не больше, чем по карману. */
+    @Test
+    void buysNoMoreThanTheMoneyAllows() {
+        assertEquals(300, quantity.toBuy(named(SignalType.POSITION_ENTRY, 1, 1), TradeCapacity.of(300, 700)));
+    }
+
+    /** Выход не переворачивает: фиксация больше лонга закрывает лонг, больше шорта - шорт. */
+    @Test
+    void neverTurnsThePositionOnAnExit() {
+        assertEquals(300, quantity.toSell(named(SignalType.TAKE_PROFIT, -1, 0.5), TradeCapacity.of(700, 300)));
+        assertEquals(500, quantity.toBuy(named(SignalType.POSITION_EXIT, 1, 0.8), TradeCapacity.of(1500, -500)));
+        assertEquals(250, quantity.toBuy(named(SignalType.TAKE_PROFIT, 1, 0.25), TradeCapacity.of(1500, -500)));
+        assertEquals(0, quantity.toSell(named(SignalType.POSITION_EXIT, -1, 0.5), TradeCapacity.of(1000, 0)));
     }
 
     /**
-     * Из лонга в шорт одной продажей: 800 закрывают лонг, ещё 500 - половина тысячи - открывают шорт.
-     * Купить при этом нечего, сколько бы денег ни было.
+     * Из лонга в шорт одной продажей: 800 закрывают лонг, ещё 500 - половина тысячи - открывают шорт, и
+     * это сделка в 1.3 счёта. Дальше шорта на весь счёт не продаётся.
      */
     @Test
     void turnsALongIntoAShortInOneSale() {
-        TradeMoment shortHalf = named(-1.0, -0.5);
-
-        assertEquals(1300, quantity.toSell(shortHalf, TradeCapacity.of(200, 800)));
-        assertEquals(0, quantity.toBuy(shortHalf, TradeCapacity.of(200, 800)));
-    }
-
-    /**
-     * В шорте счёт тот же: 500 проданных лежат деньгами и покупаются обратно, а позиция ниже нуля их
-     * вычитает - тысяча лотов, как до продажи. Цель достигнута, просить нечего ни в одну сторону.
-     */
-    @Test
-    void holdsAShortOnceItIsMet() {
-        TradeMoment shortHalf = named(-1.0, -0.5);
-
-        assertEquals(0, quantity.toSell(shortHalf, TradeCapacity.of(1500, -500)));
-        assertEquals(0, quantity.toBuy(shortHalf, TradeCapacity.of(1500, -500)));
-    }
-
-    /** Фиксация шорта - покупка: половина от шорта на половину счёта - 250 из 500. */
-    @Test
-    void coversPartOfAShortWhenItsTargetShrinks() {
-        assertEquals(250, quantity.toBuy(named(1.0, -0.25), TradeCapacity.of(1500, -500)));
-    }
-
-    @Test
-    void coversTheWholeShortOnAZeroTarget() {
-        assertEquals(500, quantity.toBuy(named(1.0, 0), TradeCapacity.of(1500, -500)));
+        assertEquals(1300, quantity.toSell(named(SignalType.POSITION_ENTRY, -1, 1.3), TradeCapacity.of(200, 800)));
+        assertEquals(1000, quantity.toSell(named(SignalType.POSITION_ENTRY, -1, 2), TradeCapacity.of(1000, 0)));
     }
 
     /**
@@ -172,8 +161,8 @@ class TargetPositionQuantityTest {
         assertEquals(0, quantity.toSell(moment(-1.0), TradeCapacity.of(1000, 0)));
     }
 
-    private TradeMoment named(double confidence, double balance) {
-        return new TradeMoment(1L, NOW, new Signal(confidence, 1.0).withPositionBalance(balance));
+    private TradeMoment named(SignalType type, double confidence, double share) {
+        return new TradeMoment(1L, NOW, new Signal(type, confidence, 1.0, share));
     }
 
     private TradeMoment moment(double signal) {

@@ -36,15 +36,16 @@ class SignalScaledQuantityTest {
     }
 
     /**
-     * Доля, названная сигналом, вытесняет уверенность. Откат на уверенность и есть прежнее поведение: до
-     * появления positionBalance она работала и знаком, и порогом, и размером сразу.
+     * Доля, названная сигналом, вытесняет уверенность и считается от всего счёта, а не от того, что можно
+     * купить: 0.3 счёта в тысячу лотов - 300, даже когда половина уже в бумаге. Откат на уверенность и есть
+     * прежнее поведение: до появления доли она работала и знаком, и порогом, и размером сразу.
      */
     @Test
-    void prefersTheBalanceTheSignalNamedOverItsConfidence() {
-        TradeMoment named = new TradeMoment(1L, NOW, new Signal(1.0, 1.0).withPositionBalance(0.3));
+    void prefersTheShareTheSignalNamedOverItsConfidence() {
+        TradeMoment named = new TradeMoment(1L, NOW, new Signal(1.0, 1.0).withShare(0.3));
 
-        assertEquals(300, quantity.toBuy(named, TradeCapacity.of(1000, 0)));
-        assertEquals(1000, quantity.toBuy(moment(1.0), TradeCapacity.of(1000, 0)));
+        assertEquals(300, quantity.toBuy(named, TradeCapacity.of(500, 500)));
+        assertEquals(500, quantity.toBuy(moment(1.0), TradeCapacity.of(500, 500)));
     }
 
     private TradeMoment moment(double signal) {

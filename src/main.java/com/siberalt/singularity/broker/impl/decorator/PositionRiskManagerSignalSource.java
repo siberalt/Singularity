@@ -113,6 +113,6 @@ public class PositionRiskManagerSignalSource implements SignalSource {
         // leaves a negative one that no longer equals NEUTRAL.
         // Это стоп по построению: срабатывает он от того, насколько позиция под водой.
         return clamped == 0 ? Signal.NEUTRAL
-            : new Signal(SignalType.STOP_LOSS, clamped, Math.abs(clamped), Signal.UNDEFINED_BALANCE);
+            : new Signal(SignalType.STOP_LOSS, clamped, Math.abs(clamped), Signal.UNDEFINED_SHARE);
     }
 }

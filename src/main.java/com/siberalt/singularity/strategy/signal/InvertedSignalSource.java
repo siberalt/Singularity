@@ -52,7 +52,7 @@ public class InvertedSignalSource implements SignalSource {
             signal.type(),
             -signal.confidence(),
             signal.strength(),
-            signal.positionBalance()
+            signal.share()
         );
     }
 }

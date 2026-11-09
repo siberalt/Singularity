@@ -13,7 +13,7 @@ public class CompositeFactorSignalSource implements SignalSource {
 
     private TypePolicy type = TypePolicy.UNDECIDED;
 
-    private BalancePolicy balance = BalancePolicy.UNDEFINED;
+    private SharePolicy share = SharePolicy.UNDEFINED;
 
     public CompositeFactorSignalSource(List<WeightedCalculator> weightedCalculators) {
         if (weightedCalculators == null || weightedCalculators.isEmpty()) {
@@ -44,14 +44,14 @@ public class CompositeFactorSignalSource implements SignalSource {
     /**
      * Какую долю счёта просить. По умолчанию состав её не называет, и размер считает
      * {@link com.siberalt.singularity.strategy.impl.quantity.TradeQuantity} от уверенности, как раньше;
-     * {@link BalancePolicy#AGREEING_WEIGHT} вместо этого берёт долю согласного веса.
+     * {@link SharePolicy#AGREEING_WEIGHT} вместо этого берёт долю согласного веса.
      */
-    public CompositeFactorSignalSource setBalance(BalancePolicy balance) {
-        if (balance == null) {
+    public CompositeFactorSignalSource setShare(SharePolicy share) {
+        if (share == null) {
             throw new IllegalArgumentException("Нет политики, которой определять долю счёта");
         }
 
-        this.balance = balance;
+        this.share = share;
 
         return this;
     }
@@ -100,7 +100,7 @@ public class CompositeFactorSignalSource implements SignalSource {
             negativeWeight
         );
 
-        return new Signal(type.of(votes), votes.confidence(), votes.strength(), balance.of(votes));
+        return new Signal(type.of(votes), votes.confidence(), votes.strength(), share.of(votes));
     }
 
     public static class Builder {

@@ -14,14 +14,14 @@ package com.siberalt.singularity.strategy.signal;
  * существующий прогон не меняется.
  */
 @FunctionalInterface
-public interface BalancePolicy {
+public interface SharePolicy {
     double of(Votes votes);
 
     /**
      * Доли не называть: пусть размер считает тот, кто считает размер. Поведение по умолчанию -
-     * {@link Signal#UNDEFINED_BALANCE}.
+     * {@link Signal#UNDEFINED_SHARE}.
      */
-    BalancePolicy UNDEFINED = votes -> Signal.UNDEFINED_BALANCE;
+    SharePolicy UNDEFINED = votes -> Signal.UNDEFINED_SHARE;
 
     /**
      * Доля веса, проголосовавшая в сторону ответа: трое из пяти за - шестьдесят процентов счёта.
@@ -29,10 +29,10 @@ public interface BalancePolicy {
      * Ровный раскол даёт ноль, то есть «встать в деньги», и это согласуется с ответом: уверенность при
      * таком раскладе тоже ноль, действовать не на чем.
      */
-    BalancePolicy AGREEING_WEIGHT = Votes::agreeingShare;
+    SharePolicy AGREEING_WEIGHT = Votes::agreeingShare;
 
     /** Та же доля согласного веса, но не больше потолка - когда весь счёт на один инструмент не кладут. */
-    static BalancePolicy agreeingWeightUpTo(double cap) {
+    static SharePolicy agreeingWeightUpTo(double cap) {
         if (!(cap > 0) || cap > 1) {
             throw new IllegalArgumentException("Потолок доли лежит в (0, 1], получено " + cap);
         }

@@ -42,7 +42,7 @@ class EntryExitSignalSourceTest {
 
     /** Закрывающий сигнал: его обёртка называет типом, и этим он отличается от входа в другую сторону. */
     private Signal closing(double signal) {
-        return new Signal(SignalType.POSITION_EXIT, signal, 1, Signal.UNDEFINED_BALANCE);
+        return new Signal(SignalType.POSITION_EXIT, signal, 1, Signal.UNDEFINED_SHARE);
     }
 
     private List<Signal> run(EntryExitSignalSource calculator, int bars) {

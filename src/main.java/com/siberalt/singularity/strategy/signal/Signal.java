@@ -14,30 +14,30 @@ package com.siberalt.singularity.strategy.signal;
  *                   {@link ChangeAngleSignalSource}, зазор импульса у расхождения. Поэтому порог на неё
  *                   ставится рядом с тем источником, который её произвёл - см.
  *                   {@link com.siberalt.singularity.strategy.signal.condition.Deadband}
- * @param positionBalance какую долю счёта сигнал просит держать, в [-1, 1], или
- *                   {@link #UNDEFINED_BALANCE}, если источник этого не говорит. Знак - сторона
- *                   <b>позиции</b>: выше нуля лонг, ниже шорт, ноль - встать в деньги. Со знаком
- *                   {@code confidence} он не обязан совпадать, потому что тот - сторона <b>сделки</b>:
- *                   зафиксировать часть лонга значит продать ({@code confidence < 0}), оставаясь в лонге
- *                   (доля выше нуля)
+ * @param share      какую долю счёта торгует <b>этот</b> сигнал, в [0, 2], или {@link #UNDEFINED_SHARE},
+ *                   если источник этого не говорит. Не цель позиции, а размер сделки: доля стоимости
+ *                   всего счёта, а не позиции и не того, что осталось. Поэтому доли складываются -
+ *                   фиксации 0.1, 0.2 и 0.2 вместе снимают половину счёта. Сторону сделки говорит
+ *                   {@code confidence}, здесь только сколько. Больше единицы - только переворот: закрыть
+ *                   лонг на весь счёт и открыть шорт на половину - сделка в полтора счёта
  *
  * @see SignalType о чём бывает сигнал и чего тип пока не делает
  */
-public record Signal(SignalType type, double confidence, double strength, double positionBalance) {
+public record Signal(SignalType type, double confidence, double strength, double share) {
     /**
      * Доля счёта не названа - решать её тому, кто считает размер.
      * <p>
      * {@link Double#NaN} здесь - идиома этой базы: так же отвечают {@link
      * com.siberalt.singularity.strategy.indicator.Macd} и {@link
      * com.siberalt.singularity.strategy.indicator.IncrementalRsi}, когда читать нечего. Но NaN тихо
-     * протекает в арифметику и даёт NaN-позицию, поэтому спрашивать надо {@link #hasPositionBalance()}, а
+     * протекает в арифметику и даёт NaN-позицию, поэтому спрашивать надо {@link #hasShare()}, а
      * не сравнивать с константой и не считать по ней не глядя.
      */
-    public static final double UNDEFINED_BALANCE = Double.NaN;
+    public static final double UNDEFINED_SHARE = Double.NaN;
 
     /** Сказать нечего. Не «сигнал нулевой силы», а отсутствие мнения на этом баре. */
     public static final Signal NEUTRAL =
-        new Signal(SignalType.NONE, 0, 0, UNDEFINED_BALANCE);
+        new Signal(SignalType.NONE, 0, 0, UNDEFINED_SHARE);
 
     public Signal {
         if (type == null) {
@@ -58,9 +58,10 @@ public record Signal(SignalType type, double confidence, double strength, double
                 "Уверенность лежит в [-1, 1], получено " + confidence);
         }
 
-        // Не больше счёта ни в одну сторону: доля - это цель без плеча, а плечо - решение счёта, не сигнала.
-        if (!Double.isNaN(positionBalance) && (positionBalance < -1 || positionBalance > 1)) {
-            throw new IllegalArgumentException("Доля счёта лежит в [-1, 1], получено " + positionBalance);
+        // Сторона - у уверенности, здесь только размер. Больше двух счетов не бывает и у переворота: закрыть
+        // весь лонг и открыть шорт на весь счёт. Плечо - решение счёта, не сигнала.
+        if (!Double.isNaN(share) && (share < 0 || share > 2)) {
+            throw new IllegalArgumentException("Доля сделки лежит в [0, 2], получено " + share);
         }
     }
 
@@ -69,21 +70,21 @@ public record Signal(SignalType type, double confidence, double strength, double
      * все источники.
      */
     public Signal(double confidence, double strength) {
-        this(SignalType.UNSPECIFIED, confidence, strength, UNDEFINED_BALANCE);
+        this(SignalType.UNSPECIFIED, confidence, strength, UNDEFINED_SHARE);
     }
 
-    /** Назвал ли источник долю счёта. Спрашивать это, а не сравнивать с {@link #UNDEFINED_BALANCE}. */
-    public boolean hasPositionBalance() {
-        return !Double.isNaN(positionBalance);
+    /** Назвал ли источник долю счёта. Спрашивать это, а не сравнивать с {@link #UNDEFINED_SHARE}. */
+    public boolean hasShare() {
+        return !Double.isNaN(share);
     }
 
     /** Тот же сигнал, но о позиции: {@code new Signal(-1, 1).withType(SignalType.STOP_LOSS)}. */
     public Signal withType(SignalType type) {
-        return new Signal(type, confidence, strength, positionBalance);
+        return new Signal(type, confidence, strength, share);
     }
 
     /** Тот же сигнал с названной долей счёта. */
-    public Signal withPositionBalance(double positionBalance) {
-        return new Signal(type, confidence, strength, positionBalance);
+    public Signal withShare(double share) {
+        return new Signal(type, confidence, strength, share);
     }
 }

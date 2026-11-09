@@ -12,7 +12,7 @@ import java.time.Instant;
  * @param at           the moment of the decision - the candle the strategy just reacted to, which
  *                     is what any measure of recent market activity has to be taken as of
  * @param signal       сигнал целиком, а не одно его число: размер читается из
- *                     {@link Signal#positionBalance()}, если источник его назвал, и из
+ *                     {@link Signal#share()}, если источник его назвал, и из
  *                     {@link Signal#confidence()}, если нет, а {@link Signal#type()} отвечает, о чём
  *                     сигнал вообще. Отдавать сюда одно поле значило бы менять контракт при каждом
  *                     следующем способе считать размер

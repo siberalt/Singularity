@@ -1,6 +1,7 @@
 package com.siberalt.singularity.strategy.impl.quantity;
 
 import com.siberalt.singularity.broker.contract.service.order.request.OrderDirection;
+import com.siberalt.singularity.strategy.signal.Signal;
 
 /**
  * How many lots a strategy asks for when it decides to trade.
@@ -43,5 +44,36 @@ public interface TradeQuantity {
 
     default long toSell(TradeMoment moment, TradeCapacity capacity) {
         return toTrade(moment, capacity, OrderDirection.SELL);
+    }
+
+    /**
+     * Размер сделки, которую сигнал назвал сам ({@link Signal#hasShare()}): его доля от стоимости всего
+     * счёта, одна и та же у любого способа считать размер. Названное не пересчитывается - источник сказал,
+     * сколько торговать, и умножать это на что-нибудь своё значило бы ответить не на его вопрос.
+     * <p>
+     * Ограничений два, и оба - про то, что счёт может, а не про то, чего хочет сигнал:
+     * <ul>
+     *     <li><b>Купить - не больше, чем по карману.</b></li>
+     *     <li><b>Выход позицию не переворачивает.</b> Сигнал, который закрывает ({@link
+     *     com.siberalt.singularity.strategy.signal.SignalType#closes()}), продаёт не больше лонга и
+     *     откупает не больше шорта: фиксация 0.5 счёта при лонге на 0.3 закрывает лонг, а не открывает шорт
+     *     на 0.2. Остальные продают и за ноль, но не дальше шорта на весь счёт: шорт открывается только
+     *     названной долей, уверенность ниже нуля по-прежнему значит «продать то, что есть».</li>
+     * </ul>
+     */
+    static long namedLots(Signal signal, TradeCapacity capacity, OrderDirection direction) {
+        long lots = (long) (capacity.totalLots() * signal.share());
+        long position = capacity.positionLots();
+        boolean closes = signal.type().closes();
+
+        if (direction.isBuy()) {
+            long limit = closes ? Math.max(0, -position) : capacity.affordableLots();
+
+            return Math.min(lots, Math.min(limit, capacity.affordableLots()));
+        }
+
+        long limit = closes ? Math.max(0, position) : position + capacity.totalLots();
+
+        return Math.max(0, Math.min(lots, limit));
     }
 }

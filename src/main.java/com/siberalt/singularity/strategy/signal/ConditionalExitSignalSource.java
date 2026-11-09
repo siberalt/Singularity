@@ -37,7 +37,7 @@ public class ConditionalExitSignalSource implements SignalSource {
      * уверенность названа потому, что без неё сигнал не пройдёт ни один порог - и правильно не пройдёт.
      */
     private static final Signal CLOSING =
-        new Signal(SignalType.POSITION_EXIT, 1, 1, Signal.UNDEFINED_BALANCE);
+        new Signal(SignalType.POSITION_EXIT, 1, 1, Signal.UNDEFINED_SHARE);
 
     private final MarketCondition condition;
 

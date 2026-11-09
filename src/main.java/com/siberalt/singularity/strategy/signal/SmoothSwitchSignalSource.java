@@ -50,7 +50,7 @@ public class SmoothSwitchSignalSource implements SignalSource {
 
     private TypePolicy type = TypePolicy.UNDECIDED;
 
-    private BalancePolicy balance = BalancePolicy.UNDEFINED;
+    private SharePolicy share = SharePolicy.UNDEFINED;
 
     /**
      * О чём получается сигнал этого состава. По умолчанию ни о чём - {@link SignalType#UNSPECIFIED}:
@@ -73,14 +73,14 @@ public class SmoothSwitchSignalSource implements SignalSource {
 
     /**
      * Какую долю счёта просить. По умолчанию состав её не называет, и размер считается от уверенности,
-     * как раньше; {@link BalancePolicy#AGREEING_WEIGHT} берёт вместо этого долю согласного веса.
+     * как раньше; {@link SharePolicy#AGREEING_WEIGHT} берёт вместо этого долю согласного веса.
      */
-    public SmoothSwitchSignalSource setBalance(BalancePolicy balance) {
-        if (balance == null) {
+    public SmoothSwitchSignalSource setShare(SharePolicy share) {
+        if (share == null) {
             throw new IllegalArgumentException("Нет политики, которой определять долю счёта");
         }
 
-        this.balance = balance;
+        this.share = share;
 
         return this;
     }
@@ -136,7 +136,7 @@ public class SmoothSwitchSignalSource implements SignalSource {
 
         Votes votes = new Votes(signal / total, strength / total, total, positiveWeight, negativeWeight);
 
-        return new Signal(type.of(votes), votes.confidence(), votes.strength(), balance.of(votes));
+        return new Signal(type.of(votes), votes.confidence(), votes.strength(), share.of(votes));
     }
 
     public static WeightedCalculator weighted(SignalSource calculator, Weight weight) {

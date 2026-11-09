@@ -24,7 +24,7 @@ class CompositeFactorSignalSourceTest {
         Signal merged = committee().calculate(ANY_CANDLES);
 
         assertEquals(SignalType.UNSPECIFIED, merged.type());
-        assertFalse(merged.hasPositionBalance());
+        assertFalse(merged.hasShare());
     }
 
     /**
@@ -35,12 +35,12 @@ class CompositeFactorSignalSourceTest {
     @Test
     void sizesByHowMuchOfTheCommitteeAgreed() {
         Signal merged = committee()
-            .setBalance(BalancePolicy.AGREEING_WEIGHT)
+            .setShare(SharePolicy.AGREEING_WEIGHT)
             .calculate(ANY_CANDLES);
 
         assertEquals(0.2, merged.confidence(), 1e-9);
-        assertTrue(merged.hasPositionBalance());
-        assertEquals(0.6, merged.positionBalance(), 1e-9);
+        assertTrue(merged.hasShare());
+        assertEquals(0.6, merged.share(), 1e-9);
     }
 
     @Test
@@ -65,11 +65,11 @@ class CompositeFactorSignalSourceTest {
             .addSource(saying(1), 3)
             .addSource(saying(-1), 1)
             .build()
-            .setBalance(BalancePolicy.AGREEING_WEIGHT)
+            .setShare(SharePolicy.AGREEING_WEIGHT)
             .calculate(ANY_CANDLES);
 
         assertEquals(0.5, merged.confidence(), 1e-9);
-        assertEquals(0.75, merged.positionBalance(), 1e-9);
+        assertEquals(0.75, merged.share(), 1e-9);
     }
 
     /** Ровный раскол - встать в деньги: ответа нет, согласных с ним нет. */
@@ -79,11 +79,11 @@ class CompositeFactorSignalSourceTest {
             .addSource(saying(1), 1)
             .addSource(saying(-1), 1)
             .build()
-            .setBalance(BalancePolicy.AGREEING_WEIGHT)
+            .setShare(SharePolicy.AGREEING_WEIGHT)
             .calculate(ANY_CANDLES);
 
         assertEquals(0, merged.confidence(), 1e-9);
-        assertEquals(0, merged.positionBalance(), 1e-9);
+        assertEquals(0, merged.share(), 1e-9);
     }
 
     /** Молчащий делегат не голосует ни за, ни против, но и состав из-за него не меняет сторону. */
@@ -93,18 +93,18 @@ class CompositeFactorSignalSourceTest {
             .addSource(saying(1), 1)
             .addSource(candles -> Signal.NEUTRAL, 1)
             .build()
-            .setBalance(BalancePolicy.AGREEING_WEIGHT)
+            .setShare(SharePolicy.AGREEING_WEIGHT)
             .calculate(ANY_CANDLES);
 
         assertEquals(0.5, merged.confidence(), 1e-9);
-        assertEquals(0.5, merged.positionBalance(), 1e-9);
+        assertEquals(0.5, merged.share(), 1e-9);
     }
 
     @Test
     void refusesPoliciesItCannotApply() {
         assertThrows(IllegalArgumentException.class, () -> committee().setType((TypePolicy) null));
         assertThrows(IllegalArgumentException.class, () -> committee().setType((SignalType) null));
-        assertThrows(IllegalArgumentException.class, () -> committee().setBalance(null));
+        assertThrows(IllegalArgumentException.class, () -> committee().setShare(null));
     }
 
     /** Трое за, двое против, веса равные. */

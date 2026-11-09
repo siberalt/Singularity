@@ -56,18 +56,18 @@ class VotesTest {
     }
 
     @Test
-    void readsTheBalanceOffThePolicyItWasGiven() {
+    void readsTheShareOffThePolicyItWasGiven() {
         Votes buying = new Votes(0.2, 1, 1, 0.6, 0.4);
 
-        assertEquals(Signal.UNDEFINED_BALANCE, BalancePolicy.UNDEFINED.of(buying));
-        assertEquals(0.6, BalancePolicy.AGREEING_WEIGHT.of(buying), 1e-9);
-        assertEquals(0.3, BalancePolicy.agreeingWeightUpTo(0.5).of(buying), 1e-9);
+        assertEquals(Signal.UNDEFINED_SHARE, SharePolicy.UNDEFINED.of(buying));
+        assertEquals(0.6, SharePolicy.AGREEING_WEIGHT.of(buying), 1e-9);
+        assertEquals(0.3, SharePolicy.agreeingWeightUpTo(0.5).of(buying), 1e-9);
     }
 
     @Test
     void refusesPoliciesThatCannotBeBuilt() {
         assertThrows(IllegalArgumentException.class, () -> TypePolicy.fixed(null));
-        assertThrows(IllegalArgumentException.class, () -> BalancePolicy.agreeingWeightUpTo(0));
-        assertThrows(IllegalArgumentException.class, () -> BalancePolicy.agreeingWeightUpTo(1.5));
+        assertThrows(IllegalArgumentException.class, () -> SharePolicy.agreeingWeightUpTo(0));
+        assertThrows(IllegalArgumentException.class, () -> SharePolicy.agreeingWeightUpTo(1.5));
     }
 }

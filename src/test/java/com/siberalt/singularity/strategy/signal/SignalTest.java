@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Сигнал: о чём он, в какую сторону и какую долю счёта просит. */
+/** Сигнал: о чём он, в какую сторону и какую долю счёта торгует. */
 class SignalTest {
     /** Форма, которой отвечают почти все источники: направление есть, мнения о позиции нет. */
     @Test
@@ -16,7 +16,7 @@ class SignalTest {
         Signal signal = new Signal(0.8, 0.3);
 
         assertEquals(SignalType.UNSPECIFIED, signal.type());
-        assertFalse(signal.hasPositionBalance());
+        assertFalse(signal.hasShare());
         assertEquals(0.8, signal.confidence());
         assertEquals(0.3, signal.strength());
     }
@@ -34,37 +34,38 @@ class SignalTest {
     }
 
     @Test
-    void doesNotPretendToKnowABalanceItWasNotGiven() {
-        assertFalse(Signal.NEUTRAL.hasPositionBalance());
-        assertFalse(new Signal(1, 1).hasPositionBalance());
-        assertTrue(new Signal(1, 1).withPositionBalance(0).hasPositionBalance());
-        assertTrue(new Signal(1, 1).withPositionBalance(0.4).hasPositionBalance());
+    void doesNotPretendToKnowAShareItWasNotGiven() {
+        assertFalse(Signal.NEUTRAL.hasShare());
+        assertFalse(new Signal(1, 1).hasShare());
+        assertTrue(new Signal(1, 1).withShare(0).hasShare());
+        assertTrue(new Signal(1, 1).withShare(0.4).hasShare());
     }
 
-    /** Ноль - это «встать в деньги», а не «доли нет»: различие несёт {@link Signal#hasPositionBalance()}. */
+    /** Ноль - это «торговать нечего», а не «доли нет»: различие несёт {@link Signal#hasShare()}. */
     @Test
     void takesZeroAsAnAnswerRatherThanAsSilence() {
-        Signal flat = new Signal(1, 1).withPositionBalance(0);
+        Signal flat = new Signal(1, 1).withShare(0);
 
-        assertTrue(flat.hasPositionBalance());
-        assertEquals(0, flat.positionBalance());
+        assertTrue(flat.hasShare());
+        assertEquals(0, flat.share());
     }
 
-    /** Доля ниже нуля - шорт: сторона позиции, а не ошибка. */
+    /** Переворот - одна сделка больше счёта: закрыть весь лонг и открыть шорт на половину. */
     @Test
-    void takesANegativeBalanceAsAShort() {
-        Signal shortHalf = new Signal(-1, 1).withPositionBalance(-0.5);
+    void takesAFlipAsMoreThanTheAccount() {
+        Signal flip = new Signal(SignalType.POSITION_ENTRY, -1, 1, 1.5);
 
-        assertTrue(shortHalf.hasPositionBalance());
-        assertEquals(-0.5, shortHalf.positionBalance());
+        assertTrue(flip.hasShare());
+        assertEquals(1.5, flip.share());
     }
 
+    /** Сторона - у уверенности; доля со знаком - ошибка, а не шорт. */
     @Test
-    void refusesABalanceOutsideItsRange() {
-        assertThrows(IllegalArgumentException.class, () -> new Signal(1, 1).withPositionBalance(-1.1));
-        assertThrows(IllegalArgumentException.class, () -> new Signal(1, 1).withPositionBalance(1.1));
+    void refusesAShareOutsideItsRange() {
+        assertThrows(IllegalArgumentException.class, () -> new Signal(-1, 1).withShare(-0.5));
+        assertThrows(IllegalArgumentException.class, () -> new Signal(1, 1).withShare(2.1));
         assertThrows(IllegalArgumentException.class,
-            () -> new Signal(SignalType.POSITION_ENTRY, 1, 1, 2));
+            () -> new Signal(SignalType.POSITION_ENTRY, 1, 1, 3));
     }
 
     @Test
@@ -80,14 +81,14 @@ class SignalTest {
         assertEquals(SignalType.STOP_LOSS, typed.type());
         assertEquals(-0.6, typed.confidence());
         assertEquals(0.2, typed.strength());
-        assertFalse(typed.hasPositionBalance());
+        assertFalse(typed.hasShare());
 
-        Signal sized = typed.withPositionBalance(0.25);
+        Signal sized = typed.withShare(0.25);
 
         assertEquals(SignalType.STOP_LOSS, sized.type());
         assertEquals(-0.6, sized.confidence());
         assertEquals(0.2, sized.strength());
-        assertEquals(0.25, sized.positionBalance());
+        assertEquals(0.25, sized.share());
     }
 
     /**
