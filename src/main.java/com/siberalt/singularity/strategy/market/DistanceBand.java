@@ -226,6 +226,17 @@ public class DistanceBand implements MarketCoefficient {
     }
 
     /**
+     * Расстояние последнего бара окна - мера для того, кто читает расстояние по одному бару, например
+     * {@link com.siberalt.singularity.strategy.signal.DistanceTakePlan} через {@link ClosedBarsCoefficient}.
+     * {@link Double#NaN}, если окна нет или мерить нечем.
+     */
+    public double lastDistanceOf(List<Candle> lastCandles) {
+        double[] distances = distancesOf(lastCandles);
+
+        return distances.length == 0 ? Double.NaN : distances[distances.length - 1];
+    }
+
+    /**
      * Края полосы у каждого бара. Без сужения оба равны ширине; с сужением там, где наклон ещё не
      * измерить, - тоже.
      */
@@ -281,7 +292,7 @@ public class DistanceBand implements MarketCoefficient {
     }
 
     private double clamp(double edge) {
-        return Math.max(minWidth, Math.min(width, edge));
+        return Math.clamp(edge, minWidth, width);
     }
 
     private double priceOf(Candle candle) {

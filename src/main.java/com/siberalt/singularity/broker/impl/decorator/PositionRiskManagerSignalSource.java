@@ -107,7 +107,7 @@ public class PositionRiskManagerSignalSource implements SignalSource {
         double underWater = coefficient.of(lastCandles);
         // Under water asks to close, and closing a long is a sell.
         double signal = position.quantity() > 0 ? -underWater : underWater;
-        double clamped = Math.min(1, Math.max(-1, signal));
+        double clamped = Math.clamp(signal, -1, 1);
 
         // A position sitting exactly on its reference reads as nothing to say, and negating a zero
         // leaves a negative one that no longer equals NEUTRAL.

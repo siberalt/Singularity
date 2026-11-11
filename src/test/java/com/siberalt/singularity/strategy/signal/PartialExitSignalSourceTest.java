@@ -1,5 +1,6 @@
 package com.siberalt.singularity.strategy.signal;
 
+import com.siberalt.singularity.entity.candle.Candle;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -105,6 +106,62 @@ class PartialExitSignalSourceTest {
         assertEquals(SignalType.TAKE_PROFIT, next(down).type());
     }
 
+    /**
+     * Сколько снимать - решает план, и фиксер отдаёт ему позицию: сколько фиксаций было и сколько снято.
+     * Выход, на котором план назвал ноль, - не фиксация: тишина, и шаг не сдвигается.
+     */
+    @Test
+    void asksThePlanHowMuchToTake() {
+        List<String> asked = new ArrayList<>();
+        double[] answers = {0.3, 0, 0.2};
+        TakePlan plan = new TakePlan() {
+            @Override
+            public double shareOf(int steps, double taken, double side, List<Candle> lastCandles) {
+                asked.add(steps + " " + taken + " " + side);
+
+                return answers[asked.size() - 1];
+            }
+
+            @Override
+            public boolean done(int steps, double taken) {
+                return taken >= 0.5 - 1e-12;
+            }
+        };
+        PartialExitSignalSource planned = new PartialExitSignalSource(candles -> signals.get(bar), 0.5, 0.8, plan);
+
+        assertSame(BUY, next(planned, BUY));
+        assertEquals(0.3, next(planned, SELL).share());
+        assertSame(Signal.NEUTRAL, next(planned, SELL));
+        assertEquals(0.2, next(planned, SELL).share());
+        assertEquals(List.of("0 0.0 1.0", "1 0.3 1.0", "1 0.3 1.0"), asked);
+        // План выполнен - снова ждёт вход.
+        assertSame(Signal.NEUTRAL, next(planned, SELL));
+        assertSame(BUY, next(planned, BUY));
+    }
+
+    /** Доля вне [0, 1] - ошибка плана, а не сделка. */
+    @Test
+    void refusesAShareThePlanCannotHave() {
+        TakePlan broken = new TakePlan() {
+            @Override
+            public double shareOf(int steps, double taken, double side, List<Candle> lastCandles) {
+                return 1.5;
+            }
+
+            @Override
+            public boolean done(int steps, double taken) {
+                return false;
+            }
+        };
+        PartialExitSignalSource planned = new PartialExitSignalSource(candles -> signals.get(bar), 0.5, 0.8, broken);
+
+        next(planned, BUY);
+
+        assertThrows(IllegalStateException.class, () -> next(planned, SELL));
+        assertThrows(IllegalArgumentException.class,
+            () -> new PartialExitSignalSource(candles -> Signal.NEUTRAL, 0.5, 0.5, (TakePlan) null));
+    }
+
     @Test
     void refusesAPlanItCannotKeep() {
         SignalSource any = candles -> Signal.NEUTRAL;
@@ -118,9 +175,13 @@ class PartialExitSignalSourceTest {
     }
 
     private Signal next(Signal signal) {
+        return next(source, signal);
+    }
+
+    private Signal next(PartialExitSignalSource fixer, Signal signal) {
         signals.add(signal);
 
-        Signal result = source.calculate(List.of());
+        Signal result = fixer.calculate(List.of());
 
         bar++;
 

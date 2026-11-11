@@ -103,6 +103,14 @@ class DistanceBandTest {
         assertArrayEquals(new double[]{1, -1.5}, Arrays.copyOfRange(distances, 1, 3), 1e-9);
     }
 
+    /** Мера по одному бару - расстояние последнего; окна нет - и мерить нечего. */
+    @Test
+    void readsTheDistanceOfTheLastBar() {
+        assertEquals(3, band().lastDistanceOf(prices(101, 103)), 1e-9);
+        assertEquals(-2.5, band().lastDistanceOf(prices(101, 97.5)), 1e-9);
+        assertTrue(Double.isNaN(band().lastDistanceOf(List.of())));
+    }
+
     @Test
     void saysNothingWhileTheCurveIsNotReady() {
         DistanceBand overSma = new DistanceBand(

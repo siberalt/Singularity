@@ -57,7 +57,7 @@ public record EwmaVolumeSignalSource(
         // (1 - alpha)^halfLife = 0.5  =>  alpha = 1 - 0.5^(1/halfLife)
         double alpha = 1.0 - Math.pow(0.5, 1.0 / halfLife);
         // Для численной стабильности
-        alpha = Math.min(0.5, Math.max(0.01, alpha));
+        alpha = Math.clamp(alpha, 0.01, 0.5);
 
         double weightedSignedSum = 0.0;
         double totalWeightedVolume = 0.0;

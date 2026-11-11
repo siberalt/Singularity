@@ -67,7 +67,7 @@ public class BasicLevelBasedSignalSource implements LevelBasedSignalSource {
         }
 
         // Нормализуем сигнал и вычисляем силу
-        double normalizedSignal = Math.max(-1, Math.min(1, signal));
+        double normalizedSignal = Math.clamp(signal, -1, 1);
 
         return new Signal(normalizedSignal, signal);
     }

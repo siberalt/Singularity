@@ -32,8 +32,8 @@ public class RSISignalSource implements SignalSource {
     public RSISignalSource(int period, double oversoldThreshold, double overboughtThreshold) {
         if (period < 2) throw new IllegalArgumentException("Period must be at least 2");
         this.period = period;
-        this.oversoldThreshold = Math.max(0, Math.min(100, oversoldThreshold));
-        this.overboughtThreshold = Math.max(0, Math.min(100, overboughtThreshold));
+        this.oversoldThreshold = Math.clamp(oversoldThreshold, 0, 100);
+        this.overboughtThreshold = Math.clamp(overboughtThreshold, 0, 100);
     }
 
     /**
@@ -64,7 +64,7 @@ public class RSISignalSource implements SignalSource {
 
         // Нормализуем сигнал в [-1, 1]
         double signal = (rsi - 50.0) / 50.0;
-        signal = Math.max(-1.0, Math.min(1.0, signal));
+        signal = Math.clamp(signal, -1.0, 1.0);
 
         // Сила = удалённость RSI от 50 (0..1)
         double strength = Math.abs(rsi - 50.0) / 50.0;
