@@ -10,13 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Доля 0.12 на полном расстоянии 5, всего до 0.30; расстояние подаётся напрямую. */
+/** Порог 2, доля 0.12 на полном расстоянии 5, всего до 0.30; расстояние подаётся напрямую. */
 class DistanceTakePlanTest {
     private double distance;
 
-    private final DistanceTakePlan plan = new DistanceTakePlan(candles -> distance, 0.12, 0.30, 5);
+    private final DistanceTakePlan plan = new DistanceTakePlan(candles -> distance, 2, 0.12, 0.30, 5);
 
-    /** Доля растёт с расстоянием в сторону позиции и дальше полного не растёт. */
+    /** За порогом доля растёт с расстоянием в сторону позиции и дальше полного не растёт. */
     @Test
     void takesMoreTheFurtherThePriceWent() {
         assertEquals(0.06, shareAt(2.5, 1), 1e-12);
@@ -24,9 +24,11 @@ class DistanceTakePlanTest {
         assertEquals(0.12, shareAt(10, 1), 1e-12);
     }
 
-    /** У средней и за ней снимать нечего; не измерить - тоже ноль. */
+    /** Ближе порога снимать нечего - и у средней, и за ней, и когда не измерить. */
     @Test
-    void takesNothingAtTheAverageOrBehindIt() {
+    void takesNothingShortOfTheThreshold() {
+        assertEquals(0.048, shareAt(2, 1), 1e-12);
+        assertEquals(0, shareAt(1.9, 1));
         assertEquals(0, shareAt(0, 1));
         assertEquals(0, shareAt(-3, 1));
         assertEquals(0, shareAt(Double.NaN, 1));
@@ -44,39 +46,42 @@ class DistanceTakePlanTest {
     void neverTakesMoreThanTheCap() {
         distance = 5;
 
-        assertEquals(0.05, plan.shareOf(2, 0.25, 1, List.of()), 1e-12);
-        assertFalse(plan.done(2, 0.25));
-        assertTrue(plan.done(3, 0.30));
+        assertEquals(0.05, plan.shareOf(new TakeProgress(2, 0.25, 1), List.of()), 1e-12);
+        assertFalse(plan.done(new TakeProgress(2, 0.25, 1)));
+        assertTrue(plan.done(new TakeProgress(3, 0.30, 1)));
     }
 
-    /** Контроль: полное расстояние ноль - доля одна и та же, расстояние не спрашивается. */
+    /** Контроль: полное расстояние ноль - за порогом доля одна и та же. */
     @Test
-    void takesTheSameShareWhenTheDistanceDoesNotMatter() {
-        MarketCoefficient unread = candles -> {
-            throw new AssertionError("расстояние не нужно");
-        };
-        DistanceTakePlan constant = new DistanceTakePlan(unread, 0.05, 0.30, 0);
+    void takesTheSameShareWhenTheDistanceDoesNotScaleIt() {
+        DistanceTakePlan constant = new DistanceTakePlan(candles -> distance, 2, 0.05, 0.30, 0);
 
-        assertEquals(0.05, constant.shareOf(0, 0, 1, List.of()));
-        assertEquals(0.05, constant.shareOf(0, 0, -1, List.of()));
+        distance = 2.5;
+        assertEquals(0.05, constant.shareOf(TakeProgress.fresh(1), List.of()));
+        distance = 9;
+        assertEquals(0.05, constant.shareOf(TakeProgress.fresh(1), List.of()));
+        distance = 1;
+        assertEquals(0, constant.shareOf(TakeProgress.fresh(1), List.of()));
     }
 
     @Test
     void refusesAPlanItCannotKeep() {
         MarketCoefficient any = candles -> 0;
 
-        assertThrows(IllegalArgumentException.class, () -> new DistanceTakePlan(null, 0.1, 0.3, 5));
-        assertThrows(IllegalArgumentException.class, () -> new DistanceTakePlan(any, 0, 0.3, 5));
-        assertThrows(IllegalArgumentException.class, () -> new DistanceTakePlan(any, 0.4, 0.3, 5));
-        assertThrows(IllegalArgumentException.class, () -> new DistanceTakePlan(any, 0.1, 1.5, 5));
-        assertThrows(IllegalArgumentException.class, () -> new DistanceTakePlan(any, 0.1, 0.3, -1));
+        assertThrows(IllegalArgumentException.class, () -> new DistanceTakePlan(null, 0, 0.1, 0.3, 5));
+        assertThrows(IllegalArgumentException.class, () -> new DistanceTakePlan(any, -1, 0.1, 0.3, 5));
+        assertThrows(IllegalArgumentException.class, () -> new DistanceTakePlan(any, Double.NaN, 0.1, 0.3, 5));
+        assertThrows(IllegalArgumentException.class, () -> new DistanceTakePlan(any, 0, 0, 0.3, 5));
+        assertThrows(IllegalArgumentException.class, () -> new DistanceTakePlan(any, 0, 0.4, 0.3, 5));
+        assertThrows(IllegalArgumentException.class, () -> new DistanceTakePlan(any, 0, 0.1, 1.5, 5));
+        assertThrows(IllegalArgumentException.class, () -> new DistanceTakePlan(any, 0, 0.1, 0.3, -1));
         assertThrows(IllegalArgumentException.class,
-            () -> new DistanceTakePlan(any, 0.1, 0.3, Double.POSITIVE_INFINITY));
+            () -> new DistanceTakePlan(any, 0, 0.1, 0.3, Double.POSITIVE_INFINITY));
     }
 
     private double shareAt(double distance, double side) {
         this.distance = distance;
 
-        return plan.shareOf(0, 0, side, List.of());
+        return plan.shareOf(TakeProgress.fresh(side), List.of());
     }
 }

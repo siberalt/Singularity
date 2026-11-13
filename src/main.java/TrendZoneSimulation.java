@@ -76,7 +76,7 @@ public class TrendZoneSimulation {
     /** Самая ликвидная бумага базы по медианному минутному обороту - с неё начинаются все стенды. */
     private static final long INSTRUMENT_ID = 7;
     private static final Instant FROM = Instant.parse("2020-01-01T00:00:00Z");
-    private static final Instant TO = Instant.parse("2026-09-16T00:00:00Z");
+    private static final Instant TO = Instant.parse("2026-12-16T00:00:00Z");
     /** Дневные бары: режим - вещь медленная, и мерился он дневными. */
     private static final CandleInterval INTERVAL = CandleInterval.DAY;
     /** Период средней, по чьим изгибам читается тренд: быстрая нога креста, которым проект уже мерил. */

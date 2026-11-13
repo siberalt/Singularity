@@ -6,28 +6,32 @@ import com.siberalt.singularity.strategy.market.MarketCoefficient;
 import java.util.List;
 
 /**
- * Доля растёт с расстоянием цены от средней в сторону позиции: чем дальше ушла цена, тем больше фиксация.
+ * Фиксация только вдали от средней, и тем больше, чем дальше ушла цена.
  * <pre>
- *     доля = share · clamp(d / fullDistance, 0, 1),   d = сторона · расстояние
+ *     d = сторона · расстояние
+ *     доля = d ≥ threshold ? share · clamp(d / fullDistance, 0, 1) : 0
  * </pre>
- * Цена у средней или за ней не снимает ничего, и такой выход фиксацией не считается. Всего за позицию - не
- * больше {@code cap}: последняя фиксация урезается до остатка, и на нём план выполнен.
+ * Ближе порога выход не снимает ничего и фиксацией не считается. Всего за позицию - не больше {@code cap}:
+ * последняя фиксация урезается до остатка, и на нём план выполнен.
  * <p>
  * Расстояние - любая мера со знаком, плюс выше средней. Дневное расстояние полосы на часовой ленте, без
  * заглядывания вперёд:
  * <pre>
- *     new DistanceTakePlan(new ClosedBarsCoefficient(CandleInterval.DAY, 480, band::lastDistanceOf), 0.12, 0.30, 5)
+ *     new DistanceTakePlan(new ClosedBarsCoefficient(CandleInterval.DAY, 480, band::lastDistanceOf), 2.5, 0.2, 0.5, 5)
  * </pre>
- * {@code fullDistance} ноль - доля {@code share} на каждом выходе, расстояние не спрашивается. Это контроль:
- * сравнивать с ним надо при той же средней доле, тогда разница - ровно то, что даёт расстояние.
+ * {@code fullDistance} ноль - доля {@code share} на каждом выходе за порогом. Это контроль: сравнивать с ним
+ * надо при той же средней доле, тогда разница - ровно то, что даёт пропорциональность.
  *
- * <h2>Замер</h2>
- * Автомат с этим правилом на часовом стенде по ликвидной трети - кривизна SlopeChangeSignalSource(120),
- * расстояние дня в ATR(14) от SMA(80), 0.12 · min(1, d / 5), всего до 0.30, без повторного входа, - со
- * скелетом без фиксации не разошёлся (−0.5 ± 2.0), а постоянной доле той же средней проиграл: −2.5 ± 1.3.
+ * <h2>Почему порог</h2>
+ * Без него план почти не выполняется. Над голой кривизной событие - каждый час встречной кривизны, и на 94%
+ * таких часов цена у средней или за ней: доля ноль, план стоит. Фиксация {@code 0.2 · min(1, d / 5)} до 0.5
+ * без порога проиграла шагам 0.1, 0.2, 0.2 на часовом стенде: −9.0 ± 6.0, - и проиграла не долей, а тем,
+ * что до откупа дело не доходило.
  */
 public class DistanceTakePlan implements TakePlan {
     private final MarketCoefficient distance;
+
+    private final double threshold;
 
     private final double share;
 
@@ -37,13 +41,19 @@ public class DistanceTakePlan implements TakePlan {
 
     /**
      * @param distance     расстояние цены от средней, со знаком; {@link Double#NaN} - снимается ноль
+     * @param threshold    с какого расстояния в сторону позиции фиксировать, в единицах меры, не меньше нуля
      * @param share        доля счёта, которую снимает фиксация на полном расстоянии
      * @param cap          сколько всего можно снять за позицию, не меньше {@code share}
-     * @param fullDistance с какого расстояния доля полная, в единицах меры; ноль - не зависит от расстояния
+     * @param fullDistance с какого расстояния доля полная; ноль - не зависит от расстояния
      */
-    public DistanceTakePlan(MarketCoefficient distance, double share, double cap, double fullDistance) {
+    public DistanceTakePlan(MarketCoefficient distance, double threshold, double share, double cap,
+                            double fullDistance) {
         if (distance == null) {
             throw new IllegalArgumentException("Нужна мера расстояния от средней");
+        }
+
+        if (!(threshold >= 0) || Double.isInfinite(threshold)) {
+            throw new IllegalArgumentException("Порог расстояния неотрицателен, получено " + threshold);
         }
 
         if (!(share > 0) || !(cap >= share) || cap > 1) {
@@ -56,29 +66,28 @@ public class DistanceTakePlan implements TakePlan {
         }
 
         this.distance = distance;
+        this.threshold = threshold;
         this.share = share;
         this.cap = cap;
         this.fullDistance = fullDistance;
     }
 
     @Override
-    public double shareOf(int steps, double taken, double side, List<Candle> lastCandles) {
-        return Math.clamp(share * fullness(side, lastCandles), 0, Math.max(0, cap - taken));
+    public double shareOf(TakeProgress progress, List<Candle> lastCandles) {
+        double along = progress.side() * distance.of(lastCandles);
+
+        // Сравнение с NaN ложно: не измеренное расстояние порог не проходит.
+        if (!(along >= threshold)) {
+            return 0;
+        }
+
+        double fullness = fullDistance == 0 ? 1 : Math.clamp(along / fullDistance, 0, 1);
+
+        return Math.clamp(share * fullness, 0, Math.max(0, cap - progress.taken()));
     }
 
     @Override
-    public boolean done(int steps, double taken) {
-        return taken >= cap - 1e-12;
-    }
-
-    /** Доля от полной: у средней ноль, с {@code fullDistance} в сторону позиции - единица. */
-    private double fullness(double side, List<Candle> lastCandles) {
-        if (fullDistance == 0) {
-            return 1;
-        }
-
-        double along = side * distance.of(lastCandles);
-
-        return Double.isNaN(along) ? 0 : Math.clamp(along / fullDistance, 0, 1);
+    public boolean done(TakeProgress progress) {
+        return progress.taken() >= cap - 1e-12;
     }
 }

@@ -10,7 +10,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-/** Сигналы источника подаются по сценарию, бар за баром; пороги 0.5 и 0.8, план 0.1, 0.2, 0.2. */
+/**
+ * Сигналы источника подаются по сценарию, бар за баром; лонговый фиксер, пороги 0.5 и 0.8, план 0.1, 0.2,
+ * 0.2, откуп после плана.
+ */
 class PartialExitSignalSourceTest {
     private static final Signal BUY = new Signal(SignalType.POSITION_ENTRY, 1, 0.3, Signal.UNDEFINED_SHARE);
 
@@ -22,15 +25,15 @@ class PartialExitSignalSourceTest {
 
     private final List<Signal> signals = new ArrayList<>();
 
-    private int bar;
+    private final SignalSource scripted = candles -> signals.get(signals.size() - 1);
 
-    private final PartialExitSignalSource source =
-        new PartialExitSignalSource(candles -> signals.get(bar), 0.5, 0.8, 0.1, 0.2, 0.2);
+    private final PartialExitSignalSource source = new PartialExitSignalSource(scripted, 1, 0.5, 0.8, 0.1, 0.2, 0.2);
 
-    /** До входа источник молчит обо всём, кроме входа: выходить не из чего. */
+    /** До входа источник молчит обо всём, кроме сильного входа своей стороны. */
     @Test
-    void waitsForAnEntry() {
+    void waitsForAnEntryOnItsOwnSide() {
         assertSame(Signal.NEUTRAL, next(SELL));
+        assertSame(Signal.NEUTRAL, next(SHORT));
         assertSame(Signal.NEUTRAL, next(new Signal(SignalType.POSITION_ENTRY, 0.4, 1, Signal.UNDEFINED_SHARE)));
         assertSame(BUY, next(BUY));
     }
@@ -48,7 +51,7 @@ class PartialExitSignalSourceTest {
         assertEquals(0.4, fixation.strength());
     }
 
-    /** Шаги идут по плану, а между ними - тишина, в том числе на новых входах. */
+    /** Шаги идут по плану, а между ними - тишина: откуп после плана, а не посреди него. */
     @Test
     void walksThePlanStepByStep() {
         next(BUY);
@@ -60,16 +63,24 @@ class PartialExitSignalSourceTest {
         assertEquals(0.2, next(SELL).share());
     }
 
-    /** План выполнен - снова ждёт вход: следующий выход не фиксирует, следующий вход проходит. */
+    /**
+     * План выполнен - фиксаций больше нет, ждёт откупа. Откуп - ровно снятое, и с него цикл заново: следующая
+     * фиксация - снова первый шаг.
+     */
     @Test
-    void startsOverOnceThePlanIsDone() {
+    void buysBackWhatItTookAndStartsOver() {
         next(BUY);
         next(SELL);
         next(SELL);
         next(SELL);
 
         assertSame(Signal.NEUTRAL, next(SELL));
-        assertSame(BUY, next(BUY));
+
+        Signal buyBack = next(BUY);
+
+        assertEquals(SignalType.POSITION_ENTRY, buyBack.type());
+        assertEquals(1, buyBack.confidence());
+        assertEquals(0.5, buyBack.share(), 1e-12);
         assertEquals(0.1, next(SELL).share());
     }
 
@@ -80,98 +91,151 @@ class PartialExitSignalSourceTest {
 
         assertSame(Signal.NEUTRAL, next(COVER));
         assertSame(Signal.NEUTRAL, next(new Signal(SignalType.POSITION_EXIT, -0.7, 1, Signal.UNDEFINED_SHARE)));
-        assertSame(Signal.NEUTRAL, next(new Signal(SignalType.POSITION_ENTRY, -1, 1, Signal.UNDEFINED_SHARE)));
+        assertSame(Signal.NEUTRAL, next(SHORT));
         assertEquals(SignalType.TAKE_PROFIT, next(SELL).type());
     }
 
-    /** В шорте фиксация - откуп. */
+    /** Шортовый фиксер: вход - продажа, фиксация - откуп части, откуп снятого - снова продажа. */
     @Test
-    void buysBackAPartOfAShort() {
-        next(SHORT);
+    void leadsAShort() {
+        PartialExitSignalSource shorts = new PartialExitSignalSource(scripted, -1, 0.5, 0.8, 0.5);
 
-        Signal fixation = next(COVER);
+        assertSame(Signal.NEUTRAL, next(shorts, BUY));
+        assertSame(SHORT, next(shorts, SHORT));
+
+        Signal fixation = next(shorts, COVER);
 
         assertEquals(1, fixation.confidence());
-        assertEquals(0.1, fixation.share());
+        assertEquals(0.5, fixation.share());
+
+        Signal buyBack = next(shorts, SHORT);
+
+        assertEquals(-1, buyBack.confidence());
+        assertEquals(0.5, buyBack.share());
     }
 
-    /** Источнику, который знает только направление, роль задаёт фиксер: сначала вход, потом выход. */
+    /** Источнику, который знает только направление, роль задаёт фиксер. */
     @Test
     void readsBareDirectionAsEitherRole() {
         Signal up = new Signal(1, 0.5);
         Signal down = new Signal(-1, 0.5);
+        PartialExitSignalSource once = new PartialExitSignalSource(scripted, 1, 0.5, 0.8, 0.3);
 
-        assertSame(up, next(up));
-        assertSame(Signal.NEUTRAL, next(up));
-        assertEquals(SignalType.TAKE_PROFIT, next(down).type());
+        assertSame(up, next(once, up));
+        assertSame(Signal.NEUTRAL, next(once, up));
+        assertEquals(SignalType.TAKE_PROFIT, next(once, down).type());
+        assertEquals(SignalType.POSITION_ENTRY, next(once, up).type());
+    }
+
+    /** Откупать нечего, пока ничего не снято, - что бы ни говорило правило. */
+    @Test
+    void buysNothingBackWhileNothingIsTaken() {
+        PartialExitSignalSource eager = fixer(new StepTakePlan(0.5), (progress, done, candles) -> true);
+
+        next(eager, BUY);
+
+        assertSame(Signal.NEUTRAL, next(eager, BUY));
+    }
+
+    /** Когда откупать, решает правило, и фиксер отдаёт ему позицию и то, выполнен ли план. */
+    @Test
+    void asksTheRuleWhenToBuyBack() {
+        List<String> asked = new ArrayList<>();
+        boolean[] allow = {false};
+        PartialExitSignalSource ruled = fixer(new StepTakePlan(0.1, 0.2, 0.2), (progress, done, candles) -> {
+            asked.add(progress + " " + done);
+
+            return allow[0];
+        });
+
+        next(ruled, BUY);
+        next(ruled, SELL);
+
+        assertSame(Signal.NEUTRAL, next(ruled, BUY));
+
+        allow[0] = true;
+
+        assertEquals(0.1, next(ruled, BUY).share());
+        assertEquals(List.of("TakeProgress[steps=1, taken=0.1, side=1.0] false",
+            "TakeProgress[steps=1, taken=0.1, side=1.0] false"), asked);
+        assertEquals(0.1, next(ruled, SELL).share(), "откуп начал план заново");
     }
 
     /**
-     * Сколько снимать - решает план, и фиксер отдаёт ему позицию: сколько фиксаций было и сколько снято.
-     * Выход, на котором план назвал ноль, - не фиксация: тишина, и шаг не сдвигается.
+     * Сколько снимать - решает план, и фиксер отдаёт ему позицию. Выход, на котором план назвал ноль, - не
+     * фиксация: тишина, и шаг не сдвигается. План выполнен - фиксаций нет, пока не откуплено.
      */
     @Test
     void asksThePlanHowMuchToTake() {
-        List<String> asked = new ArrayList<>();
+        List<TakeProgress> asked = new ArrayList<>();
         double[] answers = {0.3, 0, 0.2};
         TakePlan plan = new TakePlan() {
             @Override
-            public double shareOf(int steps, double taken, double side, List<Candle> lastCandles) {
-                asked.add(steps + " " + taken + " " + side);
+            public double shareOf(TakeProgress progress, List<Candle> lastCandles) {
+                asked.add(progress);
 
                 return answers[asked.size() - 1];
             }
 
             @Override
-            public boolean done(int steps, double taken) {
-                return taken >= 0.5 - 1e-12;
+            public boolean done(TakeProgress progress) {
+                return progress.taken() >= 0.5 - 1e-12;
             }
         };
-        PartialExitSignalSource planned = new PartialExitSignalSource(candles -> signals.get(bar), 0.5, 0.8, plan);
-
-        assertSame(BUY, next(planned, BUY));
-        assertEquals(0.3, next(planned, SELL).share());
-        assertSame(Signal.NEUTRAL, next(planned, SELL));
-        assertEquals(0.2, next(planned, SELL).share());
-        assertEquals(List.of("0 0.0 1.0", "1 0.3 1.0", "1 0.3 1.0"), asked);
-        // План выполнен - снова ждёт вход.
-        assertSame(Signal.NEUTRAL, next(planned, SELL));
-        assertSame(BUY, next(planned, BUY));
-    }
-
-    /** Доля вне [0, 1] - ошибка плана, а не сделка. */
-    @Test
-    void refusesAShareThePlanCannotHave() {
-        TakePlan broken = new TakePlan() {
-            @Override
-            public double shareOf(int steps, double taken, double side, List<Candle> lastCandles) {
-                return 1.5;
-            }
-
-            @Override
-            public boolean done(int steps, double taken) {
-                return false;
-            }
-        };
-        PartialExitSignalSource planned = new PartialExitSignalSource(candles -> signals.get(bar), 0.5, 0.8, broken);
+        PartialExitSignalSource planned = fixer(plan, ReentryRule.afterPlan());
 
         next(planned, BUY);
 
-        assertThrows(IllegalStateException.class, () -> next(planned, SELL));
-        assertThrows(IllegalArgumentException.class,
-            () -> new PartialExitSignalSource(candles -> Signal.NEUTRAL, 0.5, 0.5, (TakePlan) null));
+        assertEquals(0.3, next(planned, SELL).share());
+        assertSame(Signal.NEUTRAL, next(planned, SELL));
+        assertEquals(0.2, next(planned, SELL).share());
+        assertEquals(List.of(new TakeProgress(0, 0, 1), new TakeProgress(1, 0.3, 1), new TakeProgress(1, 0.3, 1)),
+            asked);
+        assertSame(Signal.NEUTRAL, next(planned, SELL));
+        assertEquals(3, asked.size(), "выполненный план больше не спрашивают");
+    }
+
+    /** Доля вне [0, 1] или больше остатка счёта - ошибка плана, а не сделка. */
+    @Test
+    void refusesAShareThePlanCannotHave() {
+        PartialExitSignalSource tooMuch = fixer(new TakePlan() {
+            @Override
+            public double shareOf(TakeProgress progress, List<Candle> lastCandles) {
+                return 0.6;
+            }
+
+            @Override
+            public boolean done(TakeProgress progress) {
+                return false;
+            }
+        }, ReentryRule.afterPlan());
+
+        next(tooMuch, BUY);
+        next(tooMuch, SELL);
+
+        assertThrows(IllegalStateException.class, () -> next(tooMuch, SELL));
     }
 
     @Test
-    void refusesAPlanItCannotKeep() {
+    void refusesWhatItCannotKeep() {
         SignalSource any = candles -> Signal.NEUTRAL;
+        TakePlan plan = new StepTakePlan(0.1);
+        ReentryRule rule = ReentryRule.afterPlan();
 
-        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(null, 0.5, 0.5, 0.1));
-        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(any, 0, 0.5, 0.1));
-        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(any, 0.5, 1.5, 0.1));
-        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(any, 0.5, 0.5));
-        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(any, 0.5, 0.5, 0.1, 0));
-        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(any, 0.5, 0.5, 0.6, 0.6));
+        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(null, 1, 0.5, 0.5, 0.1));
+        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(any, 0, 0.5, 0.5, 0.1));
+        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(any, 0.5, 0.5, 0.5, 0.1));
+        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(any, 1, 0, 0.5, 0.1));
+        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(any, 1, 0.5, 1.5, 0.1));
+        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(any, 1, 0.5, 0.5));
+        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(any, 1, 0.5, 0.5, 0.1, 0));
+        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(any, 1, 0.5, 0.5, 0.6, 0.6));
+        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(any, 1, 0.5, 0.5, null, rule));
+        assertThrows(IllegalArgumentException.class, () -> new PartialExitSignalSource(any, 1, 0.5, 0.5, plan, null));
+    }
+
+    private PartialExitSignalSource fixer(TakePlan plan, ReentryRule rule) {
+        return new PartialExitSignalSource(scripted, 1, 0.5, 0.8, plan, rule);
     }
 
     private Signal next(Signal signal) {
@@ -181,10 +245,6 @@ class PartialExitSignalSourceTest {
     private Signal next(PartialExitSignalSource fixer, Signal signal) {
         signals.add(signal);
 
-        Signal result = fixer.calculate(List.of());
-
-        bar++;
-
-        return result;
+        return fixer.calculate(List.of());
     }
 }

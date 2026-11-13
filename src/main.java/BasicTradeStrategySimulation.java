@@ -87,7 +87,7 @@ public class BasicTradeStrategySimulation {
     private final static boolean VWAP_RESET_DAILY = false;
 
     public static void main(String[] args) throws AbstractException, IOException, java.sql.SQLException {
-        Instant startTime = Instant.parse("2021-06-01T00:00:00Z");
+        Instant startTime = Instant.parse("2019-06-01T00:00:00Z");
         Instant endTime = Instant.parse("2026-12-31T00:00:00Z");
         ConfigInterface configuration = new YamlConfig(
             Files.newInputStream(Paths.get("src/main/resources/app.yaml"))
@@ -266,8 +266,10 @@ public class BasicTradeStrategySimulation {
         ExtremeLocator minimaBaseLocator,
         DividendCalendar dividends
     ) {
-        //SignalSource priceChange = new PivotSlopeSignalSource(4).setVolatilityCalculator(new ATRVolatilityCalculator(20));
-        SignalSource priceChange = new SlopeChangeSignalSource(120);
+        // SignalSource priceChange = new PivotSlopeSignalSource(8);
+        // SignalSource priceChange = new SlopeChangeSignalSource(120);
+
+        SignalSource priceChange = new SlopeChangeSignalSource(StretchPolicy.betweenPivots(new ZigZagExtremeLocator(6)));
 
         // Срок закрывает позицию под отсечку независимо от мнения выхода, и закрывает любую сторону:
         // направление позиции знает только сама обёртка. Окно по умолчанию - день покупки и день перед

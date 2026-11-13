@@ -227,7 +227,8 @@ public class DistanceBand implements MarketCoefficient {
 
     /**
      * Расстояние последнего бара окна - мера для того, кто читает расстояние по одному бару, например
-     * {@link com.siberalt.singularity.strategy.signal.DistanceTakePlan} через {@link ClosedBarsCoefficient}.
+     * {@link com.siberalt.singularity.strategy.signal.DistanceTakePlan} и
+     * {@link com.siberalt.singularity.strategy.signal.DistanceReentry} через {@link ClosedBarsCoefficient}.
      * {@link Double#NaN}, если окна нет или мерить нечем.
      */
     public double lastDistanceOf(List<Candle> lastCandles) {

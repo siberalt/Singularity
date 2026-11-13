@@ -33,12 +33,12 @@ public class StepTakePlan implements TakePlan {
     }
 
     @Override
-    public double shareOf(int steps, double taken, double side, List<Candle> lastCandles) {
-        return shares[steps];
+    public double shareOf(TakeProgress progress, List<Candle> lastCandles) {
+        return shares[progress.steps()];
     }
 
     @Override
-    public boolean done(int steps, double taken) {
-        return steps >= shares.length;
+    public boolean done(TakeProgress progress) {
+        return progress.steps() >= shares.length;
     }
 }

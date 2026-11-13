@@ -53,7 +53,7 @@ import java.util.Properties;
  * it can tell a finished load from one with holes. The checkpoint makes the re-run fetch only those.
  */
 public class FetchTinkoffCandles {
-    private static final String DEFAULT_INSTRUMENT = "f509af83-6e71-462f-901f-bcb073f6773b";
+    private static final String DEFAULT_INSTRUMENT = "e6123145-9665-43e0-8413-cd61b8aa9b13";
     private static final CandleInterval INTERVAL = CandleInterval.MIN_1;
     // Лимит Tinkoff API для минутных свечей — до 1 дня за один запрос
     // (https://developer.tbank.ru/invest/services/quotes/faq_marketdata)
@@ -67,7 +67,7 @@ public class FetchTinkoffCandles {
     private static final int RETRIES = 6;
     private static final Duration RETRY_BACKOFF = Duration.ofSeconds(15);
     private static final Instant FROM = Instant.parse("2021-01-01T00:00:00Z");
-    private static final Instant TO = Instant.parse("2026-09-21T00:00:00Z");
+    private static final Instant TO = Instant.parse("2026-12-21T00:00:00Z");
 
     public static void main(String[] args) throws IOException, AbstractException, SQLException {
         List<String> queries = args.length == 0 ? List.of(DEFAULT_INSTRUMENT) : List.of(args);
