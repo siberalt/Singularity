@@ -159,6 +159,21 @@ class SlopeChangeSignalSourceTest {
         assertThrows(IllegalArgumentException.class, () -> new SlopeChangeSignalSource(HALF, 2));
         assertThrows(IllegalArgumentException.class,
             () -> new SlopeChangeSignalSource(HALF).setPriceExtractor(null));
+        assertThrows(IllegalArgumentException.class, () -> new SlopeChangeSignalSource(HALF).setFormula(null));
+    }
+
+    /**
+     * Формула подменяется: слабый разворот у суммы модулей - предел, у зеркальной - нет, а зеркало предел у
+     * обеих. Сила от формулы не зависит.
+     */
+    @Test
+    void readsTheSlopesWithTheFormulaItWasGiven() {
+        SlopeChangeSignalSource mirror = new SlopeChangeSignalSource(HALF).setFormula(SlopeChangeFormula.MIRROR);
+
+        assertEquals(-1, signalOf(slopes(2, -0.2)).confidence(), 1e-12);
+        assertEquals(-0.55, mirror.calculate(slopes(2, -0.2)).confidence(), 1e-9);
+        assertEquals(-1, mirror.calculate(slopes(2, -2)).confidence(), 1e-9);
+        assertEquals(signalOf(slopes(2, -0.2)).strength(), mirror.calculate(slopes(2, -0.2)).strength(), 1e-12);
     }
 
     private static Signal signalOf(List<Candle> candles) {

@@ -269,7 +269,7 @@ public class BasicTradeStrategySimulation {
         // SignalSource priceChange = new PivotSlopeSignalSource(8);
         // SignalSource priceChange = new SlopeChangeSignalSource(120);
 
-        SignalSource priceChange = new SlopeChangeSignalSource(StretchPolicy.betweenPivots(new ZigZagExtremeLocator(6)));
+        SignalSource priceChange = new SlopeChangeSignalSource(StretchPolicy.betweenPivots(new ZigZagExtremeLocator(6))).setFormula(SlopeChangeFormula.MIRROR);
 
         // Срок закрывает позицию под отсечку независимо от мнения выхода, и закрывает любую сторону:
         // направление позиции знает только сама обёртка. Окно по умолчанию - день покупки и день перед

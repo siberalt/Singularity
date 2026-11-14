@@ -44,6 +44,12 @@ import java.util.List;
  * неравенству треугольника {@code |sl − sw| ≤ |sl| + |sw|}, так что результат лежит в {@code [−1, 1]}
  * без всякого {@code tanh} и инвариант {@link Signal} выполняется по построению.
  *
+ * <h2>Формула подменяется</h2>
+ * Цена суммы модулей - насыщение: любая смена знака даёт ±1, и резкий поздний отрезок при слабом раннем
+ * весит как зеркальный разворот. {@link #setFormula} ставит другую; {@link SlopeChangeFormula#MIRROR}
+ * делит на удвоенный максимум модулей и даёт ±1 только у зеркала. По умолчанию - {@link
+ * SlopeChangeFormula#SUM}, всё сказанное выше о пределе и порогах - про неё.
+ *
  * <h2>Нормировать наклоны на цену не нужно, и это не экономия</h2>
  * Мера однородна нулевой степени: домножьте оба наклона на любое положительное число, и ответ не
  * изменится. Значит бумага за 100 ₽ и бумага за 10000 ₽ дают сравнимые числа сами собой, и деление на
@@ -73,6 +79,8 @@ public class SlopeChangeSignalSource implements SignalSource {
     private final int minSlopeBars;
 
     private PriceExtractor priceExtractor = Candle::close;
+
+    private SlopeChangeFormula formula = SlopeChangeFormula.SUM;
 
     /**
      * @param stretches    чем выбирать отрезки
@@ -117,35 +125,55 @@ public class SlopeChangeSignalSource implements SignalSource {
         return this;
     }
 
+    /** Чем сводить два наклона в сигнал - см. {@link SlopeChangeFormula}. */
+    public SlopeChangeSignalSource setFormula(SlopeChangeFormula formula) {
+        if (formula == null) {
+            throw new IllegalArgumentException("Нужно, чем сводить два наклона в сигнал");
+        }
+
+        this.formula = formula;
+
+        return this;
+    }
+
     @Override
     public Signal calculate(List<Candle> lastCandles) {
+        Slopes slopes = slopesOf(lastCandles);
+
+        return slopes == null ? Signal.NEUTRAL
+            : new Signal(formula.of(slopes.earlier(), slopes.later()), slopes.fit());
+    }
+
+    /**
+     * Наклоны двух отрезков, из которых сводится сигнал, - для того, кому нужны они сами, а не кривизна: см.
+     * {@link SlopeSteepness}.
+     *
+     * @return {@code null} там, где источник молчит: отрезков нет или они короче {@code minSlopeBars}
+     */
+    public Slopes slopesOf(List<Candle> lastCandles) {
         if (lastCandles == null || lastCandles.isEmpty()) {
-            return Signal.NEUTRAL;
+            return null;
         }
 
         SlopeStretches chosen = stretches.of(lastCandles);
 
         if (chosen == null || !chosen.longEnough(minSlopeBars)
             || chosen.laterTo() >= lastCandles.size()) {
-            return Signal.NEUTRAL;
+            return null;
         }
 
         LinearRegression earlier = fit(lastCandles, chosen.earlierFrom(), chosen.earlierTo());
         LinearRegression later = fit(lastCandles, chosen.laterFrom(), chosen.laterTo());
 
-        return new Signal(changeOf(earlier.getSlope(), later.getSlope()),
-            Math.min(earlier.getR2(), later.getR2()));
+        return new Slopes(earlier.getSlope(), later.getSlope(), Math.min(earlier.getR2(), later.getR2()));
     }
 
     /**
-     * Ядро меры, вынесенное отдельно, чтобы у формулы и её обоснования был один экземпляр.
-     * <p>
-     * Ноль возвращается, когда оба наклона нулевые: ход стоит, и ускоряться нечему.
+     * @param earlier наклон раннего отрезка, в цене за бар
+     * @param later   наклон позднего
+     * @param fit     наименьшее из двух {@code R²} - то, что уходит в силу сигнала
      */
-    public static double changeOf(double earlierSlope, double laterSlope) {
-        double scale = Math.abs(laterSlope) + Math.abs(earlierSlope);
-
-        return scale == 0 ? 0 : (laterSlope - earlierSlope) / scale;
+    public record Slopes(double earlier, double later, double fit) {
     }
 
     /** Регрессия по отрезку; обе границы входят. Сдвиг по оси x на наклон не влияет. */
